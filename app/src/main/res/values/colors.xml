@@ -1,0 +1,19 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <color name="lavender_soft">#DCCEFF</color>
+    <color name="pastel_purple">#C7B2FF</color>
+    <color name="lilac">#B798FF</color>
+    <color name="blush_pink">#F7CCE0</color>
+    <color name="rose_pink">#EE9EC6</color>
+    <color name="cream_bg">#FFFBF8</color>
+    <color name="card_bg">#FDF9FF</color>
+    <color name="text_main">#352B45</color>
+    <color name="text_muted">#7C7092</color>
+    <color name="white">#FFFFFFFF</color>
+
+    <color name="pink_primary">#EE9EC6</color>
+    <color name="pink_dark">#D97CB0</color>
+    <color name="mint_secondary">#C7B2FF</color>
+    <color name="mint_dark">#B798FF</color>
+    <color name="screen_bg">#FFFBF8</color>
+</resources>

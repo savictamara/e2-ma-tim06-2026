@@ -1,0 +1,58 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<ScrollView xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:background="@drawable/bg_screen"
+    android:padding="16dp">
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="vertical">
+
+        <TextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="@string/moj_broj_title"
+            android:textColor="@color/text_main"
+            android:textSize="24sp"
+            android:textStyle="bold" />
+
+        <TextView android:id="@+id/tvTarget" android:layout_width="wrap_content" android:layout_height="wrap_content" android:layout_marginTop="8dp" android:textColor="@color/text_muted"/>
+        <TextView android:id="@+id/tvMojBrojPoints" android:layout_width="wrap_content" android:layout_height="wrap_content" android:layout_marginTop="4dp" android:textColor="@color/text_muted"/>
+
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="12dp"
+            android:background="@drawable/bg_card"
+            android:orientation="vertical">
+
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="horizontal">
+
+                <Button android:id="@+id/btnStopTarget" style="@style/Widget.MaterialComponents.Button" android:layout_width="0dp" android:layout_height="wrap_content" android:layout_weight="1" android:background="@drawable/bg_button_primary" android:text="@string/stop_button" android:textColor="@color/white"/>
+                <Button android:id="@+id/btnStopNumbers" style="@style/Widget.MaterialComponents.Button" android:layout_width="0dp" android:layout_height="wrap_content" android:layout_marginStart="8dp" android:layout_weight="1" android:background="@drawable/bg_button_secondary" android:text="@string/stop_button" android:textColor="@color/text_main"/>
+            </LinearLayout>
+
+            <TextView android:id="@+id/tvNumbers" android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginTop="10dp" android:text="- - - - - -" android:textColor="@color/text_main" android:textSize="20sp" android:textStyle="bold"/>
+            <TextView android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginTop="8dp" android:text="( ) + - * /" android:textColor="@color/text_muted"/>
+
+            <EditText android:id="@+id/etExpression" android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginTop="8dp" android:background="@drawable/bg_step" android:hint="@string/hint_expression" android:padding="12dp"/>
+
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="8dp"
+                android:orientation="horizontal">
+
+                <Button android:id="@+id/btnDelete" style="@style/Widget.MaterialComponents.Button" android:layout_width="0dp" android:layout_height="wrap_content" android:layout_weight="1" android:background="@drawable/bg_button_secondary" android:text="@string/delete_last" android:textColor="@color/text_main"/>
+                <Button android:id="@+id/btnConfirm" style="@style/Widget.MaterialComponents.Button" android:layout_width="0dp" android:layout_height="wrap_content" android:layout_marginStart="8dp" android:layout_weight="1" android:background="@drawable/bg_button_primary" android:text="@string/submit_result" android:textColor="@color/white"/>
+            </LinearLayout>
+
+            <TextView android:id="@+id/tvMojBrojResult" android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginTop="10dp" android:textColor="@color/text_muted"/>
+        </LinearLayout>
+    </LinearLayout>
+</ScrollView>
