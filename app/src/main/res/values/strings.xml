@@ -1,0 +1,44 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">Slagalica</string>
+    <string name="welcome_title">Slagalica</string>
+    <string name="go_login">Login</string>
+    <string name="go_register">Registracija</string>
+    <string name="go_reset">Reset lozinke</string>
+    <string name="go_korak">Korak po korak</string>
+    <string name="go_moj_broj">Moj broj</string>
+
+    <string name="email_or_username">Email ili korisnicko ime</string>
+    <string name="email">Email</string>
+    <string name="username">Korisnicko ime</string>
+    <string name="password">Lozinka</string>
+    <string name="old_password">Stara lozinka</string>
+    <string name="new_password">Nova lozinka</string>
+    <string name="repeat_password">Ponovljena lozinka</string>
+    <string name="region">Region</string>
+
+    <string name="login_action">Login</string>
+    <string name="register_action">Registracija</string>
+    <string name="reset_action">Reset lozinke</string>
+    <string name="open_step">Otvori korak</string>
+    <string name="check_solution">Proveri</string>
+    <string name="submit_result">Potvrdi</string>
+    <string name="delete_last">Obrisi</string>
+    <string name="stop_button">STOP</string>
+
+    <string name="hint_solution">Unesi resenje</string>
+    <string name="hint_expression">Unesi izraz</string>
+    <string name="timer_text">Vreme: %1$ds</string>
+    <string name="points_text">Poeni: %1$d</string>
+    <string name="result_text">Rezultat: %1$s</string>
+
+    <string name="error_fill_fields">Popunite sva obavezna polja.</string>
+    <string name="error_password_mismatch">Lozinke se ne poklapaju.</string>
+    <string name="mock_login_success">Uspesan login.</string>
+    <string name="mock_register_email">Registracija je uspesna. Potvrdite email link.</string>
+    <string name="mock_reset_success">Lozinka je uspesno promenjena.</string>
+
+    <string name="korak_title">Korak po korak</string>
+    <string name="moj_broj_title">Moj broj</string>
+    <string name="target_number">Trazeni broj: %1$d</string>
+</resources>
