@@ -17,11 +17,17 @@ public class MainActivity extends AppCompatActivity {
         Button btnReset = findViewById(R.id.btnReset);
         Button btnKorak = findViewById(R.id.btnKorak);
         Button btnMojBroj = findViewById(R.id.btnMojBroj);
+        Button btnProfile = findViewById(R.id.btnProfileTop);
+        Button btnKoZnaZna = findViewById(R.id.btnKoZnaZna);
+        Button btnSpojnice = findViewById(R.id.btnSpojnice);
 
         btnLogin.setOnClickListener(v -> startActivity(new Intent(this, LoginActivity.class)));
         btnRegister.setOnClickListener(v -> startActivity(new Intent(this, RegisterActivity.class)));
         btnReset.setOnClickListener(v -> startActivity(new Intent(this, ResetPasswordActivity.class)));
         btnKorak.setOnClickListener(v -> startActivity(new Intent(this, KorakPoKorakActivity.class)));
         btnMojBroj.setOnClickListener(v -> startActivity(new Intent(this, MojBrojActivity.class)));
+        btnProfile.setOnClickListener(v -> startActivity(new Intent(this, ProfileActivity.class)));
+        btnKoZnaZna.setOnClickListener(v -> startActivity(new Intent(this, KoZnaZnaActivity.class)));
+        btnSpojnice.setOnClickListener(v -> startActivity(new Intent(this, SpojniceActivity.class)));
     }
 }

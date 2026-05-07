@@ -9,6 +9,15 @@
         android:supportsRtl="true"
         android:theme="@style/Theme.SlagalicaStudent1KT1">
         <activity
+            android:name=".SpojniceActivity"
+            android:exported="false" />
+        <activity
+            android:name=".KoZnaZnaActivity"
+            android:exported="false" />
+        <activity
+            android:name=".ProfileActivity"
+            android:exported="false" />
+        <activity
             android:name=".MojBrojActivity"
             android:exported="false" />
         <activity
