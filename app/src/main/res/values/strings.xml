@@ -7,6 +7,11 @@
     <string name="go_reset">Reset lozinke</string>
     <string name="go_korak">Korak po korak</string>
     <string name="go_moj_broj">Moj broj</string>
+    <string name="go_profile">Profil</string>
+    <string name="go_ko_zna_zna">Ko zna zna</string>
+    <string name="go_spojnice">Spojnice</string>
+    <string name="main_account_section">Nalog</string>
+    <string name="main_games_section">Igre</string>
 
     <string name="email_or_username">Email ili korisnicko ime</string>
     <string name="email">Email</string>
@@ -41,4 +46,45 @@
     <string name="korak_title">Korak po korak</string>
     <string name="moj_broj_title">Moj broj</string>
     <string name="target_number">Trazeni broj: %1$d</string>
+    <string name="profile_title">Profil korisnika</string>
+    <string name="profile_name_value">ana_igra</string>
+    <string name="profile_email_value">ana.igra@example.com</string>
+    <string name="profile_change_avatar">Izmeni avatar</string>
+    <string name="profile_meta">Tokeni: 12 | Zvezde: 184 | Liga: Zlatna ⭐ | Region: Vojvodina</string>
+    <string name="profile_qr_label">Pozovi prijatelja</string>
+    <string name="profile_qr_hint">Skeniraj QR kod za poziv u partiju.</string>
+    <string name="profile_section_basic">Osnovni podaci</string>
+    <string name="profile_section_league">Liga i region</string>
+    <string name="profile_section_games">Statistika igara</string>
+    <string name="profile_section_total">Ukupna statistika</string>
+    <string name="profile_stats_games">Uspesnost po igrama: 63%
+Ko zna zna: 64 pogodjena / 21 promaseno
+Moj broj: 58% tacan broj
+Korak po korak: 49% pogodjen pojam po koraku
+Asocijacije: 33 resene / 12 neresene
+Skocko: 61% pogodjena kombinacija po pokusaju
+Spojnice: 72% uspesno povezano</string>
+    <string name="profile_stats_total">Ukupno odigranih partija: 148
+Pobede: 57%
+Porazi: 43%</string>
+    <string name="profile_logout">Odjava</string>
+    <string name="kznz_title">Ko zna zna</string>
+    <string name="kznz_question_counter">Pitanje %1$d/%2$d</string>
+    <string name="kznz_next_question">Sledece pitanje</string>
+    <string name="kznz_answer_correct">Tacan odgovor: +10 poena</string>
+    <string name="kznz_answer_wrong">Netacan odgovor: -5 poena</string>
+    <string name="kznz_timeout">Vreme je isteklo. Nema poena.</string>
+    <string name="kznz_finished">Rezultat igre</string>
+    <string name="kznz_final_score">Konacan rezultat: %1$d poena</string>
+    <string name="kznz_mock_speed_rule">Ako oba igraca odgovore tacno, bodove dobija brzi igrac.</string>
+    <string name="kznz_done">Zavrseno</string>
+    <string name="spojnice_title">Spojnice</string>
+    <string name="spojnice_round">Runda %1$d/%2$d</string>
+    <string name="spojnice_check_round">Proveri rundu</string>
+    <string name="spojnice_next_round">Sledeca runda</string>
+    <string name="spojnice_finished">Zavrseno</string>
+    <string name="spojnice_round_result">Tacni parovi: %1$d | Osvojeno poena: %2$d</string>
+    <string name="spojnice_round_points">Poeni runde: %1$d/10</string>
+    <string name="spojnice_total_points">Ukupno poena: %1$d/20</string>
+    <string name="spojnice_final_result">Konacan rezultat: %1$d/20</string>
 </resources>
