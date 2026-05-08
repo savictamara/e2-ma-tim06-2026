@@ -15,7 +15,6 @@ import java.util.Random;
 
 public class AsocijacijeActivity extends AppCompatActivity {
     private static final int ROUND_MS = 120_000;
-    private static final int TOTAL_ROUNDS = 2;
     private final Random random = new Random();
 
     private final String[][] clues = {
@@ -45,13 +44,10 @@ public class AsocijacijeActivity extends AppCompatActivity {
     private EditText etAnswerC;
     private EditText etAnswerD;
     private EditText etFinal;
-    private Button btnNextRound;
     private Button[] guessButtons;
     private EditText[] answerInputs;
 
-    private int round = 1;
     private int activePlayer = 1;
-    private int starterForRound = 1;
     private int scoreP1 = 0;
     private int scoreP2 = 0;
     private boolean roundFinished = false;
@@ -77,8 +73,7 @@ public class AsocijacijeActivity extends AppCompatActivity {
         etAnswerD = findViewById(R.id.etAnswerD);
         etFinal = findViewById(R.id.etFinal);
         Button btnOpenField = findViewById(R.id.btnOpenField);
-        Button btnGuessFinal = findViewById(R.id.btnGuessFinal);
-        btnNextRound = findViewById(R.id.btnNextRound);
+        Button         btnGuessFinal = findViewById(R.id.btnGuessFinal);
         guessButtons = new Button[] {
                 findViewById(R.id.btnGuessA),
                 findViewById(R.id.btnGuessB),
@@ -93,7 +88,6 @@ public class AsocijacijeActivity extends AppCompatActivity {
         guessButtons[2].setOnClickListener(v -> guessColumn(2));
         guessButtons[3].setOnClickListener(v -> guessColumn(3));
         btnGuessFinal.setOnClickListener(v -> guessFinal());
-        btnNextRound.setOnClickListener(v -> nextRound());
 
         setupRound();
     }
@@ -102,7 +96,7 @@ public class AsocijacijeActivity extends AppCompatActivity {
         stopTimer();
         roundFinished = false;
         finalSolved = false;
-        activePlayer = starterForRound;
+        activePlayer = 1;
         for (int c = 0; c < 4; c++) {
             solvedColumns[c] = false;
             for (int r = 0; r < 4; r++) {
@@ -112,7 +106,6 @@ public class AsocijacijeActivity extends AppCompatActivity {
             }
         }
         clearInputs();
-        btnNextRound.setEnabled(false);
         tvStatus.setText("");
         updateHeader();
         startTimer();
@@ -222,19 +215,8 @@ public class AsocijacijeActivity extends AppCompatActivity {
     private void finishRound() {
         roundFinished = true;
         stopTimer();
-        btnNextRound.setEnabled(true);
-        if (round >= TOTAL_ROUNDS) {
-            btnNextRound.setEnabled(false);
-            tvStatus.append(" Kraj igre.");
-        }
+        tvStatus.append(" Kraj igre.");
         updateHeader();
-    }
-
-    private void nextRound() {
-        if (!roundFinished || round >= TOTAL_ROUNDS) return;
-        round++;
-        starterForRound = 2;
-        setupRound();
     }
 
     private void startTimer() {
@@ -252,7 +234,7 @@ public class AsocijacijeActivity extends AppCompatActivity {
     }
 
     private void updateHeader() {
-        tvRound.setText("Runda " + round + "/2");
+        tvRound.setText(getString(R.string.asocijacije_round_label));
         tvCurrentPlayer.setText("Na potezu: Igrac " + activePlayer);
         tvScoreP1.setText("Igrac 1: " + scoreP1 + " poena");
         tvScoreP2.setText("Igrac 2: " + scoreP2 + " poena");

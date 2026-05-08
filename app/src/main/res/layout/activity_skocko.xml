@@ -34,15 +34,94 @@
             <TextView
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:text="Simboli: S, K, O, H, T, Z"
+                android:text="@string/skocko_pick_hint"
                 android:textColor="@color/text_muted" />
 
             <TextView
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
                 android:layout_marginTop="4dp"
-                android:text="Feedback kvadrati: prvo crveni (tacno mesto), zatim zuti (tacan simbol)"
+                android:text="@string/skocko_feedback_hint"
                 android:textColor="@color/text_muted" />
+
+            <LinearLayout
+                android:id="@+id/paletteBar"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="10dp"
+                android:orientation="horizontal">
+
+                <ImageView
+                    android:id="@+id/ivPaletteS"
+                    android:layout_width="0dp"
+                    android:layout_height="48dp"
+                    android:layout_weight="1"
+                    android:background="@drawable/bg_step"
+                    android:contentDescription="S"
+                    android:padding="6dp"
+                    android:scaleType="centerInside"
+                    android:src="@drawable/skocko" />
+
+                <ImageView
+                    android:id="@+id/ivPaletteK"
+                    android:layout_width="0dp"
+                    android:layout_height="48dp"
+                    android:layout_marginStart="6dp"
+                    android:layout_weight="1"
+                    android:background="@drawable/bg_step"
+                    android:contentDescription="K"
+                    android:padding="6dp"
+                    android:scaleType="centerInside"
+                    android:src="@drawable/black_square" />
+
+                <ImageView
+                    android:id="@+id/ivPaletteO"
+                    android:layout_width="0dp"
+                    android:layout_height="48dp"
+                    android:layout_marginStart="6dp"
+                    android:layout_weight="1"
+                    android:background="@drawable/bg_step"
+                    android:contentDescription="O"
+                    android:padding="6dp"
+                    android:scaleType="centerInside"
+                    android:src="@drawable/circle" />
+
+                <ImageView
+                    android:id="@+id/ivPaletteH"
+                    android:layout_width="0dp"
+                    android:layout_height="48dp"
+                    android:layout_marginStart="6dp"
+                    android:layout_weight="1"
+                    android:background="@drawable/bg_step"
+                    android:contentDescription="H"
+                    android:padding="6dp"
+                    android:scaleType="centerInside"
+                    android:src="@drawable/heart_2" />
+
+                <ImageView
+                    android:id="@+id/ivPaletteT"
+                    android:layout_width="0dp"
+                    android:layout_height="48dp"
+                    android:layout_marginStart="6dp"
+                    android:layout_weight="1"
+                    android:background="@drawable/bg_step"
+                    android:contentDescription="T"
+                    android:padding="6dp"
+                    android:scaleType="centerInside"
+                    android:src="@drawable/triangle" />
+
+                <ImageView
+                    android:id="@+id/ivPaletteZ"
+                    android:layout_width="0dp"
+                    android:layout_height="48dp"
+                    android:layout_marginStart="6dp"
+                    android:layout_weight="1"
+                    android:background="@drawable/bg_step"
+                    android:contentDescription="Z"
+                    android:padding="6dp"
+                    android:scaleType="centerInside"
+                    android:src="@drawable/star" />
+            </LinearLayout>
 
             <LinearLayout
                 android:layout_width="match_parent"
@@ -50,52 +129,48 @@
                 android:layout_marginTop="10dp"
                 android:orientation="horizontal">
 
-                <TextView
-                    android:id="@+id/tvGuess1"
+                <ImageView
+                    android:id="@+id/ivGuessSlot1"
                     android:layout_width="0dp"
-                    android:layout_height="44dp"
+                    android:layout_height="48dp"
                     android:layout_weight="1"
                     android:background="@drawable/bg_step"
-                    android:gravity="center"
-                    android:text="S"
-                    android:textColor="@color/text_main"
-                    android:textStyle="bold" />
+                    android:contentDescription="@string/skocko_slot_empty"
+                    android:padding="6dp"
+                    android:scaleType="centerInside" />
 
-                <TextView
-                    android:id="@+id/tvGuess2"
+                <ImageView
+                    android:id="@+id/ivGuessSlot2"
                     android:layout_width="0dp"
-                    android:layout_height="44dp"
+                    android:layout_height="48dp"
                     android:layout_marginStart="6dp"
                     android:layout_weight="1"
                     android:background="@drawable/bg_step"
-                    android:gravity="center"
-                    android:text="S"
-                    android:textColor="@color/text_main"
-                    android:textStyle="bold" />
+                    android:contentDescription="@string/skocko_slot_empty"
+                    android:padding="6dp"
+                    android:scaleType="centerInside" />
 
-                <TextView
-                    android:id="@+id/tvGuess3"
+                <ImageView
+                    android:id="@+id/ivGuessSlot3"
                     android:layout_width="0dp"
-                    android:layout_height="44dp"
+                    android:layout_height="48dp"
                     android:layout_marginStart="6dp"
                     android:layout_weight="1"
                     android:background="@drawable/bg_step"
-                    android:gravity="center"
-                    android:text="S"
-                    android:textColor="@color/text_main"
-                    android:textStyle="bold" />
+                    android:contentDescription="@string/skocko_slot_empty"
+                    android:padding="6dp"
+                    android:scaleType="centerInside" />
 
-                <TextView
-                    android:id="@+id/tvGuess4"
+                <ImageView
+                    android:id="@+id/ivGuessSlot4"
                     android:layout_width="0dp"
-                    android:layout_height="44dp"
+                    android:layout_height="48dp"
                     android:layout_marginStart="6dp"
                     android:layout_weight="1"
                     android:background="@drawable/bg_step"
-                    android:gravity="center"
-                    android:text="S"
-                    android:textColor="@color/text_main"
-                    android:textStyle="bold" />
+                    android:contentDescription="@string/skocko_slot_empty"
+                    android:padding="6dp"
+                    android:scaleType="centerInside" />
             </LinearLayout>
 
             <LinearLayout
@@ -110,56 +185,65 @@
                     android:layout_height="wrap_content"
                     android:orientation="horizontal">
 
-                    <TextView android:id="@+id/row1slot1" android:layout_width="0dp" android:layout_height="40dp" android:layout_weight="1" android:background="@drawable/bg_step" android:gravity="center" android:text="-" android:textStyle="bold" />
-                    <TextView android:id="@+id/row1slot2" android:layout_width="0dp" android:layout_height="40dp" android:layout_marginStart="4dp" android:layout_weight="1" android:background="@drawable/bg_step" android:gravity="center" android:text="-" android:textStyle="bold" />
-                    <TextView android:id="@+id/row1slot3" android:layout_width="0dp" android:layout_height="40dp" android:layout_marginStart="4dp" android:layout_weight="1" android:background="@drawable/bg_step" android:gravity="center" android:text="-" android:textStyle="bold" />
-                    <TextView android:id="@+id/row1slot4" android:layout_width="0dp" android:layout_height="40dp" android:layout_marginStart="4dp" android:layout_weight="1" android:background="@drawable/bg_step" android:gravity="center" android:text="-" android:textStyle="bold" />
+                    <ImageView android:id="@+id/row1slot1" android:layout_width="0dp" android:layout_height="40dp" android:layout_weight="1" android:background="@drawable/bg_step" android:contentDescription="@string/skocko_slot_empty" android:padding="6dp" android:scaleType="centerInside" />
+                    <ImageView android:id="@+id/row1slot2" android:layout_width="0dp" android:layout_height="40dp" android:layout_marginStart="4dp" android:layout_weight="1" android:background="@drawable/bg_step" android:contentDescription="@string/skocko_slot_empty" android:padding="6dp" android:scaleType="centerInside" />
+                    <ImageView android:id="@+id/row1slot3" android:layout_width="0dp" android:layout_height="40dp" android:layout_marginStart="4dp" android:layout_weight="1" android:background="@drawable/bg_step" android:contentDescription="@string/skocko_slot_empty" android:padding="6dp" android:scaleType="centerInside" />
+                    <ImageView android:id="@+id/row1slot4" android:layout_width="0dp" android:layout_height="40dp" android:layout_marginStart="4dp" android:layout_weight="1" android:background="@drawable/bg_step" android:contentDescription="@string/skocko_slot_empty" android:padding="6dp" android:scaleType="centerInside" />
                     <TextView android:id="@+id/row1feedback" android:layout_width="128dp" android:layout_height="40dp" android:layout_marginStart="6dp" android:background="@drawable/bg_step" android:gravity="center" android:text="M:0 S:0" android:textSize="12sp" />
                 </LinearLayout>
 
                 <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginTop="4dp" android:orientation="horizontal">
-                    <TextView android:id="@+id/row2slot1" android:layout_width="0dp" android:layout_height="40dp" android:layout_weight="1" android:background="@drawable/bg_step" android:gravity="center" android:text="-" android:textStyle="bold" />
-                    <TextView android:id="@+id/row2slot2" android:layout_width="0dp" android:layout_height="40dp" android:layout_marginStart="4dp" android:layout_weight="1" android:background="@drawable/bg_step" android:gravity="center" android:text="-" android:textStyle="bold" />
-                    <TextView android:id="@+id/row2slot3" android:layout_width="0dp" android:layout_height="40dp" android:layout_marginStart="4dp" android:layout_weight="1" android:background="@drawable/bg_step" android:gravity="center" android:text="-" android:textStyle="bold" />
-                    <TextView android:id="@+id/row2slot4" android:layout_width="0dp" android:layout_height="40dp" android:layout_marginStart="4dp" android:layout_weight="1" android:background="@drawable/bg_step" android:gravity="center" android:text="-" android:textStyle="bold" />
+                    <ImageView android:id="@+id/row2slot1" android:layout_width="0dp" android:layout_height="40dp" android:layout_weight="1" android:background="@drawable/bg_step" android:contentDescription="@string/skocko_slot_empty" android:padding="6dp" android:scaleType="centerInside" />
+                    <ImageView android:id="@+id/row2slot2" android:layout_width="0dp" android:layout_height="40dp" android:layout_marginStart="4dp" android:layout_weight="1" android:background="@drawable/bg_step" android:contentDescription="@string/skocko_slot_empty" android:padding="6dp" android:scaleType="centerInside" />
+                    <ImageView android:id="@+id/row2slot3" android:layout_width="0dp" android:layout_height="40dp" android:layout_marginStart="4dp" android:layout_weight="1" android:background="@drawable/bg_step" android:contentDescription="@string/skocko_slot_empty" android:padding="6dp" android:scaleType="centerInside" />
+                    <ImageView android:id="@+id/row2slot4" android:layout_width="0dp" android:layout_height="40dp" android:layout_marginStart="4dp" android:layout_weight="1" android:background="@drawable/bg_step" android:contentDescription="@string/skocko_slot_empty" android:padding="6dp" android:scaleType="centerInside" />
                     <TextView android:id="@+id/row2feedback" android:layout_width="128dp" android:layout_height="40dp" android:layout_marginStart="6dp" android:background="@drawable/bg_step" android:gravity="center" android:text="M:0 S:0" android:textSize="12sp" />
                 </LinearLayout>
 
                 <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginTop="4dp" android:orientation="horizontal">
-                    <TextView android:id="@+id/row3slot1" android:layout_width="0dp" android:layout_height="40dp" android:layout_weight="1" android:background="@drawable/bg_step" android:gravity="center" android:text="-" android:textStyle="bold" />
-                    <TextView android:id="@+id/row3slot2" android:layout_width="0dp" android:layout_height="40dp" android:layout_marginStart="4dp" android:layout_weight="1" android:background="@drawable/bg_step" android:gravity="center" android:text="-" android:textStyle="bold" />
-                    <TextView android:id="@+id/row3slot3" android:layout_width="0dp" android:layout_height="40dp" android:layout_marginStart="4dp" android:layout_weight="1" android:background="@drawable/bg_step" android:gravity="center" android:text="-" android:textStyle="bold" />
-                    <TextView android:id="@+id/row3slot4" android:layout_width="0dp" android:layout_height="40dp" android:layout_marginStart="4dp" android:layout_weight="1" android:background="@drawable/bg_step" android:gravity="center" android:text="-" android:textStyle="bold" />
+                    <ImageView android:id="@+id/row3slot1" android:layout_width="0dp" android:layout_height="40dp" android:layout_weight="1" android:background="@drawable/bg_step" android:contentDescription="@string/skocko_slot_empty" android:padding="6dp" android:scaleType="centerInside" />
+                    <ImageView android:id="@+id/row3slot2" android:layout_width="0dp" android:layout_height="40dp" android:layout_marginStart="4dp" android:layout_weight="1" android:background="@drawable/bg_step" android:contentDescription="@string/skocko_slot_empty" android:padding="6dp" android:scaleType="centerInside" />
+                    <ImageView android:id="@+id/row3slot3" android:layout_width="0dp" android:layout_height="40dp" android:layout_marginStart="4dp" android:layout_weight="1" android:background="@drawable/bg_step" android:contentDescription="@string/skocko_slot_empty" android:padding="6dp" android:scaleType="centerInside" />
+                    <ImageView android:id="@+id/row3slot4" android:layout_width="0dp" android:layout_height="40dp" android:layout_marginStart="4dp" android:layout_weight="1" android:background="@drawable/bg_step" android:contentDescription="@string/skocko_slot_empty" android:padding="6dp" android:scaleType="centerInside" />
                     <TextView android:id="@+id/row3feedback" android:layout_width="128dp" android:layout_height="40dp" android:layout_marginStart="6dp" android:background="@drawable/bg_step" android:gravity="center" android:text="M:0 S:0" android:textSize="12sp" />
                 </LinearLayout>
 
                 <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginTop="4dp" android:orientation="horizontal">
-                    <TextView android:id="@+id/row4slot1" android:layout_width="0dp" android:layout_height="40dp" android:layout_weight="1" android:background="@drawable/bg_step" android:gravity="center" android:text="-" android:textStyle="bold" />
-                    <TextView android:id="@+id/row4slot2" android:layout_width="0dp" android:layout_height="40dp" android:layout_marginStart="4dp" android:layout_weight="1" android:background="@drawable/bg_step" android:gravity="center" android:text="-" android:textStyle="bold" />
-                    <TextView android:id="@+id/row4slot3" android:layout_width="0dp" android:layout_height="40dp" android:layout_marginStart="4dp" android:layout_weight="1" android:background="@drawable/bg_step" android:gravity="center" android:text="-" android:textStyle="bold" />
-                    <TextView android:id="@+id/row4slot4" android:layout_width="0dp" android:layout_height="40dp" android:layout_marginStart="4dp" android:layout_weight="1" android:background="@drawable/bg_step" android:gravity="center" android:text="-" android:textStyle="bold" />
+                    <ImageView android:id="@+id/row4slot1" android:layout_width="0dp" android:layout_height="40dp" android:layout_weight="1" android:background="@drawable/bg_step" android:contentDescription="@string/skocko_slot_empty" android:padding="6dp" android:scaleType="centerInside" />
+                    <ImageView android:id="@+id/row4slot2" android:layout_width="0dp" android:layout_height="40dp" android:layout_marginStart="4dp" android:layout_weight="1" android:background="@drawable/bg_step" android:contentDescription="@string/skocko_slot_empty" android:padding="6dp" android:scaleType="centerInside" />
+                    <ImageView android:id="@+id/row4slot3" android:layout_width="0dp" android:layout_height="40dp" android:layout_marginStart="4dp" android:layout_weight="1" android:background="@drawable/bg_step" android:contentDescription="@string/skocko_slot_empty" android:padding="6dp" android:scaleType="centerInside" />
+                    <ImageView android:id="@+id/row4slot4" android:layout_width="0dp" android:layout_height="40dp" android:layout_marginStart="4dp" android:layout_weight="1" android:background="@drawable/bg_step" android:contentDescription="@string/skocko_slot_empty" android:padding="6dp" android:scaleType="centerInside" />
                     <TextView android:id="@+id/row4feedback" android:layout_width="128dp" android:layout_height="40dp" android:layout_marginStart="6dp" android:background="@drawable/bg_step" android:gravity="center" android:text="M:0 S:0" android:textSize="12sp" />
                 </LinearLayout>
 
                 <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginTop="4dp" android:orientation="horizontal">
-                    <TextView android:id="@+id/row5slot1" android:layout_width="0dp" android:layout_height="40dp" android:layout_weight="1" android:background="@drawable/bg_step" android:gravity="center" android:text="-" android:textStyle="bold" />
-                    <TextView android:id="@+id/row5slot2" android:layout_width="0dp" android:layout_height="40dp" android:layout_marginStart="4dp" android:layout_weight="1" android:background="@drawable/bg_step" android:gravity="center" android:text="-" android:textStyle="bold" />
-                    <TextView android:id="@+id/row5slot3" android:layout_width="0dp" android:layout_height="40dp" android:layout_marginStart="4dp" android:layout_weight="1" android:background="@drawable/bg_step" android:gravity="center" android:text="-" android:textStyle="bold" />
-                    <TextView android:id="@+id/row5slot4" android:layout_width="0dp" android:layout_height="40dp" android:layout_marginStart="4dp" android:layout_weight="1" android:background="@drawable/bg_step" android:gravity="center" android:text="-" android:textStyle="bold" />
+                    <ImageView android:id="@+id/row5slot1" android:layout_width="0dp" android:layout_height="40dp" android:layout_weight="1" android:background="@drawable/bg_step" android:contentDescription="@string/skocko_slot_empty" android:padding="6dp" android:scaleType="centerInside" />
+                    <ImageView android:id="@+id/row5slot2" android:layout_width="0dp" android:layout_height="40dp" android:layout_marginStart="4dp" android:layout_weight="1" android:background="@drawable/bg_step" android:contentDescription="@string/skocko_slot_empty" android:padding="6dp" android:scaleType="centerInside" />
+                    <ImageView android:id="@+id/row5slot3" android:layout_width="0dp" android:layout_height="40dp" android:layout_marginStart="4dp" android:layout_weight="1" android:background="@drawable/bg_step" android:contentDescription="@string/skocko_slot_empty" android:padding="6dp" android:scaleType="centerInside" />
+                    <ImageView android:id="@+id/row5slot4" android:layout_width="0dp" android:layout_height="40dp" android:layout_marginStart="4dp" android:layout_weight="1" android:background="@drawable/bg_step" android:contentDescription="@string/skocko_slot_empty" android:padding="6dp" android:scaleType="centerInside" />
                     <TextView android:id="@+id/row5feedback" android:layout_width="128dp" android:layout_height="40dp" android:layout_marginStart="6dp" android:background="@drawable/bg_step" android:gravity="center" android:text="M:0 S:0" android:textSize="12sp" />
                 </LinearLayout>
 
                 <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginTop="4dp" android:orientation="horizontal">
-                    <TextView android:id="@+id/row6slot1" android:layout_width="0dp" android:layout_height="40dp" android:layout_weight="1" android:background="@drawable/bg_step" android:gravity="center" android:text="-" android:textStyle="bold" />
-                    <TextView android:id="@+id/row6slot2" android:layout_width="0dp" android:layout_height="40dp" android:layout_marginStart="4dp" android:layout_weight="1" android:background="@drawable/bg_step" android:gravity="center" android:text="-" android:textStyle="bold" />
-                    <TextView android:id="@+id/row6slot3" android:layout_width="0dp" android:layout_height="40dp" android:layout_marginStart="4dp" android:layout_weight="1" android:background="@drawable/bg_step" android:gravity="center" android:text="-" android:textStyle="bold" />
-                    <TextView android:id="@+id/row6slot4" android:layout_width="0dp" android:layout_height="40dp" android:layout_marginStart="4dp" android:layout_weight="1" android:background="@drawable/bg_step" android:gravity="center" android:text="-" android:textStyle="bold" />
+                    <ImageView android:id="@+id/row6slot1" android:layout_width="0dp" android:layout_height="40dp" android:layout_weight="1" android:background="@drawable/bg_step" android:contentDescription="@string/skocko_slot_empty" android:padding="6dp" android:scaleType="centerInside" />
+                    <ImageView android:id="@+id/row6slot2" android:layout_width="0dp" android:layout_height="40dp" android:layout_marginStart="4dp" android:layout_weight="1" android:background="@drawable/bg_step" android:contentDescription="@string/skocko_slot_empty" android:padding="6dp" android:scaleType="centerInside" />
+                    <ImageView android:id="@+id/row6slot3" android:layout_width="0dp" android:layout_height="40dp" android:layout_marginStart="4dp" android:layout_weight="1" android:background="@drawable/bg_step" android:contentDescription="@string/skocko_slot_empty" android:padding="6dp" android:scaleType="centerInside" />
+                    <ImageView android:id="@+id/row6slot4" android:layout_width="0dp" android:layout_height="40dp" android:layout_marginStart="4dp" android:layout_weight="1" android:background="@drawable/bg_step" android:contentDescription="@string/skocko_slot_empty" android:padding="6dp" android:scaleType="centerInside" />
                     <TextView android:id="@+id/row6feedback" android:layout_width="128dp" android:layout_height="40dp" android:layout_marginStart="6dp" android:background="@drawable/bg_step" android:gravity="center" android:text="M:0 S:0" android:textSize="12sp" />
                 </LinearLayout>
             </LinearLayout>
 
             <Button android:id="@+id/btnCheck" style="@style/Widget.MaterialComponents.Button" android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginTop="8dp" android:background="@drawable/bg_button_primary" android:text="@string/skocko_check" android:textColor="@color/white" />
-            <Button android:id="@+id/btnNextRound" style="@style/Widget.MaterialComponents.Button" android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginTop="8dp" android:background="@drawable/bg_button_secondary" android:text="Sledeca runda" android:textColor="@color/text_main" />
+            <Button
+                android:id="@+id/btnNextRound"
+                style="@style/Widget.MaterialComponents.Button"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="8dp"
+                android:background="@drawable/bg_button_secondary"
+                android:text="@string/skocko_next_round"
+                android:textColor="@color/text_main"
+                android:visibility="gone" />
 
             <TextView android:id="@+id/tvStatus" android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginTop="10dp" android:textColor="@color/text_muted" />
         </LinearLayout>

@@ -137,6 +137,14 @@ Porazi: 43%</string>
     <string name="skocko_row_5">Red 5</string>
     <string name="skocko_row_6">Red 6</string>
     <string name="skocko_choose_symbol">Izaberi simbol</string>
+    <string name="skocko_round_label">Runda 1/2</string>
+    <string name="skocko_next_round">Sledeca runda</string>
+    <string name="asocijacije_round_label">Runda 1/2</string>
+    <string name="asocijacije_next_round">Sledeca runda</string>
+    <string name="skocko_pick_hint">Izaberi simbol klikom na jednu od 6 ikonica iznad da popunis prvo prazno polje.</string>
+    <string name="skocko_feedback_hint">Kvadrati desno: crveno = tacno mesto; zuto = tacan simbol ali na drugom mestu.</string>
+    <string name="skocko_slot_empty">Prazno polje</string>
+    <string name="skocko_need_four">Popuni sva cetiri polja, zatim klikni Proveri da predjes na sledeci pokusaj.</string>
     <string name="skocko_check">Proveri kombinaciju</string>
     <string name="skocko_clear">Obrisi unos</string>
     <string name="skocko_mock_status">GUI prikaz: rezultat i bodovanje su samo vizuelni.</string>

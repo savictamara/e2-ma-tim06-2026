@@ -5,11 +5,15 @@ import android.os.CountDownTimer;
 import android.graphics.Color;
 import android.text.SpannableString;
 import android.text.style.ForegroundColorSpan;
+import android.view.View;
+import android.view.ViewGroup;
 import android.widget.Button;
+import android.widget.ImageView;
 import android.widget.TextView;
 
 import androidx.appcompat.app.AppCompatActivity;
 
+import java.util.Arrays;
 import java.util.HashSet;
 import java.util.Locale;
 import java.util.Random;
@@ -17,6 +21,14 @@ import java.util.Set;
 
 public class SkockoActivity extends AppCompatActivity {
     private static final char[] SYMBOLS = {'S', 'K', 'O', 'H', 'T', 'Z'};
+    private static final int[] SYMBOL_DRAWABLES = {
+            R.drawable.skocko,
+            R.drawable.black_square,
+            R.drawable.circle,
+            R.drawable.heart_2,
+            R.drawable.triangle,
+            R.drawable.star
+    };
     private static final int ROUND_MS = 30_000;
     private static final int STEAL_MS = 10_000;
     private final Random random = new Random();
@@ -39,11 +51,12 @@ public class SkockoActivity extends AppCompatActivity {
     private TextView tvScoreP1;
     private TextView tvScoreP2;
     private TextView tvStatus;
-    private TextView[] guessFields;
-    private int[] guessIndexes = {0, 0, 0, 0};
-    private Button btnNextRound;
+    private ImageView[] guessSlots;
+    private ViewGroup paletteBar;
+    private Button btnCheck;
 
-    private int round = 1;
+    private final int[] draftSymbolIndex = {-1, -1, -1, -1};
+
     private int activePlayer = 1;
     private int scoreP1 = 0;
     private int scoreP2 = 0;
@@ -64,20 +77,32 @@ public class SkockoActivity extends AppCompatActivity {
         tvScoreP1 = findViewById(R.id.tvScoreP1);
         tvScoreP2 = findViewById(R.id.tvScoreP2);
         tvStatus = findViewById(R.id.tvStatus);
-        guessFields = new TextView[] {
-                findViewById(R.id.tvGuess1),
-                findViewById(R.id.tvGuess2),
-                findViewById(R.id.tvGuess3),
-                findViewById(R.id.tvGuess4)
+        paletteBar = findViewById(R.id.paletteBar);
+        guessSlots = new ImageView[] {
+                findViewById(R.id.ivGuessSlot1),
+                findViewById(R.id.ivGuessSlot2),
+                findViewById(R.id.ivGuessSlot3),
+                findViewById(R.id.ivGuessSlot4)
         };
-        Button btnCheck = findViewById(R.id.btnCheck);
-        btnNextRound = findViewById(R.id.btnNextRound);
+        btnCheck = findViewById(R.id.btnCheck);
 
-        setupGuessSelectors();
+        bindPaletteSymbols();
         btnCheck.setOnClickListener(v -> submitGuess());
-        btnNextRound.setOnClickListener(v -> nextRound());
 
         setupRound();
+    }
+
+    private void bindPaletteSymbols() {
+        setPaletteClick(findViewById(R.id.ivPaletteS), 0);
+        setPaletteClick(findViewById(R.id.ivPaletteK), 1);
+        setPaletteClick(findViewById(R.id.ivPaletteO), 2);
+        setPaletteClick(findViewById(R.id.ivPaletteH), 3);
+        setPaletteClick(findViewById(R.id.ivPaletteT), 4);
+        setPaletteClick(findViewById(R.id.ivPaletteZ), 5);
+    }
+
+    private void setPaletteClick(ImageView view, final int symbolIndex) {
+        view.setOnClickListener(v -> appendSymbolDraft(symbolIndex));
     }
 
     private void setupRound() {
@@ -87,16 +112,17 @@ public class SkockoActivity extends AppCompatActivity {
         attempt = 0;
         target = randomTarget();
         resetBoardRows();
-        resetGuessSelectors();
-        btnNextRound.setEnabled(false);
+        resetDraftGuess();
         tvStatus.setText("");
         updateHeader();
+        refreshCheckAvailability();
         startMainTimer();
     }
 
     private void submitGuess() {
         if (roundFinished) return;
-        String guess = readGuessFromSelectors();
+        String guess = readDraftGuess();
+        if (!isDraftComplete()) return;
         if (!isValidGuess(guess)) return;
         if (!stealPhase && attempt >= 6) return;
 
@@ -121,7 +147,11 @@ public class SkockoActivity extends AppCompatActivity {
         if (attempt >= 6) {
             tvStatus.setText("Nije pogodjeno. Protivnik ima jednu sansu od 10s za 10 poena.");
             startStealPhase();
+            resetDraftGuess();
+            return;
         }
+
+        resetDraftGuess();
         updateHeader();
     }
 
@@ -155,6 +185,7 @@ public class SkockoActivity extends AppCompatActivity {
     private void startStealPhase() {
         stopTimer();
         stealPhase = true;
+        resetDraftGuess();
         timer = new CountDownTimer(STEAL_MS, 1000) {
             @Override public void onTick(long millisUntilFinished) {
                 tvTimer.setText("Bonus pokusaj: " + (millisUntilFinished / 1000) + "s");
@@ -173,19 +204,13 @@ public class SkockoActivity extends AppCompatActivity {
     private void finishRound() {
         roundFinished = true;
         stopTimer();
-        btnNextRound.setEnabled(true);
-        if (round >= 2) {
-            btnNextRound.setEnabled(false);
-            tvStatus.append(" Kraj igre.");
+        tvStatus.append(" Kraj igre.");
+        paletteBar.setEnabled(false);
+        for (int i = 0; i < paletteBar.getChildCount(); i++) {
+            paletteBar.getChildAt(i).setEnabled(false);
         }
+        btnCheck.setEnabled(false);
         updateHeader();
-    }
-
-    private void nextRound() {
-        if (!roundFinished || round >= 2) return;
-        round = 2;
-        activePlayer = 2;
-        setupRound();
     }
 
     private boolean isValidGuess(String guess) {
@@ -198,41 +223,83 @@ public class SkockoActivity extends AppCompatActivity {
         return true;
     }
 
-    private void setupGuessSelectors() {
-        for (int i = 0; i < guessFields.length; i++) {
-            int index = i;
-            guessFields[i].setText(String.valueOf(SYMBOLS[0]));
-            guessFields[i].setOnClickListener(v -> {
-                guessIndexes[index] = (guessIndexes[index] + 1) % SYMBOLS.length;
-                guessFields[index].setText(String.valueOf(SYMBOLS[guessIndexes[index]]));
-            });
+    private void appendSymbolDraft(int symbolIndex) {
+        if (roundFinished) return;
+        if (!isDraftComplete()) {
+            for (int i = 0; i < draftSymbolIndex.length; i++) {
+                if (draftSymbolIndex[i] < 0) {
+                    draftSymbolIndex[i] = symbolIndex;
+                    break;
+                }
+            }
+            redrawDraftSlots();
+            refreshCheckAvailability();
         }
+        // Dok su sva 4 popunjena, dalji simbol se ne dodaje dok se ne klikne Proveri
     }
 
-    private void resetGuessSelectors() {
-        for (int i = 0; i < guessFields.length; i++) {
-            guessIndexes[i] = 0;
-            guessFields[i].setText(String.valueOf(SYMBOLS[0]));
-        }
+    private boolean isDraftComplete() {
+        for (int v : draftSymbolIndex) if (v < 0) return false;
+        return true;
     }
 
-    private String readGuessFromSelectors() {
+    private String readDraftGuess() {
+        if (!isDraftComplete()) {
+            tvStatus.setText(getString(R.string.skocko_need_four));
+            return "";
+        }
         StringBuilder sb = new StringBuilder(4);
-        for (int idx : guessIndexes) {
-            sb.append(SYMBOLS[idx]);
+        for (int idx : draftSymbolIndex) sb.append(SYMBOLS[idx]);
+        return sb.toString().trim().toUpperCase(Locale.ROOT);
+    }
+
+    private void redrawDraftSlots() {
+        for (int i = 0; i < guessSlots.length; i++) {
+            int idx = draftSymbolIndex[i];
+            if (idx < 0) {
+                guessSlots[i].setImageDrawable(null);
+            } else {
+                guessSlots[i].setImageResource(SYMBOL_DRAWABLES[idx]);
+            }
         }
-        String guess = sb.toString().trim().toUpperCase(Locale.ROOT);
-        if (!isValidGuess(guess)) {
-            tvStatus.setText("Izaberi 4 simbola klikom na polja.");
+    }
+
+    private void resetDraftGuess() {
+        Arrays.fill(draftSymbolIndex, -1);
+        redrawDraftSlots();
+        refreshCheckAvailability();
+        if (!roundFinished && paletteBar != null) {
+            paletteBar.setEnabled(true);
+            for (int i = 0; i < paletteBar.getChildCount(); i++) {
+                paletteBar.getChildAt(i).setEnabled(true);
+                paletteBar.getChildAt(i).setAlpha(1f);
+            }
         }
-        return guess;
+    }
+
+    private void refreshCheckAvailability() {
+        if (roundFinished) {
+            btnCheck.setEnabled(false);
+            return;
+        }
+        btnCheck.setEnabled(isDraftComplete());
+        if (paletteBar != null && !roundFinished) {
+            boolean full = isDraftComplete();
+            float alpha = full ? 0.42f : 1f;
+            for (int i = 0; i < paletteBar.getChildCount(); i++) {
+                View child = paletteBar.getChildAt(i);
+                child.setAlpha(alpha);
+                child.setClickable(!full);
+                child.setEnabled(!full);
+            }
+        }
     }
 
     private void resetBoardRows() {
         for (int rowIndex = 0; rowIndex < rowSlotIds.length; rowIndex++) {
             for (int col = 0; col < 4; col++) {
-                TextView slot = findViewById(rowSlotIds[rowIndex][col]);
-                slot.setText("-");
+                ImageView slot = findViewById(rowSlotIds[rowIndex][col]);
+                slot.setImageDrawable(null);
             }
             TextView feedback = findViewById(rowFeedbackIds[rowIndex]);
             feedback.setText(buildFeedbackSquares(0, 0));
@@ -242,12 +309,18 @@ public class SkockoActivity extends AppCompatActivity {
 
     private void fillGuessRow(int rowIndex, String guess, int exact, int colorOnly) {
         for (int col = 0; col < 4; col++) {
-            TextView slot = findViewById(rowSlotIds[rowIndex][col]);
-            slot.setText(String.valueOf(guess.charAt(col)));
+            ImageView slot = findViewById(rowSlotIds[rowIndex][col]);
+            int sym = symbolCharToIndex(guess.charAt(col));
+            slot.setImageResource(SYMBOL_DRAWABLES[sym]);
         }
         TextView feedback = findViewById(rowFeedbackIds[rowIndex]);
         feedback.setText(buildFeedbackSquares(exact, colorOnly));
         tvStatus.setText("Red " + (rowIndex + 1) + " -> Tacno mesto: " + exact + ", Tacan simbol: " + colorOnly);
+    }
+
+    private int symbolCharToIndex(char c) {
+        for (int i = 0; i < SYMBOLS.length; i++) if (SYMBOLS[i] == c) return i;
+        return 0;
     }
 
     private CharSequence buildFeedbackSquares(int exact, int colorOnly) {
@@ -263,13 +336,6 @@ public class SkockoActivity extends AppCompatActivity {
             span.setSpan(new ForegroundColorSpan(color), i, i + 1, 0);
         }
         return span;
-    }
-
-    private int feedbackColor(int exact, int colorOnly) {
-        if (exact == 4) return Color.parseColor("#A5D6A7");
-        if (exact >= 2 || exact + colorOnly >= 3) return Color.parseColor("#FFE082");
-        if (exact + colorOnly > 0) return Color.parseColor("#FFCC80");
-        return Color.parseColor("#EF9A9A");
     }
 
     private int scoreForAttempt(int attemptNum) {
@@ -310,7 +376,7 @@ public class SkockoActivity extends AppCompatActivity {
     }
 
     private void updateHeader() {
-        tvRound.setText("Runda " + round + "/2");
+        tvRound.setText(getString(R.string.skocko_round_label));
         tvCurrentPlayer.setText(stealPhase ? "Bonus potez protivnika igraca " + activePlayer : "Na potezu: Igrac " + activePlayer);
         tvScoreP1.setText("Igrac 1: " + scoreP1 + " poena");
         tvScoreP2.setText("Igrac 2: " + scoreP2 + " poena");

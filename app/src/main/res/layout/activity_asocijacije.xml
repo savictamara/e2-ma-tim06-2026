@@ -255,8 +255,9 @@
                 android:layout_height="wrap_content"
                 android:layout_marginTop="8dp"
                 android:background="@drawable/bg_button_primary"
-                android:text="Sledeca runda"
-                android:textColor="@color/white" />
+                android:text="@string/asocijacije_next_round"
+                android:textColor="@color/white"
+                android:visibility="gone" />
 
             <TextView
                 android:id="@+id/tvStatus"
