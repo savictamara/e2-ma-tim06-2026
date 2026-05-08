@@ -8,41 +8,28 @@ import android.widget.TextView;
 import androidx.appcompat.app.AppCompatActivity;
 
 public class SpojniceActivity extends AppCompatActivity {
-    private final String[][] leftRounds = {
-            {"Tesla", "Andric", "Novak", "Nusic", "Mokranjac"},
-            {"Jabuka", "Sargarepa", "Spinat", "Sljiva", "Krompir"}
-    };
-
-    private final String[][] rightRounds = {
-            {"Pisac", "Kompozitor", "Naucnik", "Teniser", "Dramaturg"},
-            {"Vitaminski list", "Korenasto povrce", "Krtolasto povrce", "Vocna vrsta", "Jezgrasto voce"}
-    };
-
-    private final int[][] pairMap = {
-            {2, 0, 3, 4, 1},
-            {3, 1, 0, 4, 2}
-    };
+    private final String[] leftItems = {"Tesla", "Andric", "Novak", "Nusic", "Mokranjac"};
+    private final String[] rightItems = {"Pisac", "Kompozitor", "Naucnik", "Teniser", "Dramaturg"};
+    private final int[] pairMap = {2, 0, 3, 4, 1};
 
     private final Button[] leftButtons = new Button[5];
     private final Button[] rightButtons = new Button[5];
+    private final int[] selectedPairs = {-1, -1, -1, -1, -1};
 
     private TextView tvRound;
     private TextView tvTimer;
     private TextView tvPoints;
-    private TextView tvRoundPoints;
     private TextView tvStatus;
     private TextView tvPlayer1Score;
     private TextView tvPlayer2Score;
     private Button btnCheckRound;
-    private int currentRound = 0;
-    private int totalPoints = 0;
-    private int currentRoundPoints = 0;
+
+    private int points = 0;
     private int selectedLeft = -1;
     private int selectedRight = -1;
     private final int mockPlayerTwoPoints = 8;
-    private final int[] selectedPairs = {-1, -1, -1, -1, -1};
-    private CountDownTimer roundTimer;
     private boolean roundFinished = false;
+    private CountDownTimer roundTimer;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -52,7 +39,6 @@ public class SpojniceActivity extends AppCompatActivity {
         tvRound = findViewById(R.id.tvRound);
         tvTimer = findViewById(R.id.tvTimer);
         tvPoints = findViewById(R.id.tvPoints);
-        tvRoundPoints = findViewById(R.id.tvRoundPoints);
         tvStatus = findViewById(R.id.tvStatus);
         tvPlayer1Score = findViewById(R.id.tvSpojnicePlayer1);
         tvPlayer2Score = findViewById(R.id.tvSpojnicePlayer2);
@@ -83,9 +69,6 @@ public class SpojniceActivity extends AppCompatActivity {
         btnCheckRound.setOnClickListener(v -> {
             if (!roundFinished) {
                 finishRound();
-            } else if (currentRound == 0) {
-                currentRound = 1;
-                setupRound();
             }
         });
 
@@ -95,19 +78,19 @@ public class SpojniceActivity extends AppCompatActivity {
     private void setupRound() {
         selectedLeft = -1;
         selectedRight = -1;
+        points = 0;
         roundFinished = false;
-        currentRoundPoints = 0;
+        tvRound.setText(getString(R.string.round_one_of_two));
         tvStatus.setText("");
+        btnCheckRound.setEnabled(true);
         btnCheckRound.setText(R.string.spojnice_check_round);
-        tvRound.setText(getString(R.string.spojnice_round, currentRound + 1, 2));
-        tvPoints.setText(getString(R.string.spojnice_total_points, totalPoints));
-        tvRoundPoints.setText(getString(R.string.spojnice_round_points, currentRoundPoints));
+        tvPoints.setText(getString(R.string.spojnice_points_single_round, points));
         updateMockPlayerScores();
 
         for (int i = 0; i < 5; i++) {
             selectedPairs[i] = -1;
-            leftButtons[i].setText(leftRounds[currentRound][i]);
-            rightButtons[i].setText(rightRounds[currentRound][i]);
+            leftButtons[i].setText(leftItems[i]);
+            rightButtons[i].setText(rightItems[i]);
             leftButtons[i].setEnabled(true);
             rightButtons[i].setEnabled(true);
             leftButtons[i].setBackgroundResource(R.drawable.bg_step);
@@ -118,10 +101,11 @@ public class SpojniceActivity extends AppCompatActivity {
     }
 
     private void onLeftSelected(int leftIndex) {
-        if (roundFinished) {
+        if (roundFinished || selectedPairs[leftIndex] != -1) {
             return;
         }
         selectedLeft = leftIndex;
+        selectedRight = -1;
         refreshSelectionVisuals();
     }
 
@@ -137,20 +121,17 @@ public class SpojniceActivity extends AppCompatActivity {
                 break;
             }
         }
-
         if (rightTaken) {
-            refreshSelectionVisuals();
             return;
         }
 
         selectedRight = rightIndex;
-        refreshSelectionVisuals();
-
-        if (selectedLeft == -1 || selectedPairs[selectedLeft] != -1) {
+        if (selectedLeft == -1) {
+            refreshSelectionVisuals();
             return;
         }
 
-        selectedPairs[selectedLeft] = rightIndex;
+        selectedPairs[selectedLeft] = selectedRight;
         selectedLeft = -1;
         selectedRight = -1;
         refreshSelectionVisuals();
@@ -158,9 +139,7 @@ public class SpojniceActivity extends AppCompatActivity {
 
     private void refreshSelectionVisuals() {
         for (int i = 0; i < leftButtons.length; i++) {
-            if (selectedPairs[i] != -1) {
-                leftButtons[i].setBackgroundResource(R.drawable.bg_answer_selected);
-            } else if (i == selectedLeft) {
+            if (selectedPairs[i] != -1 || i == selectedLeft) {
                 leftButtons[i].setBackgroundResource(R.drawable.bg_answer_selected);
             } else {
                 leftButtons[i].setBackgroundResource(R.drawable.bg_step);
@@ -175,31 +154,10 @@ public class SpojniceActivity extends AppCompatActivity {
                     break;
                 }
             }
-
             if (isPaired || i == selectedRight) {
                 rightButtons[i].setBackgroundResource(R.drawable.bg_answer_selected);
             } else {
                 rightButtons[i].setBackgroundResource(R.drawable.bg_step);
-            }
-        }
-    }
-
-    private int findPairOwner(int rightIndex) {
-        for (int i = 0; i < selectedPairs.length; i++) {
-            if (selectedPairs[i] == rightIndex) {
-                return i;
-            }
-        }
-        return -1;
-    }
-
-    private void highlightWrongPair(int leftIndex) {
-        leftButtons[leftIndex].setBackgroundResource(R.drawable.bg_answer_wrong);
-        int pairedRight = selectedPairs[leftIndex];
-        if (pairedRight >= 0) {
-            int rightOwner = findPairOwner(pairedRight);
-            if (rightOwner == leftIndex || (rightOwner >= 0 && selectedPairs[rightOwner] != pairMap[currentRound][rightOwner])) {
-                rightButtons[pairedRight].setBackgroundResource(R.drawable.bg_answer_wrong);
             }
         }
     }
@@ -211,40 +169,34 @@ public class SpojniceActivity extends AppCompatActivity {
         }
 
         int matched = 0;
-        for (int i = 0; i < pairMap[currentRound].length; i++) {
-            boolean correct = selectedPairs[i] == pairMap[currentRound][i];
+        for (int i = 0; i < pairMap.length; i++) {
+            boolean correct = selectedPairs[i] == pairMap[i];
             if (correct) {
                 matched++;
                 leftButtons[i].setBackgroundResource(R.drawable.bg_answer_correct);
                 rightButtons[selectedPairs[i]].setBackgroundResource(R.drawable.bg_answer_correct);
             } else {
-                highlightWrongPair(i);
+                leftButtons[i].setBackgroundResource(R.drawable.bg_answer_wrong);
+                if (selectedPairs[i] >= 0) {
+                    rightButtons[selectedPairs[i]].setBackgroundResource(R.drawable.bg_answer_wrong);
+                }
             }
             leftButtons[i].setEnabled(false);
             rightButtons[i].setEnabled(false);
         }
 
-        currentRoundPoints = matched * 2;
-        totalPoints += currentRoundPoints;
-        tvRoundPoints.setText(getString(R.string.spojnice_round_points, currentRoundPoints));
-        tvPoints.setText(getString(R.string.spojnice_total_points, totalPoints));
+        points = matched * 2;
+        tvPoints.setText(getString(R.string.spojnice_points_single_round, points));
         updateMockPlayerScores();
-        tvStatus.setText(getString(R.string.spojnice_round_result, matched, currentRoundPoints));
-
-        if (currentRound == 0) {
-            btnCheckRound.setText(R.string.spojnice_next_round);
-        } else {
-            btnCheckRound.setText(R.string.spojnice_finished);
-            btnCheckRound.setEnabled(false);
-            tvStatus.setText(getString(R.string.spojnice_final_result, totalPoints));
-        }
+        tvStatus.setText(getString(R.string.spojnice_round_result, matched, points));
+        btnCheckRound.setText(R.string.spojnice_finished);
+        btnCheckRound.setEnabled(false);
     }
 
     private void startRoundTimer() {
         if (roundTimer != null) {
             roundTimer.cancel();
         }
-
         roundTimer = new CountDownTimer(30000, 1000) {
             @Override
             public void onTick(long millisUntilFinished) {
@@ -263,7 +215,15 @@ public class SpojniceActivity extends AppCompatActivity {
     }
 
     private void updateMockPlayerScores() {
-        tvPlayer1Score.setText(getString(R.string.player_points, totalPoints));
+        tvPlayer1Score.setText(getString(R.string.player_points, points));
         tvPlayer2Score.setText(getString(R.string.player_points, mockPlayerTwoPoints));
+    }
+
+    @Override
+    protected void onDestroy() {
+        if (roundTimer != null) {
+            roundTimer.cancel();
+        }
+        super.onDestroy();
     }
 }

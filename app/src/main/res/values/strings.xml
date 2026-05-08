@@ -93,6 +93,7 @@ Porazi: 43%</string>
     <string name="spojnice_next_round">Sledeca runda</string>
     <string name="spojnice_finished">Zavrseno</string>
     <string name="spojnice_round_result">Tacni parovi: %1$d | Osvojeno poena: %2$d</string>
+    <string name="spojnice_points_single_round">Poeni: %1$d/10</string>
     <string name="spojnice_round_points">Poeni runde: %1$d/10</string>
     <string name="spojnice_total_points">Ukupno poena: %1$d/20</string>
     <string name="spojnice_final_result">Konacan rezultat: %1$d/20</string>
