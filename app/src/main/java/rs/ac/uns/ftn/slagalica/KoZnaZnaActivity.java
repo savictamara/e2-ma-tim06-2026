@@ -9,7 +9,7 @@ import androidx.appcompat.app.AppCompatActivity;
 
 public class KoZnaZnaActivity extends AppCompatActivity {
     private final String[] questions = {
-            "Koji je glavni grad Srbije?",
+            "Koji element ima hemijski simbol Au?",
             "Koliko kontinenata postoji?",
             "Koja planeta je poznata kao crvena planeta?",
             "Ko je napisao Na Drini cuprija?",
@@ -17,14 +17,14 @@ public class KoZnaZnaActivity extends AppCompatActivity {
     };
 
     private final String[][] answers = {
-            {"Novi Sad", "Beograd", "Nis", "Kragujevac"},
+            {"Zlato", "Srebro", "Gvozdje", "Kiseonik"},
             {"5", "6", "7", "8"},
             {"Venera", "Mars", "Jupiter", "Merkur"},
             {"Mesa Selimovic", "Ivo Andric", "Branko Copic", "Milos Crnjanski"},
             {"Ag", "Au", "Fe", "Pb"}
     };
 
-    private final int[] correctIndex = {1, 2, 1, 1, 1};
+    private final int[] correctIndex = {0, 2, 1, 1, 1};
     private final Button[] answerButtons = new Button[4];
 
     private TextView tvTimer;
@@ -32,10 +32,13 @@ public class KoZnaZnaActivity extends AppCompatActivity {
     private TextView tvPoints;
     private TextView tvQuestion;
     private TextView tvRoundResult;
+    private TextView tvPlayer1Score;
+    private TextView tvPlayer2Score;
     private Button btnNextQuestion;
 
     private int questionIndex = 0;
     private int points = 0;
+    private final int mockPlayerTwoPoints = 15;
     private boolean answered = false;
     private CountDownTimer questionTimer;
 
@@ -49,6 +52,8 @@ public class KoZnaZnaActivity extends AppCompatActivity {
         tvPoints = findViewById(R.id.tvPoints);
         tvQuestion = findViewById(R.id.tvQuestion);
         tvRoundResult = findViewById(R.id.tvRoundResult);
+        tvPlayer1Score = findViewById(R.id.tvKznzPlayer1);
+        tvPlayer2Score = findViewById(R.id.tvKznzPlayer2);
         btnNextQuestion = findViewById(R.id.btnNextQuestion);
 
         answerButtons[0] = findViewById(R.id.btnAnswer1);
@@ -149,6 +154,8 @@ public class KoZnaZnaActivity extends AppCompatActivity {
     private void updateScoreAndHeader() {
         tvQuestionIndex.setText(getString(R.string.kznz_question_counter, questionIndex + 1, questions.length));
         tvPoints.setText(getString(R.string.points_text, points));
+        tvPlayer1Score.setText(getString(R.string.player_points, points));
+        tvPlayer2Score.setText(getString(R.string.player_points, mockPlayerTwoPoints));
     }
 
     private void showFinalResult() {

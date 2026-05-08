@@ -39,6 +39,9 @@
     <string name="timer_text">Vreme: %1$ds</string>
     <string name="timer_text_60">Vreme: 60s</string>
     <string name="points_text">Poeni: %1$d</string>
+    <string name="player_one">Igrac 1</string>
+    <string name="player_two">Igrac 2</string>
+    <string name="player_points">Poeni: %1$d</string>
     <string name="result_text">Rezultat: %1$s</string>
     <string name="round_one_of_two">Runda: 1/2</string>
     <string name="moj_broj_round_end">Vreme je isteklo. Runda je zavrsena.</string>

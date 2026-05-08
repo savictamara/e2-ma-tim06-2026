@@ -31,12 +31,15 @@ public class SpojniceActivity extends AppCompatActivity {
     private TextView tvPoints;
     private TextView tvRoundPoints;
     private TextView tvStatus;
+    private TextView tvPlayer1Score;
+    private TextView tvPlayer2Score;
     private Button btnCheckRound;
     private int currentRound = 0;
     private int totalPoints = 0;
     private int currentRoundPoints = 0;
     private int selectedLeft = -1;
     private int selectedRight = -1;
+    private final int mockPlayerTwoPoints = 8;
     private final int[] selectedPairs = {-1, -1, -1, -1, -1};
     private CountDownTimer roundTimer;
     private boolean roundFinished = false;
@@ -51,6 +54,8 @@ public class SpojniceActivity extends AppCompatActivity {
         tvPoints = findViewById(R.id.tvPoints);
         tvRoundPoints = findViewById(R.id.tvRoundPoints);
         tvStatus = findViewById(R.id.tvStatus);
+        tvPlayer1Score = findViewById(R.id.tvSpojnicePlayer1);
+        tvPlayer2Score = findViewById(R.id.tvSpojnicePlayer2);
         btnCheckRound = findViewById(R.id.btnCheckRound);
 
         leftButtons[0] = findViewById(R.id.btnLeft1);
@@ -97,6 +102,7 @@ public class SpojniceActivity extends AppCompatActivity {
         tvRound.setText(getString(R.string.spojnice_round, currentRound + 1, 2));
         tvPoints.setText(getString(R.string.spojnice_total_points, totalPoints));
         tvRoundPoints.setText(getString(R.string.spojnice_round_points, currentRoundPoints));
+        updateMockPlayerScores();
 
         for (int i = 0; i < 5; i++) {
             selectedPairs[i] = -1;
@@ -222,6 +228,7 @@ public class SpojniceActivity extends AppCompatActivity {
         totalPoints += currentRoundPoints;
         tvRoundPoints.setText(getString(R.string.spojnice_round_points, currentRoundPoints));
         tvPoints.setText(getString(R.string.spojnice_total_points, totalPoints));
+        updateMockPlayerScores();
         tvStatus.setText(getString(R.string.spojnice_round_result, matched, currentRoundPoints));
 
         if (currentRound == 0) {
@@ -253,5 +260,10 @@ public class SpojniceActivity extends AppCompatActivity {
             }
         };
         roundTimer.start();
+    }
+
+    private void updateMockPlayerScores() {
+        tvPlayer1Score.setText(getString(R.string.player_points, totalPoints));
+        tvPlayer2Score.setText(getString(R.string.player_points, mockPlayerTwoPoints));
     }
 }

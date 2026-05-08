@@ -14,6 +14,7 @@ public class MojBrojActivity extends AppCompatActivity {
     private final Random random = new Random();
     private int targetNumber = 0;
     private int points = 0;
+    private final int mockPlayerTwoPoints = 6;
     private CountDownTimer roundTimer;
     private boolean roundEnded = false;
 
@@ -27,6 +28,8 @@ public class MojBrojActivity extends AppCompatActivity {
         TextView tvNumbers = findViewById(R.id.tvNumbers);
         TextView tvResult = findViewById(R.id.tvMojBrojResult);
         TextView tvPoints = findViewById(R.id.tvMojBrojPoints);
+        TextView tvPlayer1 = findViewById(R.id.tvMojBrojPlayer1);
+        TextView tvPlayer2 = findViewById(R.id.tvMojBrojPlayer2);
         EditText etExpression = findViewById(R.id.etExpression);
 
         Button btnStopTarget = findViewById(R.id.btnStopTarget);
@@ -35,7 +38,7 @@ public class MojBrojActivity extends AppCompatActivity {
         Button btnConfirm = findViewById(R.id.btnConfirm);
 
         updateTarget(tvTarget);
-        updatePoints(tvPoints);
+        updatePoints(tvPoints, tvPlayer1, tvPlayer2);
         startTimer(tvTimer, etExpression, btnStopTarget, btnStopNumbers, btnDelete, btnConfirm, tvResult);
 
         btnStopTarget.setOnClickListener(v -> {
@@ -92,7 +95,7 @@ public class MojBrojActivity extends AppCompatActivity {
                 }
                 tvResult.setText(getString(R.string.result_text, "Rezultat izraza: " + mockResult));
             }
-            updatePoints(tvPoints);
+            updatePoints(tvPoints, tvPlayer1, tvPlayer2);
         });
     }
 
@@ -142,7 +145,9 @@ public class MojBrojActivity extends AppCompatActivity {
         tvTarget.setText(getString(R.string.target_number, targetNumber));
     }
 
-    private void updatePoints(TextView tvPoints) {
+    private void updatePoints(TextView tvPoints, TextView tvPlayer1, TextView tvPlayer2) {
         tvPoints.setText(getString(R.string.points_text, points));
+        tvPlayer1.setText(getString(R.string.player_points, points));
+        tvPlayer2.setText(getString(R.string.player_points, mockPlayerTwoPoints));
     }
 }

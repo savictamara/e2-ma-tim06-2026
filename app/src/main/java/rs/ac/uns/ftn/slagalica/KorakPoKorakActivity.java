@@ -15,8 +15,11 @@ public class KorakPoKorakActivity extends AppCompatActivity {
     private final TextView[] stepViews = new TextView[7];
     private int openedSteps = 0;
     private int points = 20;
+    private final int mockPlayerTwoPoints = 14;
     private TextView tvTimer;
     private TextView tvPoints;
+    private TextView tvPlayer1Score;
+    private TextView tvPlayer2Score;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -33,6 +36,8 @@ public class KorakPoKorakActivity extends AppCompatActivity {
 
         tvTimer = findViewById(R.id.tvTimer);
         tvPoints = findViewById(R.id.tvPoints);
+        tvPlayer1Score = findViewById(R.id.tvPlayer1Score);
+        tvPlayer2Score = findViewById(R.id.tvPlayer2Score);
         EditText etSolution = findViewById(R.id.etSolution);
         TextView tvResult = findViewById(R.id.tvResult);
         Button btnOpenStep = findViewById(R.id.btnOpenStep);
@@ -78,5 +83,7 @@ public class KorakPoKorakActivity extends AppCompatActivity {
 
     private void updatePoints() {
         tvPoints.setText(getString(R.string.points_text, points));
+        tvPlayer1Score.setText(getString(R.string.player_points, points));
+        tvPlayer2Score.setText(getString(R.string.player_points, mockPlayerTwoPoints));
     }
 }
