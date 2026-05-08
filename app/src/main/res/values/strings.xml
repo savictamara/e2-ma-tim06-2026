@@ -37,8 +37,11 @@
     <string name="hint_solution">Unesi resenje</string>
     <string name="hint_expression">Unesi izraz</string>
     <string name="timer_text">Vreme: %1$ds</string>
+    <string name="timer_text_60">Vreme: 60s</string>
     <string name="points_text">Poeni: %1$d</string>
     <string name="result_text">Rezultat: %1$s</string>
+    <string name="round_one_of_two">Runda: 1/2</string>
+    <string name="moj_broj_round_end">Vreme je isteklo. Runda je zavrsena.</string>
 
     <string name="error_fill_fields">Popunite sva obavezna polja.</string>
     <string name="error_password_mismatch">Lozinke se ne poklapaju.</string>

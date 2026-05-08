@@ -18,6 +18,22 @@
             android:textSize="24sp"
             android:textStyle="bold" />
 
+        <TextView
+            android:id="@+id/tvMojBrojRound"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="6dp"
+            android:text="@string/round_one_of_two"
+            android:textColor="@color/text_muted" />
+
+        <TextView
+            android:id="@+id/tvMojBrojTimer"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="4dp"
+            android:text="@string/timer_text_60"
+            android:textColor="@color/text_muted" />
+
         <TextView android:id="@+id/tvTarget" android:layout_width="wrap_content" android:layout_height="wrap_content" android:layout_marginTop="8dp" android:textColor="@color/text_muted"/>
         <TextView android:id="@+id/tvMojBrojPoints" android:layout_width="wrap_content" android:layout_height="wrap_content" android:layout_marginTop="4dp" android:textColor="@color/text_muted"/>
 
