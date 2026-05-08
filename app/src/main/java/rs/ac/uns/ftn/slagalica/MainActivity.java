@@ -20,6 +20,9 @@ public class MainActivity extends AppCompatActivity {
         Button btnProfile = findViewById(R.id.btnProfileTop);
         Button btnKoZnaZna = findViewById(R.id.btnKoZnaZna);
         Button btnSpojnice = findViewById(R.id.btnSpojnice);
+        Button btnAsocijacije = findViewById(R.id.btnAsocijacije);
+        Button btnSkocko = findViewById(R.id.btnSkocko);
+        Button btnNotifikacije = findViewById(R.id.btnNotifikacije);
 
         btnLogin.setOnClickListener(v -> startActivity(new Intent(this, LoginActivity.class)));
         btnRegister.setOnClickListener(v -> startActivity(new Intent(this, RegisterActivity.class)));
@@ -29,5 +32,8 @@ public class MainActivity extends AppCompatActivity {
         btnProfile.setOnClickListener(v -> startActivity(new Intent(this, ProfileActivity.class)));
         btnKoZnaZna.setOnClickListener(v -> startActivity(new Intent(this, KoZnaZnaActivity.class)));
         btnSpojnice.setOnClickListener(v -> startActivity(new Intent(this, SpojniceActivity.class)));
+        btnAsocijacije.setOnClickListener(v -> startActivity(new Intent(this, AsocijacijeActivity.class)));
+        btnSkocko.setOnClickListener(v -> startActivity(new Intent(this, SkockoActivity.class)));
+        btnNotifikacije.setOnClickListener(v -> startActivity(new Intent(this, NotifikacijeActivity.class)));
     }
 }

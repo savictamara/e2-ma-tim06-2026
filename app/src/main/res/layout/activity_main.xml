@@ -83,6 +83,16 @@
                 android:background="@drawable/bg_button_primary"
                 android:text="@string/go_reset"
                 android:textColor="@color/white" />
+
+            <Button
+                android:id="@+id/btnNotifikacije"
+                style="@style/Widget.MaterialComponents.Button"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="10dp"
+                android:background="@drawable/bg_button_secondary"
+                android:text="@string/go_notifikacije"
+                android:textColor="@color/text_main" />
         </LinearLayout>
 
         <LinearLayout
@@ -139,6 +149,27 @@
                 android:background="@drawable/bg_button_primary"
                 android:text="@string/go_spojnice"
                 android:textColor="@color/white" />
+
+            <Button
+                android:id="@+id/btnAsocijacije"
+                style="@style/Widget.MaterialComponents.Button"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="10dp"
+                android:background="@drawable/bg_button_secondary"
+                android:text="@string/go_asocijacije"
+                android:textColor="@color/text_main" />
+
+            <Button
+                android:id="@+id/btnSkocko"
+                style="@style/Widget.MaterialComponents.Button"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="10dp"
+                android:background="@drawable/bg_button_primary"
+                android:text="@string/go_skocko"
+                android:textColor="@color/white" />
+
         </LinearLayout>
     </LinearLayout>
 </ScrollView>

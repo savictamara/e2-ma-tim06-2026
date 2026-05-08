@@ -9,6 +9,15 @@
         android:supportsRtl="true"
         android:theme="@style/Theme.SlagalicaStudent1KT1">
         <activity
+            android:name=".NotifikacijeActivity"
+            android:exported="false" />
+        <activity
+            android:name=".SkockoActivity"
+            android:exported="false" />
+        <activity
+            android:name=".AsocijacijeActivity"
+            android:exported="false" />
+        <activity
             android:name=".SpojniceActivity"
             android:exported="false" />
         <activity
