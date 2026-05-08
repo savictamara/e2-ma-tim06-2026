@@ -1,0 +1,167 @@
+<?xml version="1.0" encoding="utf-8"?>
+<ScrollView xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:background="@drawable/bg_screen"
+    android:padding="16dp">
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="vertical">
+
+        <TextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="@string/skocko_title"
+            android:textColor="@color/text_main"
+            android:textSize="24sp"
+            android:textStyle="bold" />
+
+        <TextView android:id="@+id/tvRound" android:layout_width="wrap_content" android:layout_height="wrap_content" android:layout_marginTop="6dp" android:textColor="@color/text_muted" />
+        <TextView android:id="@+id/tvCurrentPlayer" android:layout_width="wrap_content" android:layout_height="wrap_content" android:layout_marginTop="4dp" android:textColor="@color/text_muted" />
+        <TextView android:id="@+id/tvTimer" android:layout_width="wrap_content" android:layout_height="wrap_content" android:layout_marginTop="4dp" android:textColor="@color/text_muted" />
+        <TextView android:id="@+id/tvScoreP1" android:layout_width="wrap_content" android:layout_height="wrap_content" android:layout_marginTop="4dp" android:textColor="@color/text_muted" />
+        <TextView android:id="@+id/tvScoreP2" android:layout_width="wrap_content" android:layout_height="wrap_content" android:layout_marginTop="2dp" android:textColor="@color/text_muted" />
+
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="12dp"
+            android:background="@drawable/bg_card"
+            android:orientation="vertical">
+
+            <TextView
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:text="Simboli: S, K, O, H, T, Z"
+                android:textColor="@color/text_muted" />
+
+            <TextView
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="4dp"
+                android:text="Feedback kvadrati: prvo crveni (tacno mesto), zatim zuti (tacan simbol)"
+                android:textColor="@color/text_muted" />
+
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="10dp"
+                android:orientation="horizontal">
+
+                <TextView
+                    android:id="@+id/tvGuess1"
+                    android:layout_width="0dp"
+                    android:layout_height="44dp"
+                    android:layout_weight="1"
+                    android:background="@drawable/bg_step"
+                    android:gravity="center"
+                    android:text="S"
+                    android:textColor="@color/text_main"
+                    android:textStyle="bold" />
+
+                <TextView
+                    android:id="@+id/tvGuess2"
+                    android:layout_width="0dp"
+                    android:layout_height="44dp"
+                    android:layout_marginStart="6dp"
+                    android:layout_weight="1"
+                    android:background="@drawable/bg_step"
+                    android:gravity="center"
+                    android:text="S"
+                    android:textColor="@color/text_main"
+                    android:textStyle="bold" />
+
+                <TextView
+                    android:id="@+id/tvGuess3"
+                    android:layout_width="0dp"
+                    android:layout_height="44dp"
+                    android:layout_marginStart="6dp"
+                    android:layout_weight="1"
+                    android:background="@drawable/bg_step"
+                    android:gravity="center"
+                    android:text="S"
+                    android:textColor="@color/text_main"
+                    android:textStyle="bold" />
+
+                <TextView
+                    android:id="@+id/tvGuess4"
+                    android:layout_width="0dp"
+                    android:layout_height="44dp"
+                    android:layout_marginStart="6dp"
+                    android:layout_weight="1"
+                    android:background="@drawable/bg_step"
+                    android:gravity="center"
+                    android:text="S"
+                    android:textColor="@color/text_main"
+                    android:textStyle="bold" />
+            </LinearLayout>
+
+            <LinearLayout
+                android:id="@+id/rowsContainer"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="10dp"
+                android:orientation="vertical">
+
+                <LinearLayout
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:orientation="horizontal">
+
+                    <TextView android:id="@+id/row1slot1" android:layout_width="0dp" android:layout_height="40dp" android:layout_weight="1" android:background="@drawable/bg_step" android:gravity="center" android:text="-" android:textStyle="bold" />
+                    <TextView android:id="@+id/row1slot2" android:layout_width="0dp" android:layout_height="40dp" android:layout_marginStart="4dp" android:layout_weight="1" android:background="@drawable/bg_step" android:gravity="center" android:text="-" android:textStyle="bold" />
+                    <TextView android:id="@+id/row1slot3" android:layout_width="0dp" android:layout_height="40dp" android:layout_marginStart="4dp" android:layout_weight="1" android:background="@drawable/bg_step" android:gravity="center" android:text="-" android:textStyle="bold" />
+                    <TextView android:id="@+id/row1slot4" android:layout_width="0dp" android:layout_height="40dp" android:layout_marginStart="4dp" android:layout_weight="1" android:background="@drawable/bg_step" android:gravity="center" android:text="-" android:textStyle="bold" />
+                    <TextView android:id="@+id/row1feedback" android:layout_width="128dp" android:layout_height="40dp" android:layout_marginStart="6dp" android:background="@drawable/bg_step" android:gravity="center" android:text="M:0 S:0" android:textSize="12sp" />
+                </LinearLayout>
+
+                <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginTop="4dp" android:orientation="horizontal">
+                    <TextView android:id="@+id/row2slot1" android:layout_width="0dp" android:layout_height="40dp" android:layout_weight="1" android:background="@drawable/bg_step" android:gravity="center" android:text="-" android:textStyle="bold" />
+                    <TextView android:id="@+id/row2slot2" android:layout_width="0dp" android:layout_height="40dp" android:layout_marginStart="4dp" android:layout_weight="1" android:background="@drawable/bg_step" android:gravity="center" android:text="-" android:textStyle="bold" />
+                    <TextView android:id="@+id/row2slot3" android:layout_width="0dp" android:layout_height="40dp" android:layout_marginStart="4dp" android:layout_weight="1" android:background="@drawable/bg_step" android:gravity="center" android:text="-" android:textStyle="bold" />
+                    <TextView android:id="@+id/row2slot4" android:layout_width="0dp" android:layout_height="40dp" android:layout_marginStart="4dp" android:layout_weight="1" android:background="@drawable/bg_step" android:gravity="center" android:text="-" android:textStyle="bold" />
+                    <TextView android:id="@+id/row2feedback" android:layout_width="128dp" android:layout_height="40dp" android:layout_marginStart="6dp" android:background="@drawable/bg_step" android:gravity="center" android:text="M:0 S:0" android:textSize="12sp" />
+                </LinearLayout>
+
+                <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginTop="4dp" android:orientation="horizontal">
+                    <TextView android:id="@+id/row3slot1" android:layout_width="0dp" android:layout_height="40dp" android:layout_weight="1" android:background="@drawable/bg_step" android:gravity="center" android:text="-" android:textStyle="bold" />
+                    <TextView android:id="@+id/row3slot2" android:layout_width="0dp" android:layout_height="40dp" android:layout_marginStart="4dp" android:layout_weight="1" android:background="@drawable/bg_step" android:gravity="center" android:text="-" android:textStyle="bold" />
+                    <TextView android:id="@+id/row3slot3" android:layout_width="0dp" android:layout_height="40dp" android:layout_marginStart="4dp" android:layout_weight="1" android:background="@drawable/bg_step" android:gravity="center" android:text="-" android:textStyle="bold" />
+                    <TextView android:id="@+id/row3slot4" android:layout_width="0dp" android:layout_height="40dp" android:layout_marginStart="4dp" android:layout_weight="1" android:background="@drawable/bg_step" android:gravity="center" android:text="-" android:textStyle="bold" />
+                    <TextView android:id="@+id/row3feedback" android:layout_width="128dp" android:layout_height="40dp" android:layout_marginStart="6dp" android:background="@drawable/bg_step" android:gravity="center" android:text="M:0 S:0" android:textSize="12sp" />
+                </LinearLayout>
+
+                <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginTop="4dp" android:orientation="horizontal">
+                    <TextView android:id="@+id/row4slot1" android:layout_width="0dp" android:layout_height="40dp" android:layout_weight="1" android:background="@drawable/bg_step" android:gravity="center" android:text="-" android:textStyle="bold" />
+                    <TextView android:id="@+id/row4slot2" android:layout_width="0dp" android:layout_height="40dp" android:layout_marginStart="4dp" android:layout_weight="1" android:background="@drawable/bg_step" android:gravity="center" android:text="-" android:textStyle="bold" />
+                    <TextView android:id="@+id/row4slot3" android:layout_width="0dp" android:layout_height="40dp" android:layout_marginStart="4dp" android:layout_weight="1" android:background="@drawable/bg_step" android:gravity="center" android:text="-" android:textStyle="bold" />
+                    <TextView android:id="@+id/row4slot4" android:layout_width="0dp" android:layout_height="40dp" android:layout_marginStart="4dp" android:layout_weight="1" android:background="@drawable/bg_step" android:gravity="center" android:text="-" android:textStyle="bold" />
+                    <TextView android:id="@+id/row4feedback" android:layout_width="128dp" android:layout_height="40dp" android:layout_marginStart="6dp" android:background="@drawable/bg_step" android:gravity="center" android:text="M:0 S:0" android:textSize="12sp" />
+                </LinearLayout>
+
+                <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginTop="4dp" android:orientation="horizontal">
+                    <TextView android:id="@+id/row5slot1" android:layout_width="0dp" android:layout_height="40dp" android:layout_weight="1" android:background="@drawable/bg_step" android:gravity="center" android:text="-" android:textStyle="bold" />
+                    <TextView android:id="@+id/row5slot2" android:layout_width="0dp" android:layout_height="40dp" android:layout_marginStart="4dp" android:layout_weight="1" android:background="@drawable/bg_step" android:gravity="center" android:text="-" android:textStyle="bold" />
+                    <TextView android:id="@+id/row5slot3" android:layout_width="0dp" android:layout_height="40dp" android:layout_marginStart="4dp" android:layout_weight="1" android:background="@drawable/bg_step" android:gravity="center" android:text="-" android:textStyle="bold" />
+                    <TextView android:id="@+id/row5slot4" android:layout_width="0dp" android:layout_height="40dp" android:layout_marginStart="4dp" android:layout_weight="1" android:background="@drawable/bg_step" android:gravity="center" android:text="-" android:textStyle="bold" />
+                    <TextView android:id="@+id/row5feedback" android:layout_width="128dp" android:layout_height="40dp" android:layout_marginStart="6dp" android:background="@drawable/bg_step" android:gravity="center" android:text="M:0 S:0" android:textSize="12sp" />
+                </LinearLayout>
+
+                <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginTop="4dp" android:orientation="horizontal">
+                    <TextView android:id="@+id/row6slot1" android:layout_width="0dp" android:layout_height="40dp" android:layout_weight="1" android:background="@drawable/bg_step" android:gravity="center" android:text="-" android:textStyle="bold" />
+                    <TextView android:id="@+id/row6slot2" android:layout_width="0dp" android:layout_height="40dp" android:layout_marginStart="4dp" android:layout_weight="1" android:background="@drawable/bg_step" android:gravity="center" android:text="-" android:textStyle="bold" />
+                    <TextView android:id="@+id/row6slot3" android:layout_width="0dp" android:layout_height="40dp" android:layout_marginStart="4dp" android:layout_weight="1" android:background="@drawable/bg_step" android:gravity="center" android:text="-" android:textStyle="bold" />
+                    <TextView android:id="@+id/row6slot4" android:layout_width="0dp" android:layout_height="40dp" android:layout_marginStart="4dp" android:layout_weight="1" android:background="@drawable/bg_step" android:gravity="center" android:text="-" android:textStyle="bold" />
+                    <TextView android:id="@+id/row6feedback" android:layout_width="128dp" android:layout_height="40dp" android:layout_marginStart="6dp" android:background="@drawable/bg_step" android:gravity="center" android:text="M:0 S:0" android:textSize="12sp" />
+                </LinearLayout>
+            </LinearLayout>
+
+            <Button android:id="@+id/btnCheck" style="@style/Widget.MaterialComponents.Button" android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginTop="8dp" android:background="@drawable/bg_button_primary" android:text="@string/skocko_check" android:textColor="@color/white" />
+            <Button android:id="@+id/btnNextRound" style="@style/Widget.MaterialComponents.Button" android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginTop="8dp" android:background="@drawable/bg_button_secondary" android:text="Sledeca runda" android:textColor="@color/text_main" />
+
+            <TextView android:id="@+id/tvStatus" android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginTop="10dp" android:textColor="@color/text_muted" />
+        </LinearLayout>
+    </LinearLayout>
+</ScrollView>
