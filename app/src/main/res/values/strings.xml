@@ -54,25 +54,59 @@
 
     <string name="korak_title">Korak po korak</string>
     <string name="moj_broj_title">Moj broj</string>
-    <string name="target_number">Trazeni broj: %1$d</string>
+    <string name="target_number_label">Trazeni broj</string>
+    <string name="target_number">%1$d</string>
     <string name="profile_title">Profil korisnika</string>
+    <string name="profile_username_label">Korisnicko ime</string>
+    <string name="profile_email_label">Email adresa</string>
     <string name="profile_name_value">ana_igra</string>
     <string name="profile_email_value">ana.igra@example.com</string>
     <string name="profile_change_avatar">Izmeni avatar</string>
-    <string name="profile_meta">Tokeni: 12 | Zvezde: 184 | Liga: Zlatna ⭐ | Region: Vojvodina</string>
+    <string name="profile_tokens_value">Broj tokena: 12</string>
+    <string name="profile_stars_value">Ukupno zvezda: 184</string>
+    <string name="profile_league_value">Liga: Zlatna liga</string>
+    <string name="profile_region_value">Region: Vojvodina</string>
     <string name="profile_qr_label">Pozovi prijatelja</string>
     <string name="profile_qr_hint">Skeniraj QR kod za poziv u partiju.</string>
     <string name="profile_section_basic">Osnovni podaci</string>
     <string name="profile_section_league">Liga i region</string>
     <string name="profile_section_games">Statistika igara</string>
+    <string name="profile_section_details">Detaljna statistika igara</string>
     <string name="profile_section_total">Ukupna statistika</string>
-    <string name="profile_stats_games">Uspesnost po igrama: 63%
-Ko zna zna: 64 pogodjena / 21 promaseno
-Moj broj: 58% tacan broj
-Korak po korak: 49% pogodjen pojam po koraku
-Asocijacije: 33 resene / 12 neresene
-Skocko: 61% pogodjena kombinacija po pokusaju
-Spojnice: 72% uspesno povezano</string>
+    <string name="profile_stats_avg">Ko zna zna: 18-24 poena po partiji
+Moj broj: 6-10 poena po partiji
+Korak po korak: 8-12 poena po partiji
+Asocijacije: 12-18 poena po partiji
+Skocko: 10-16 poena po partiji
+Spojnice: 6-10 poena po partiji</string>
+    <string name="profile_stats_details">Ko zna zna:
+Pogodjeno: 64
+Promaseno: 21
+
+Moj broj:
+Tacan broj pronadjen: 58%
+
+Korak po korak:
+1. korak: 8%
+2. korak: 14%
+3. korak: 18%
+4. korak: 21%
+5. korak: 19%
+6. korak: 12%
+7. korak: 8%
+
+Asocijacije:
+Resene: 33
+Neresene: 12
+
+Skocko:
+1-2. pokusaj: 18%
+3-4. pokusaj: 37%
+5-6. pokusaj: 26%
+Nije pogodjeno: 19%
+
+Spojnice:
+Uspesno povezano: 72%</string>
     <string name="profile_stats_total">Ukupno odigranih partija: 148
 Pobede: 57%
 Porazi: 43%</string>
