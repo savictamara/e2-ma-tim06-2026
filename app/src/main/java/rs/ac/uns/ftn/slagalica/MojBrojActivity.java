@@ -1,73 +1,162 @@
 package rs.ac.uns.ftn.slagalica;
 
+import android.content.Intent;
+import android.hardware.Sensor;
+import android.hardware.SensorManager;
 import android.os.Bundle;
 import android.os.CountDownTimer;
+import android.util.Log;
 import android.widget.Button;
 import android.widget.EditText;
 import android.widget.TextView;
+import android.widget.Toast;
 
 import androidx.appcompat.app.AppCompatActivity;
 
-import java.util.Random;
+import com.google.firebase.Timestamp;
+import com.google.firebase.auth.FirebaseUser;
+import com.google.firebase.firestore.DocumentSnapshot;
+import com.google.firebase.firestore.ListenerRegistration;
+
+import java.util.ArrayList;
+import java.util.List;
+import java.util.Map;
+
+import rs.ac.uns.ftn.slagalica.data.repository.FirebaseAuthRepository;
+import rs.ac.uns.ftn.slagalica.data.repository.GameRepository;
+import rs.ac.uns.ftn.slagalica.data.repository.UserRepository;
+import rs.ac.uns.ftn.slagalica.domain.service.MyNumberService;
+import rs.ac.uns.ftn.slagalica.util.ExpressionEvaluator;
+import rs.ac.uns.ftn.slagalica.util.FirebaseInitializer;
+import rs.ac.uns.ftn.slagalica.util.ShakeDetector;
 
 public class MojBrojActivity extends AppCompatActivity {
-    private final Random random = new Random();
+    private static final String TAG = "MojBrojActivity";
+    private final ExpressionEvaluator evaluator = new ExpressionEvaluator();
+    private final MyNumberService myNumberService = new MyNumberService();
+    private FirebaseAuthRepository authRepository;
+    private UserRepository userRepository;
+    private GameRepository gameRepository;
+    private ListenerRegistration gameListener;
+    private ListenerRegistration roundListener;
+    private SensorManager sensorManager;
+    private ShakeDetector shakeDetector;
+    private Sensor accelerometer;
+    private String uid;
+    private String gameId;
+    private String phase = "";
+    private String activePlayerUid = "";
+    private int roundNumber = 1;
     private int targetNumber = 0;
-    private int points = 0;
-    private final int mockPlayerTwoPoints = 6;
+    private List<Integer> availableNumbers = new ArrayList<>();
     private CountDownTimer roundTimer;
-    private boolean roundEnded = false;
+    private CountDownTimer autoStopTimer;
+    private boolean submitted = false;
+    private TextView tvTarget;
+    private TextView tvTimer;
+    private TextView tvNumbers;
+    private TextView tvResult;
+    private TextView tvPoints;
+    private TextView tvPlayer1;
+    private TextView tvPlayer2;
+    private EditText etExpression;
+    private Button btnStopTarget;
+    private Button btnStopNumbers;
+    private Button btnDelete;
+    private Button btnConfirm;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_moj_broj);
 
-        TextView tvTarget = findViewById(R.id.tvTarget);
-        TextView tvTimer = findViewById(R.id.tvMojBrojTimer);
-        TextView tvNumbers = findViewById(R.id.tvNumbers);
-        TextView tvResult = findViewById(R.id.tvMojBrojResult);
-        TextView tvPoints = findViewById(R.id.tvMojBrojPoints);
-        TextView tvPlayer1 = findViewById(R.id.tvMojBrojPlayer1);
-        TextView tvPlayer2 = findViewById(R.id.tvMojBrojPlayer2);
-        EditText etExpression = findViewById(R.id.etExpression);
+        boolean firebaseReady = FirebaseInitializer.ensure(this);
+        Log.d(TAG, "Firebase ensure from MojBrojActivity=" + firebaseReady);
+        authRepository = new FirebaseAuthRepository(this);
+        userRepository = new UserRepository(this);
+        gameRepository = new GameRepository(this);
 
-        Button btnStopTarget = findViewById(R.id.btnStopTarget);
-        Button btnStopNumbers = findViewById(R.id.btnStopNumbers);
-        Button btnDelete = findViewById(R.id.btnDelete);
-        Button btnConfirm = findViewById(R.id.btnConfirm);
+        tvTarget = findViewById(R.id.tvTarget);
+        tvTimer = findViewById(R.id.tvMojBrojTimer);
+        tvNumbers = findViewById(R.id.tvNumbers);
+        tvResult = findViewById(R.id.tvMojBrojResult);
+        tvPoints = findViewById(R.id.tvMojBrojPoints);
+        tvPlayer1 = findViewById(R.id.tvMojBrojPlayer1);
+        tvPlayer2 = findViewById(R.id.tvMojBrojPlayer2);
+        etExpression = findViewById(R.id.etExpression);
 
-        updateTarget(tvTarget);
-        updatePoints(tvPoints, tvPlayer1, tvPlayer2);
-        startTimer(tvTimer, etExpression, btnStopTarget, btnStopNumbers, btnDelete, btnConfirm, tvResult);
+        btnStopTarget = findViewById(R.id.btnStopTarget);
+        btnStopNumbers = findViewById(R.id.btnStopNumbers);
+        btnDelete = findViewById(R.id.btnDelete);
+        btnConfirm = findViewById(R.id.btnConfirm);
+
+        sensorManager = (SensorManager) getSystemService(SENSOR_SERVICE);
+        accelerometer = sensorManager == null ? null : sensorManager.getDefaultSensor(Sensor.TYPE_ACCELEROMETER);
+        shakeDetector = new ShakeDetector(this::stopByCurrentPhase);
+
+        FirebaseUser user = authRepository.currentUser();
+        if (user == null) {
+            show("Please login first.");
+            startActivity(new Intent(this, LoginActivity.class));
+            finish();
+            return;
+        }
+        if (!firebaseReady || !gameRepository.isReady() || !userRepository.isReady()) {
+            show(getString(R.string.firebase_not_ready));
+            setPlayControls(false);
+            return;
+        }
+        uid = user.getUid();
+        Log.d(TAG, "Current uid=" + uid);
+        userRepository.currentGameId(uid)
+                .continueWithTask(task -> {
+                    String existingGameId = task.isSuccessful() ? task.getResult() : "";
+                    if (existingGameId != null && !existingGameId.isEmpty()) {
+                        return gameRepository.getGame(existingGameId).continueWithTask(gameTask -> {
+                            if (gameTask.isSuccessful() && isValidMyNumberGame(gameTask.getResult())) {
+                                return com.google.android.gms.tasks.Tasks.forResult(existingGameId);
+                            }
+                            return gameRepository.joinOrCreateGame(uid, GameRepository.MINI_MY_NUMBER);
+                        });
+                    }
+                    return gameRepository.joinOrCreateGame(uid, GameRepository.MINI_MY_NUMBER);
+                })
+                .addOnSuccessListener(id -> {
+                    gameId = id;
+                    Log.d(TAG, "My number gameId=" + gameId);
+                    userRepository.updateUserState(uid, true, true, gameId);
+                    listenGame();
+                })
+                .addOnFailureListener(e -> {
+                    Log.e(TAG, "My number matchmaking failed", e);
+                    show(e.getMessage());
+                });
 
         btnStopTarget.setOnClickListener(v -> {
-            if (roundEnded) {
+            if (!uid.equals(activePlayerUid)) {
+                show(getString(R.string.not_your_turn));
                 return;
             }
-            targetNumber = 100 + random.nextInt(900);
-            updateTarget(tvTarget);
+            gameRepository.stopTarget(gameId, roundNumber)
+                    .addOnFailureListener(e -> {
+                        Log.e(TAG, "Stop target failed", e);
+                        show(e.getMessage());
+                    });
         });
 
         btnStopNumbers.setOnClickListener(v -> {
-            if (roundEnded) {
+            if (!uid.equals(activePlayerUid)) {
+                show(getString(R.string.not_your_turn));
                 return;
             }
-            int[] values = {
-                    1 + random.nextInt(9),
-                    1 + random.nextInt(9),
-                    1 + random.nextInt(9),
-                    1 + random.nextInt(9),
-                    new int[]{10, 15, 20}[random.nextInt(3)],
-                    new int[]{25, 50, 75, 100}[random.nextInt(4)]
-            };
-            tvNumbers.setText(values[0] + "  " + values[1] + "  " + values[2] + "  " + values[3] + "  " + values[4] + "  " + values[5]);
+            gameRepository.stopNumbers(gameId, roundNumber)
+                    .addOnFailureListener(e -> {
+                        Log.e(TAG, "Stop numbers failed", e);
+                        show(e.getMessage());
+                    });
         });
 
         btnDelete.setOnClickListener(v -> {
-            if (roundEnded) {
-                return;
-            }
             String expression = etExpression.getText().toString();
             if (!expression.isEmpty()) {
                 etExpression.setText(expression.substring(0, expression.length() - 1));
@@ -76,43 +165,148 @@ public class MojBrojActivity extends AppCompatActivity {
         });
 
         btnConfirm.setOnClickListener(v -> {
-            if (roundEnded) {
+            if (!GameRepository.PHASE_PLAYING.equals(phase) || submitted) {
                 return;
             }
             String expression = etExpression.getText().toString().trim();
             if (expression.isEmpty()) {
                 tvResult.setText(getString(R.string.result_text, "Unesite izraz."));
-                points = 0;
-            } else {
-                int mockResult = 100 + random.nextInt(900);
-                int distance = Math.abs(targetNumber - mockResult);
-                if (distance == 0) {
-                    points = 10;
-                } else if (distance <= 10) {
-                    points = 5;
-                } else {
-                    points = 0;
-                }
-                tvResult.setText(getString(R.string.result_text, "Rezultat izraza: " + mockResult));
+                submitMyNumberExpression("", 0, false);
+                return;
             }
-            updatePoints(tvPoints, tvPlayer1, tvPlayer2);
+            if (!myNumberService.usesOnlyAvailableNumbers(expression, availableNumbers)) {
+                tvResult.setText(getString(R.string.result_text, "Koristite samo ponudjene brojeve."));
+                submitMyNumberExpression(expression, 0, false);
+                return;
+            }
+            try {
+                double result = evaluator.evaluate(expression);
+                tvResult.setText(getString(R.string.result_text, "Rezultat izraza: " + result));
+                submitMyNumberExpression(expression, result, true);
+            } catch (IllegalArgumentException e) {
+                tvResult.setText(getString(R.string.result_text, e.getMessage()));
+                submitMyNumberExpression(expression, 0, false);
+            }
         });
     }
 
-    private void startTimer(
-            TextView tvTimer,
-            EditText etExpression,
-            Button btnStopTarget,
-            Button btnStopNumbers,
-            Button btnDelete,
-            Button btnConfirm,
-            TextView tvResult
-    ) {
+    private void submitMyNumberExpression(String expression, double result, boolean valid) {
+        submitted = true;
+        gameRepository.submitMyNumber(gameId, roundNumber, uid, expression, result, valid)
+                .addOnFailureListener(e -> {
+                    Log.e(TAG, "Submit my number failed", e);
+                    submitted = false;
+                    show(e.getMessage());
+                });
+    }
+
+    private void listenGame() {
+        gameListener = gameRepository.listenGame(gameId, (snapshot, error) -> {
+            if (error != null) {
+                Log.e(TAG, "Game snapshot error", error);
+                show(error.getMessage());
+                return;
+            }
+            if (snapshot == null || !snapshot.exists()) {
+                return;
+            }
+            Log.d(TAG, "Game snapshot gameId=" + snapshot.getId() + ", status=" + snapshot.getString("status")
+                    + ", player1=" + snapshot.getString("player1Uid")
+                    + ", player2=" + snapshot.getString("player2Uid")
+                    + ", miniGame=" + snapshot.getString("currentMiniGame"));
+            Long p1 = snapshot.getLong("player1Score");
+            Long p2 = snapshot.getLong("player2Score");
+            tvPlayer1.setText(getString(R.string.player_points, p1 == null ? 0 : p1.intValue()));
+            tvPlayer2.setText(getString(R.string.player_points, p2 == null ? 0 : p2.intValue()));
+            if ("waiting".equals(snapshot.getString("status"))) {
+                tvResult.setText(R.string.waiting_opponent);
+                setPlayControls(false);
+                return;
+            }
+            if ("finished".equals(snapshot.getString("status"))) {
+                tvResult.setText(getString(R.string.result_text, "Partija je zavrsena."));
+                setPlayControls(false);
+                userRepository.updateUserState(uid, true, false, "");
+                return;
+            }
+            gameRepository.ensureMyNumberRound(gameId, roundNumber);
+            listenRound();
+        });
+    }
+
+    private void listenRound() {
+        if (roundListener != null) {
+            return;
+        }
+        roundListener = gameRepository.listenRound(gameId, gameRepository.myNumberRoundId(roundNumber), (snapshot, error) -> {
+            if (error != null) {
+                Log.e(TAG, "Round snapshot error", error);
+                show(error.getMessage());
+                return;
+            }
+            if (snapshot == null || !snapshot.exists()) {
+                return;
+            }
+            Log.d(TAG, "My number round snapshot id=" + snapshot.getId() + ", phase=" + snapshot.getString("phase"));
+            bindRound(snapshot);
+        });
+    }
+
+    private void bindRound(DocumentSnapshot round) {
+        phase = value(round.getString("phase"));
+        activePlayerUid = value(round.getString("activePlayerUid"));
+        Long target = round.getLong("targetNumber");
+        targetNumber = target == null ? 0 : target.intValue();
+        tvTarget.setText(getString(R.string.target_number, targetNumber));
+        availableNumbers = readNumbers(round);
+        tvNumbers.setText(formatNumbers(availableNumbers));
+        Map<String, Object> submissions = (Map<String, Object>) round.get("submissionsByPlayer");
+        Map<String, Object> results = (Map<String, Object>) round.get("resultsByPlayer");
+        submitted = submissions != null && submissions.containsKey(uid);
+        Log.d(TAG, "Round state id=" + round.getId() + ", phase=" + phase
+                + ", activePlayerUid=" + activePlayerUid
+                + ", targetNumber=" + targetNumber
+                + ", numbers=" + availableNumbers
+                + ", submissions=" + submissions
+                + ", results=" + results);
+        btnStopTarget.setEnabled(uid.equals(activePlayerUid) && GameRepository.PHASE_WAITING_TARGET_STOP.equals(phase));
+        btnStopNumbers.setEnabled(uid.equals(activePlayerUid) && GameRepository.PHASE_WAITING_NUMBERS_STOP.equals(phase));
+        setPlayControls(GameRepository.PHASE_PLAYING.equals(phase) && !submitted);
+        if ((GameRepository.PHASE_WAITING_TARGET_STOP.equals(phase) || GameRepository.PHASE_WAITING_NUMBERS_STOP.equals(phase))
+                && uid.equals(activePlayerUid)) {
+            startAutoStopTimer(round);
+        } else if (autoStopTimer != null) {
+            autoStopTimer.cancel();
+            autoStopTimer = null;
+        }
+        if (GameRepository.PHASE_PLAYING.equals(phase)) {
+            startTimer(round);
+        }
+        if (GameRepository.PHASE_FINISHED.equals(phase)) {
+            if (roundTimer != null) {
+                roundTimer.cancel();
+            }
+            Long points = round.getLong("awardedPoints");
+            tvPoints.setText(getString(R.string.points_text, points == null ? 0 : points.intValue()));
+            tvResult.setText(getString(R.string.result_text, "Runda je zavrsena."));
+            moveToNextNumberRound();
+        }
+    }
+
+    private void startTimer(DocumentSnapshot round) {
         if (roundTimer != null) {
-            roundTimer.cancel();
+            return;
         }
         tvTimer.setText(getString(R.string.timer_text_60));
-        roundTimer = new CountDownTimer(60000, 1000) {
+        Timestamp startedAt = round.getTimestamp("startedAt");
+        long elapsedMs = startedAt == null ? 0 : Math.max(0, System.currentTimeMillis() - startedAt.toDate().getTime());
+        long remainingMs = Math.max(0, 60000 - elapsedMs);
+        if (remainingMs == 0) {
+            tvTimer.setText(getString(R.string.timer_text, 0));
+            handleMyNumberRoundTimeout();
+            return;
+        }
+        roundTimer = new CountDownTimer(remainingMs, 1000) {
             @Override
             public void onTick(long millisUntilFinished) {
                 tvTimer.setText(getString(R.string.timer_text, millisUntilFinished / 1000));
@@ -120,17 +314,144 @@ public class MojBrojActivity extends AppCompatActivity {
 
             @Override
             public void onFinish() {
-                roundEnded = true;
                 tvTimer.setText(getString(R.string.timer_text, 0));
-                etExpression.setEnabled(false);
-                btnStopTarget.setEnabled(false);
-                btnStopNumbers.setEnabled(false);
-                btnDelete.setEnabled(false);
-                btnConfirm.setEnabled(false);
                 tvResult.setText(getString(R.string.moj_broj_round_end));
+                setPlayControls(false);
+                handleMyNumberRoundTimeout();
             }
         };
         roundTimer.start();
+    }
+
+    private void startAutoStopTimer(DocumentSnapshot round) {
+        if (autoStopTimer != null) {
+            return;
+        }
+        Timestamp startedAt = round.getTimestamp("startedAt");
+        long elapsedMs = startedAt == null ? 0 : Math.max(0, System.currentTimeMillis() - startedAt.toDate().getTime());
+        long remainingMs = Math.max(0, 5000 - elapsedMs);
+        if (remainingMs == 0) {
+            stopByCurrentPhase();
+            return;
+        }
+        autoStopTimer = new CountDownTimer(remainingMs, 1000) {
+            @Override
+            public void onTick(long millisUntilFinished) {
+            }
+
+            @Override
+            public void onFinish() {
+                stopByCurrentPhase();
+                autoStopTimer = null;
+            }
+        }.start();
+    }
+
+    private void handleMyNumberRoundTimeout() {
+        gameRepository.finishMyNumberRound(gameId, roundNumber)
+                .addOnFailureListener(e -> {
+                    Log.e(TAG, "Finish my number round failed", e);
+                    show(e.getMessage());
+                });
+    }
+
+    private void stopByCurrentPhase() {
+        if (!uid.equals(activePlayerUid)) {
+            return;
+        }
+        if (GameRepository.PHASE_WAITING_TARGET_STOP.equals(phase)) {
+            gameRepository.stopTarget(gameId, roundNumber)
+                    .addOnFailureListener(e -> Log.e(TAG, "Shake stop target failed", e));
+        } else if (GameRepository.PHASE_WAITING_NUMBERS_STOP.equals(phase)) {
+            gameRepository.stopNumbers(gameId, roundNumber)
+                    .addOnFailureListener(e -> Log.e(TAG, "Shake stop numbers failed", e));
+        }
+    }
+
+    private boolean isValidMyNumberGame(DocumentSnapshot game) {
+        if (game == null || !game.exists()) {
+            return false;
+        }
+        String status = game.getString("status");
+        String miniGame = game.getString("currentMiniGame");
+        String p1 = game.getString("player1Uid");
+        String p2 = game.getString("player2Uid");
+        boolean containsUser = uid.equals(p1) || uid.equals(p2);
+        boolean waitingAsPlayer1 = "waiting".equals(status) && uid.equals(p1) && p2 == null;
+        boolean activeWithBothPlayers = "active".equals(status) && p1 != null && p2 != null;
+        boolean valid = GameRepository.MINI_MY_NUMBER.equals(miniGame)
+                && containsUser
+                && (waitingAsPlayer1 || activeWithBothPlayers);
+        Log.d(TAG, "Validate currentGameId=" + game.getId() + ", valid=" + valid
+                + ", status=" + status + ", player1=" + p1 + ", player2=" + p2 + ", miniGame=" + miniGame);
+        return valid;
+    }
+
+    private void moveToNextNumberRound() {
+        if (roundNumber == 1) {
+            roundNumber = 2;
+            submitted = false;
+            etExpression.setText("");
+            if (roundTimer != null) {
+                roundTimer.cancel();
+                roundTimer = null;
+            }
+            if (roundListener != null) {
+                roundListener.remove();
+                roundListener = null;
+            }
+            gameRepository.ensureMyNumberRound(gameId, roundNumber);
+            listenRound();
+        }
+    }
+
+    private List<Integer> readNumbers(DocumentSnapshot round) {
+        List<Integer> values = new ArrayList<>();
+        List<Object> raw = (List<Object>) round.get("numbers");
+        if (raw != null) {
+            for (Object item : raw) {
+                if (item instanceof Number) {
+                    values.add(((Number) item).intValue());
+                }
+            }
+        }
+        return values;
+    }
+
+    private String formatNumbers(List<Integer> numbers) {
+        if (numbers == null || numbers.isEmpty()) {
+            return "- - - - - -";
+        }
+        StringBuilder builder = new StringBuilder();
+        for (Integer number : numbers) {
+            if (builder.length() > 0) {
+                builder.append("  ");
+            }
+            builder.append(number);
+        }
+        return builder.toString();
+    }
+
+    private void setPlayControls(boolean enabled) {
+        etExpression.setEnabled(enabled);
+        btnDelete.setEnabled(enabled);
+        btnConfirm.setEnabled(enabled);
+    }
+
+    @Override
+    protected void onResume() {
+        super.onResume();
+        if (sensorManager != null && accelerometer != null) {
+            sensorManager.registerListener(shakeDetector, accelerometer, SensorManager.SENSOR_DELAY_UI);
+        }
+    }
+
+    @Override
+    protected void onPause() {
+        if (sensorManager != null) {
+            sensorManager.unregisterListener(shakeDetector);
+        }
+        super.onPause();
     }
 
     @Override
@@ -138,16 +459,23 @@ public class MojBrojActivity extends AppCompatActivity {
         if (roundTimer != null) {
             roundTimer.cancel();
         }
+        if (autoStopTimer != null) {
+            autoStopTimer.cancel();
+        }
+        if (gameListener != null) {
+            gameListener.remove();
+        }
+        if (roundListener != null) {
+            roundListener.remove();
+        }
         super.onDestroy();
     }
 
-    private void updateTarget(TextView tvTarget) {
-        tvTarget.setText(getString(R.string.target_number, targetNumber));
+    private String value(String value) {
+        return value == null ? "" : value;
     }
 
-    private void updatePoints(TextView tvPoints, TextView tvPlayer1, TextView tvPlayer2) {
-        tvPoints.setText(getString(R.string.points_text, points));
-        tvPlayer1.setText(getString(R.string.player_points, points));
-        tvPlayer2.setText(getString(R.string.player_points, mockPlayerTwoPoints));
+    private void show(String message) {
+        Toast.makeText(this, message == null ? getString(R.string.firebase_not_ready) : message, Toast.LENGTH_SHORT).show();
     }
 }

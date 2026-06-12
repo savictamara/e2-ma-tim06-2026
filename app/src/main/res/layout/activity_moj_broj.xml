@@ -131,10 +131,10 @@
                 <Button android:id="@+id/btnStopNumbers" style="@style/Widget.MaterialComponents.Button" android:layout_width="0dp" android:layout_height="wrap_content" android:layout_marginStart="8dp" android:layout_weight="1" android:background="@drawable/bg_button_secondary" android:text="@string/stop_button" android:textColor="@color/text_main"/>
             </LinearLayout>
 
-            <TextView android:id="@+id/tvNumbers" android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginTop="10dp" android:text="- - - - - -" android:textColor="@color/text_main" android:textSize="20sp" android:textStyle="bold"/>
+            <TextView android:id="@+id/tvNumbers" android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginTop="10dp" android:text="- - - - - -" android:textColor="@color/game_text_color" android:textSize="20sp" android:textStyle="bold"/>
             <TextView android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginTop="8dp" android:text="( ) + - * /" android:textColor="@color/text_muted"/>
 
-            <EditText android:id="@+id/etExpression" android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginTop="8dp" android:background="@drawable/bg_step" android:hint="@string/hint_expression" android:padding="12dp"/>
+            <EditText android:id="@+id/etExpression" android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginTop="8dp" android:background="@drawable/bg_step" android:hint="@string/hint_expression" android:padding="12dp" android:textColor="@color/game_text_color" android:textColorHint="@color/input_hint_color"/>
 
             <LinearLayout
                 android:layout_width="match_parent"

@@ -2,14 +2,20 @@ package rs.ac.uns.ftn.slagalica;
 
 import android.content.Intent;
 import android.os.Bundle;
+import android.util.Log;
 import android.widget.Button;
 
 import androidx.appcompat.app.AppCompatActivity;
 
+import rs.ac.uns.ftn.slagalica.util.FirebaseInitializer;
+
 public class MainActivity extends AppCompatActivity {
+    private static final String TAG = "MainActivity";
+
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
+        Log.d(TAG, "Firebase ensure from MainActivity=" + FirebaseInitializer.ensure(this));
         setContentView(R.layout.activity_main);
 
         Button btnLogin = findViewById(R.id.btnLogin);

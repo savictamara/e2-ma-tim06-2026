@@ -9,6 +9,9 @@
     <color name="card_bg">#FDF9FF</color>
     <color name="text_main">#352B45</color>
     <color name="text_muted">#7C7092</color>
+    <color name="input_text_color">#111111</color>
+    <color name="input_hint_color">#777777</color>
+    <color name="game_text_color">#111111</color>
     <color name="white">#FFFFFFFF</color>
 
     <color name="pink_primary">#EE9EC6</color>

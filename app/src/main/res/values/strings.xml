@@ -28,7 +28,7 @@
     <string name="login_action">Login</string>
     <string name="register_action">Registracija</string>
     <string name="reset_action">Reset lozinke</string>
-    <string name="open_step">Otvori korak</string>
+    <string name="open_step">Koraci se otvaraju automatski</string>
     <string name="check_solution">Proveri</string>
     <string name="submit_result">Potvrdi</string>
     <string name="delete_last">Obrisi</string>
@@ -49,8 +49,13 @@
     <string name="error_fill_fields">Popunite sva obavezna polja.</string>
     <string name="error_password_mismatch">Lozinke se ne poklapaju.</string>
     <string name="mock_login_success">Uspesan login.</string>
-    <string name="mock_register_email">Registracija je uspesna. Potvrdite email link.</string>
+    <string name="mock_register_email">Registracija je uspešna. Na Vašu email adresu poslat je link za potvrdu naloga. Proverite prijemno sanduče, kao i Spam/Neželjenu poštu.</string>
     <string name="mock_reset_success">Lozinka je uspesno promenjena.</string>
+    <string name="firebase_not_ready">Firebase nije inicijalizovan. Proverite google-services.json i Firebase podesavanja.</string>
+    <string name="email_not_verified">Vaš nalog još nije potvrđen. Molimo proverite email i kliknite na link za potvrdu naloga.</string>
+    <string name="invalid_email">Email adresa nije validna.</string>
+    <string name="waiting_opponent">Ceka se drugi igrac...</string>
+    <string name="not_your_turn">Nije vas potez.</string>
 
     <string name="korak_title">Korak po korak</string>
     <string name="moj_broj_title">Moj broj</string>
