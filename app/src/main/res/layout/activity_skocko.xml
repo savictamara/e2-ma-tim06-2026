@@ -14,15 +14,15 @@
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
             android:text="@string/skocko_title"
-            android:textColor="@color/text_main"
+            android:textColor="@color/game_text_color"
             android:textSize="24sp"
             android:textStyle="bold" />
 
-        <TextView android:id="@+id/tvRound" android:layout_width="wrap_content" android:layout_height="wrap_content" android:layout_marginTop="6dp" android:textColor="@color/text_muted" />
-        <TextView android:id="@+id/tvCurrentPlayer" android:layout_width="wrap_content" android:layout_height="wrap_content" android:layout_marginTop="4dp" android:textColor="@color/text_muted" />
-        <TextView android:id="@+id/tvTimer" android:layout_width="wrap_content" android:layout_height="wrap_content" android:layout_marginTop="4dp" android:textColor="@color/text_muted" />
-        <TextView android:id="@+id/tvScoreP1" android:layout_width="wrap_content" android:layout_height="wrap_content" android:layout_marginTop="4dp" android:textColor="@color/text_muted" />
-        <TextView android:id="@+id/tvScoreP2" android:layout_width="wrap_content" android:layout_height="wrap_content" android:layout_marginTop="2dp" android:textColor="@color/text_muted" />
+        <TextView android:id="@+id/tvRound" android:layout_width="wrap_content" android:layout_height="wrap_content" android:layout_marginTop="6dp" android:textColor="@color/game_text_color" />
+        <TextView android:id="@+id/tvCurrentPlayer" android:layout_width="wrap_content" android:layout_height="wrap_content" android:layout_marginTop="4dp" android:textColor="@color/game_text_color" />
+        <TextView android:id="@+id/tvTimer" android:layout_width="wrap_content" android:layout_height="wrap_content" android:layout_marginTop="4dp" android:textColor="@color/game_text_color" />
+        <TextView android:id="@+id/tvScoreP1" android:layout_width="wrap_content" android:layout_height="wrap_content" android:layout_marginTop="4dp" android:textColor="@color/game_text_color" />
+        <TextView android:id="@+id/tvScoreP2" android:layout_width="wrap_content" android:layout_height="wrap_content" android:layout_marginTop="2dp" android:textColor="@color/game_text_color" />
 
         <LinearLayout
             android:layout_width="match_parent"
@@ -35,14 +35,14 @@
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
                 android:text="@string/skocko_pick_hint"
-                android:textColor="@color/text_muted" />
+                android:textColor="@color/game_text_color" />
 
             <TextView
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
                 android:layout_marginTop="4dp"
                 android:text="@string/skocko_feedback_hint"
-                android:textColor="@color/text_muted" />
+                android:textColor="@color/game_text_color" />
 
             <LinearLayout
                 android:id="@+id/paletteBar"
@@ -189,7 +189,7 @@
                     <ImageView android:id="@+id/row1slot2" android:layout_width="0dp" android:layout_height="40dp" android:layout_marginStart="4dp" android:layout_weight="1" android:background="@drawable/bg_step" android:contentDescription="@string/skocko_slot_empty" android:padding="6dp" android:scaleType="centerInside" />
                     <ImageView android:id="@+id/row1slot3" android:layout_width="0dp" android:layout_height="40dp" android:layout_marginStart="4dp" android:layout_weight="1" android:background="@drawable/bg_step" android:contentDescription="@string/skocko_slot_empty" android:padding="6dp" android:scaleType="centerInside" />
                     <ImageView android:id="@+id/row1slot4" android:layout_width="0dp" android:layout_height="40dp" android:layout_marginStart="4dp" android:layout_weight="1" android:background="@drawable/bg_step" android:contentDescription="@string/skocko_slot_empty" android:padding="6dp" android:scaleType="centerInside" />
-                    <TextView android:id="@+id/row1feedback" android:layout_width="128dp" android:layout_height="40dp" android:layout_marginStart="6dp" android:background="@drawable/bg_step" android:gravity="center" android:text="M:0 S:0" android:textSize="12sp" />
+                    <TextView android:id="@+id/row1feedback" android:layout_width="128dp" android:layout_height="40dp" android:layout_marginStart="6dp" android:background="@drawable/bg_step" android:gravity="center" android:text="M:0 S:0" android:textColor="@color/game_text_color" android:textSize="12sp" />
                 </LinearLayout>
 
                 <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginTop="4dp" android:orientation="horizontal">
@@ -197,7 +197,7 @@
                     <ImageView android:id="@+id/row2slot2" android:layout_width="0dp" android:layout_height="40dp" android:layout_marginStart="4dp" android:layout_weight="1" android:background="@drawable/bg_step" android:contentDescription="@string/skocko_slot_empty" android:padding="6dp" android:scaleType="centerInside" />
                     <ImageView android:id="@+id/row2slot3" android:layout_width="0dp" android:layout_height="40dp" android:layout_marginStart="4dp" android:layout_weight="1" android:background="@drawable/bg_step" android:contentDescription="@string/skocko_slot_empty" android:padding="6dp" android:scaleType="centerInside" />
                     <ImageView android:id="@+id/row2slot4" android:layout_width="0dp" android:layout_height="40dp" android:layout_marginStart="4dp" android:layout_weight="1" android:background="@drawable/bg_step" android:contentDescription="@string/skocko_slot_empty" android:padding="6dp" android:scaleType="centerInside" />
-                    <TextView android:id="@+id/row2feedback" android:layout_width="128dp" android:layout_height="40dp" android:layout_marginStart="6dp" android:background="@drawable/bg_step" android:gravity="center" android:text="M:0 S:0" android:textSize="12sp" />
+                    <TextView android:id="@+id/row2feedback" android:layout_width="128dp" android:layout_height="40dp" android:layout_marginStart="6dp" android:background="@drawable/bg_step" android:gravity="center" android:text="M:0 S:0" android:textColor="@color/game_text_color" android:textSize="12sp" />
                 </LinearLayout>
 
                 <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginTop="4dp" android:orientation="horizontal">
@@ -205,7 +205,7 @@
                     <ImageView android:id="@+id/row3slot2" android:layout_width="0dp" android:layout_height="40dp" android:layout_marginStart="4dp" android:layout_weight="1" android:background="@drawable/bg_step" android:contentDescription="@string/skocko_slot_empty" android:padding="6dp" android:scaleType="centerInside" />
                     <ImageView android:id="@+id/row3slot3" android:layout_width="0dp" android:layout_height="40dp" android:layout_marginStart="4dp" android:layout_weight="1" android:background="@drawable/bg_step" android:contentDescription="@string/skocko_slot_empty" android:padding="6dp" android:scaleType="centerInside" />
                     <ImageView android:id="@+id/row3slot4" android:layout_width="0dp" android:layout_height="40dp" android:layout_marginStart="4dp" android:layout_weight="1" android:background="@drawable/bg_step" android:contentDescription="@string/skocko_slot_empty" android:padding="6dp" android:scaleType="centerInside" />
-                    <TextView android:id="@+id/row3feedback" android:layout_width="128dp" android:layout_height="40dp" android:layout_marginStart="6dp" android:background="@drawable/bg_step" android:gravity="center" android:text="M:0 S:0" android:textSize="12sp" />
+                    <TextView android:id="@+id/row3feedback" android:layout_width="128dp" android:layout_height="40dp" android:layout_marginStart="6dp" android:background="@drawable/bg_step" android:gravity="center" android:text="M:0 S:0" android:textColor="@color/game_text_color" android:textSize="12sp" />
                 </LinearLayout>
 
                 <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginTop="4dp" android:orientation="horizontal">
@@ -213,7 +213,7 @@
                     <ImageView android:id="@+id/row4slot2" android:layout_width="0dp" android:layout_height="40dp" android:layout_marginStart="4dp" android:layout_weight="1" android:background="@drawable/bg_step" android:contentDescription="@string/skocko_slot_empty" android:padding="6dp" android:scaleType="centerInside" />
                     <ImageView android:id="@+id/row4slot3" android:layout_width="0dp" android:layout_height="40dp" android:layout_marginStart="4dp" android:layout_weight="1" android:background="@drawable/bg_step" android:contentDescription="@string/skocko_slot_empty" android:padding="6dp" android:scaleType="centerInside" />
                     <ImageView android:id="@+id/row4slot4" android:layout_width="0dp" android:layout_height="40dp" android:layout_marginStart="4dp" android:layout_weight="1" android:background="@drawable/bg_step" android:contentDescription="@string/skocko_slot_empty" android:padding="6dp" android:scaleType="centerInside" />
-                    <TextView android:id="@+id/row4feedback" android:layout_width="128dp" android:layout_height="40dp" android:layout_marginStart="6dp" android:background="@drawable/bg_step" android:gravity="center" android:text="M:0 S:0" android:textSize="12sp" />
+                    <TextView android:id="@+id/row4feedback" android:layout_width="128dp" android:layout_height="40dp" android:layout_marginStart="6dp" android:background="@drawable/bg_step" android:gravity="center" android:text="M:0 S:0" android:textColor="@color/game_text_color" android:textSize="12sp" />
                 </LinearLayout>
 
                 <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginTop="4dp" android:orientation="horizontal">
@@ -221,7 +221,7 @@
                     <ImageView android:id="@+id/row5slot2" android:layout_width="0dp" android:layout_height="40dp" android:layout_marginStart="4dp" android:layout_weight="1" android:background="@drawable/bg_step" android:contentDescription="@string/skocko_slot_empty" android:padding="6dp" android:scaleType="centerInside" />
                     <ImageView android:id="@+id/row5slot3" android:layout_width="0dp" android:layout_height="40dp" android:layout_marginStart="4dp" android:layout_weight="1" android:background="@drawable/bg_step" android:contentDescription="@string/skocko_slot_empty" android:padding="6dp" android:scaleType="centerInside" />
                     <ImageView android:id="@+id/row5slot4" android:layout_width="0dp" android:layout_height="40dp" android:layout_marginStart="4dp" android:layout_weight="1" android:background="@drawable/bg_step" android:contentDescription="@string/skocko_slot_empty" android:padding="6dp" android:scaleType="centerInside" />
-                    <TextView android:id="@+id/row5feedback" android:layout_width="128dp" android:layout_height="40dp" android:layout_marginStart="6dp" android:background="@drawable/bg_step" android:gravity="center" android:text="M:0 S:0" android:textSize="12sp" />
+                    <TextView android:id="@+id/row5feedback" android:layout_width="128dp" android:layout_height="40dp" android:layout_marginStart="6dp" android:background="@drawable/bg_step" android:gravity="center" android:text="M:0 S:0" android:textColor="@color/game_text_color" android:textSize="12sp" />
                 </LinearLayout>
 
                 <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginTop="4dp" android:orientation="horizontal">
@@ -229,7 +229,7 @@
                     <ImageView android:id="@+id/row6slot2" android:layout_width="0dp" android:layout_height="40dp" android:layout_marginStart="4dp" android:layout_weight="1" android:background="@drawable/bg_step" android:contentDescription="@string/skocko_slot_empty" android:padding="6dp" android:scaleType="centerInside" />
                     <ImageView android:id="@+id/row6slot3" android:layout_width="0dp" android:layout_height="40dp" android:layout_marginStart="4dp" android:layout_weight="1" android:background="@drawable/bg_step" android:contentDescription="@string/skocko_slot_empty" android:padding="6dp" android:scaleType="centerInside" />
                     <ImageView android:id="@+id/row6slot4" android:layout_width="0dp" android:layout_height="40dp" android:layout_marginStart="4dp" android:layout_weight="1" android:background="@drawable/bg_step" android:contentDescription="@string/skocko_slot_empty" android:padding="6dp" android:scaleType="centerInside" />
-                    <TextView android:id="@+id/row6feedback" android:layout_width="128dp" android:layout_height="40dp" android:layout_marginStart="6dp" android:background="@drawable/bg_step" android:gravity="center" android:text="M:0 S:0" android:textSize="12sp" />
+                    <TextView android:id="@+id/row6feedback" android:layout_width="128dp" android:layout_height="40dp" android:layout_marginStart="6dp" android:background="@drawable/bg_step" android:gravity="center" android:text="M:0 S:0" android:textColor="@color/game_text_color" android:textSize="12sp" />
                 </LinearLayout>
             </LinearLayout>
 
@@ -242,10 +242,10 @@
                 android:layout_marginTop="8dp"
                 android:background="@drawable/bg_button_secondary"
                 android:text="@string/skocko_next_round"
-                android:textColor="@color/text_main"
+                android:textColor="@color/game_text_color"
                 android:visibility="gone" />
 
-            <TextView android:id="@+id/tvStatus" android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginTop="10dp" android:textColor="@color/text_muted" />
+            <TextView android:id="@+id/tvStatus" android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginTop="10dp" android:textColor="@color/game_text_color" />
         </LinearLayout>
     </LinearLayout>
 </ScrollView>

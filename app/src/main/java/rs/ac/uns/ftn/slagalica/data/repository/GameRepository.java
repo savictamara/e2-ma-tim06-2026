@@ -32,6 +32,7 @@ public class GameRepository {
     public static final String MINI_KNOW_IT = "KNOW_IT";
     public static final String MINI_CONNECTIONS = "CONNECTIONS";
     public static final String MINI_ASSOCIATIONS = "ASSOCIATIONS";
+    public static final String MINI_SKOCKO = "SKOCKO";
     public static final String PHASE_WAITING_TARGET_STOP = "WAITING_TARGET_STOP";
     public static final String PHASE_WAITING_NUMBERS_STOP = "WAITING_NUMBERS_STOP";
     public static final String PHASE_PLAYING = "PLAYING";
@@ -863,6 +864,267 @@ public class GameRepository {
 
     public String knowItRoundId() {
         return "know_it_round_1";
+    }
+
+    public String skockoRoundId(int roundNumber) {
+        return "skocko_round_" + roundNumber;
+    }
+
+    public Task<Void> ensureSkockoRound(String gameId, int roundNumber, List<String> allowedSymbols) {
+        if (db == null) {
+            return Tasks.forException(new IllegalStateException("Firebase nije inicijalizovan"));
+        }
+        DocumentReference gameRef = db.collection("games").document(gameId);
+        DocumentReference roundRef = gameRef.collection("rounds").document(skockoRoundId(roundNumber));
+        return db.runTransaction(transaction -> {
+            DocumentSnapshot game = transaction.get(gameRef);
+            DocumentSnapshot existing = transaction.get(roundRef);
+            if (existing.exists()) {
+                return null;
+            }
+            String p1 = game.getString("player1Uid");
+            String p2 = game.getString("player2Uid");
+            if (!"active".equals(game.getString("status")) || p1 == null || p2 == null || p1.equals(p2)) {
+                throw new IllegalStateException("Skočko ne može da počne bez dva različita igrača");
+            }
+            String active = roundNumber == 1 ? p1 : p2;
+            String opponent = roundNumber == 1 ? p2 : p1;
+            Map<String, Object> round = new HashMap<>();
+            round.put("id", skockoRoundId(roundNumber));
+            round.put("gameId", gameId);
+            round.put("type", MINI_SKOCKO);
+            round.put("roundIndex", roundNumber);
+            round.put("activePlayerUid", active);
+            round.put("opponentUid", opponent);
+            round.put("phase", "ACTIVE_PLAYER");
+            round.put("secretCombination", randomSkockoCombination(allowedSymbols));
+            round.put("attemptsByPlayer", new HashMap<String, Object>());
+            round.put("feedbackByPlayer", new HashMap<String, Object>());
+            round.put("currentAttemptIndex", 0);
+            round.put("opponentAttempt", null);
+            round.put("finished", false);
+            round.put("roundScoreAwarded", false);
+            round.put("scoredByUid", null);
+            round.put("createdAt", FieldValue.serverTimestamp());
+            round.put("updatedAt", FieldValue.serverTimestamp());
+            round.put("phaseStartedAt", FieldValue.serverTimestamp());
+            Log.d(TAG, "Creating skocko round gameId=" + gameId + ", roundId=" + skockoRoundId(roundNumber)
+                    + ", activePlayerUid=" + active + ", opponentUid=" + opponent);
+            transaction.set(roundRef, round);
+            transaction.set(gameRef, mapOf("currentMiniGame", MINI_SKOCKO, "currentPlayerUid", active,
+                    "updatedAt", FieldValue.serverTimestamp()), SetOptions.merge());
+            return null;
+        });
+    }
+
+    public Task<Void> submitSkockoAttempt(String gameId, int roundNumber, String uid, List<String> symbols) {
+        if (db == null) {
+            return Tasks.forException(new IllegalStateException("Firebase nije inicijalizovan"));
+        }
+        DocumentReference gameRef = db.collection("games").document(gameId);
+        DocumentReference roundRef = gameRef.collection("rounds").document(skockoRoundId(roundNumber));
+        return db.runTransaction(transaction -> {
+            DocumentSnapshot game = transaction.get(gameRef);
+            DocumentSnapshot round = transaction.get(roundRef);
+            if (!round.exists() || Boolean.TRUE.equals(round.getBoolean("finished")) || symbols == null || symbols.size() != 4) {
+                return null;
+            }
+            String phase = round.getString("phase");
+            String active = round.getString("activePlayerUid");
+            String opponent = round.getString("opponentUid");
+            List<String> secret = stringList(round.get("secretCombination"));
+            if (secret.size() != 4) {
+                throw new IllegalStateException("Skočko runda nema ispravnu tajnu kombinaciju");
+            }
+            SkockoFeedback feedback = calculateSkockoFeedback(secret, symbols);
+            Map<String, Object> attempt = skockoAttempt(symbols, feedback);
+            Map<String, Object> feedbackMap = skockoFeedbackMap(feedback);
+            Log.d(TAG, "Submit skocko attempt gameId=" + gameId + ", roundId=" + skockoRoundId(roundNumber)
+                    + ", uid=" + uid + ", phase=" + phase + ", activePlayerUid=" + active
+                    + ", opponentUid=" + opponent + ", attempt=" + symbols + ", feedback=" + feedbackMap);
+            if ("ACTIVE_PLAYER".equals(phase)) {
+                if (uid == null || !uid.equals(active)) {
+                    return null;
+                }
+                int currentAttemptIndex = intValue(round.get("currentAttemptIndex"));
+                if (currentAttemptIndex >= 6) {
+                    return null;
+                }
+                List<Object> attempts = objectListFromPlayerMap(round, "attemptsByPlayer", uid);
+                List<Object> feedbacks = objectListFromPlayerMap(round, "feedbackByPlayer", uid);
+                attempts.add(attempt);
+                feedbacks.add(feedbackMap);
+                int nextAttemptIndex = currentAttemptIndex + 1;
+                Map<String, Object> updates = new HashMap<>();
+                updates.put("attemptsByPlayer." + uid, attempts);
+                updates.put("feedbackByPlayer." + uid, feedbacks);
+                updates.put("currentAttemptIndex", nextAttemptIndex);
+                updates.put("updatedAt", FieldValue.serverTimestamp());
+                if (feedback.isCorrect) {
+                    int points = skockoScoreForAttempt(nextAttemptIndex);
+                    if (!Boolean.TRUE.equals(round.getBoolean("roundScoreAwarded"))) {
+                        applyScore(transaction, gameRef, game, uid, points);
+                        updates.put("roundScoreAwarded", true);
+                        updates.put("scoredByUid", uid);
+                        updates.put("awardedPoints", points);
+                    }
+                    updates.put("phase", "FINISHED");
+                    updates.put("finished", true);
+                    updates.put("phaseStartedAt", FieldValue.serverTimestamp());
+                    finishSkockoGameIfNeeded(transaction, gameRef, roundNumber);
+                } else if (nextAttemptIndex >= 6) {
+                    updates.put("phase", "OPPONENT_CHANCE");
+                    updates.put("phaseStartedAt", FieldValue.serverTimestamp());
+                    transaction.update(gameRef, "currentPlayerUid", opponent, "updatedAt", FieldValue.serverTimestamp());
+                }
+                transaction.update(roundRef, updates);
+            } else if ("OPPONENT_CHANCE".equals(phase)) {
+                if (uid == null || !uid.equals(opponent) || round.get("opponentAttempt") != null) {
+                    return null;
+                }
+                Map<String, Object> updates = new HashMap<>();
+                updates.put("opponentAttempt", attempt);
+                updates.put("attemptsByPlayer." + uid, Collections.singletonList(attempt));
+                updates.put("feedbackByPlayer." + uid, Collections.singletonList(feedbackMap));
+                updates.put("phase", "FINISHED");
+                updates.put("finished", true);
+                updates.put("phaseStartedAt", FieldValue.serverTimestamp());
+                updates.put("updatedAt", FieldValue.serverTimestamp());
+                if (feedback.isCorrect && !Boolean.TRUE.equals(round.getBoolean("roundScoreAwarded"))) {
+                    applyScore(transaction, gameRef, game, uid, 10);
+                    updates.put("roundScoreAwarded", true);
+                    updates.put("scoredByUid", uid);
+                    updates.put("awardedPoints", 10);
+                }
+                finishSkockoGameIfNeeded(transaction, gameRef, roundNumber);
+                transaction.update(roundRef, updates);
+            }
+            return null;
+        });
+    }
+
+    public Task<Void> handleSkockoTimeout(String gameId, int roundNumber, String expectedPhase) {
+        if (db == null) {
+            return Tasks.forException(new IllegalStateException("Firebase nije inicijalizovan"));
+        }
+        DocumentReference gameRef = db.collection("games").document(gameId);
+        DocumentReference roundRef = gameRef.collection("rounds").document(skockoRoundId(roundNumber));
+        return db.runTransaction(transaction -> {
+            DocumentSnapshot round = transaction.get(roundRef);
+            if (!round.exists() || Boolean.TRUE.equals(round.getBoolean("finished"))
+                    || !expectedPhase.equals(round.getString("phase"))) {
+                return null;
+            }
+            Log.d(TAG, "Skocko timeout gameId=" + gameId + ", roundId=" + skockoRoundId(roundNumber)
+                    + ", phase=" + expectedPhase + ", currentAttemptIndex=" + round.getLong("currentAttemptIndex"));
+            if ("ACTIVE_PLAYER".equals(expectedPhase)) {
+                transaction.update(roundRef, "phase", "OPPONENT_CHANCE",
+                        "phaseStartedAt", FieldValue.serverTimestamp(), "updatedAt", FieldValue.serverTimestamp());
+                transaction.update(gameRef, "currentPlayerUid", round.getString("opponentUid"),
+                        "updatedAt", FieldValue.serverTimestamp());
+            } else if ("OPPONENT_CHANCE".equals(expectedPhase)) {
+                transaction.update(roundRef, "phase", "FINISHED", "finished", true,
+                        "phaseStartedAt", FieldValue.serverTimestamp(), "updatedAt", FieldValue.serverTimestamp());
+                finishSkockoGameIfNeeded(transaction, gameRef, roundNumber);
+            }
+            return null;
+        });
+    }
+
+    private void finishSkockoGameIfNeeded(Transaction transaction, DocumentReference gameRef, int roundNumber) {
+        if (roundNumber == 2) {
+            transaction.update(gameRef, "status", "finished", "updatedAt", FieldValue.serverTimestamp());
+        }
+    }
+
+    private List<String> randomSkockoCombination(List<String> allowedSymbols) {
+        if (allowedSymbols == null || allowedSymbols.isEmpty()) {
+            throw new IllegalArgumentException("Skočko nema definisane dozvoljene znakove");
+        }
+        List<String> combination = new ArrayList<>();
+        for (int i = 0; i < 4; i++) {
+            combination.add(allowedSymbols.get(random.nextInt(allowedSymbols.size())));
+        }
+        return combination;
+    }
+
+    private SkockoFeedback calculateSkockoFeedback(List<String> secret, List<String> attempt) {
+        boolean[] secretUsed = new boolean[4];
+        boolean[] attemptUsed = new boolean[4];
+        int exact = 0;
+        for (int i = 0; i < 4; i++) {
+            if (secret.get(i).equals(attempt.get(i))) {
+                exact++;
+                secretUsed[i] = true;
+                attemptUsed[i] = true;
+            }
+        }
+        int partial = 0;
+        for (int i = 0; i < 4; i++) {
+            if (attemptUsed[i]) {
+                continue;
+            }
+            for (int j = 0; j < 4; j++) {
+                if (!secretUsed[j] && attempt.get(i).equals(secret.get(j))) {
+                    partial++;
+                    secretUsed[j] = true;
+                    break;
+                }
+            }
+        }
+        return new SkockoFeedback(exact, partial);
+    }
+
+    private Map<String, Object> skockoAttempt(List<String> symbols, SkockoFeedback feedback) {
+        return mapOf("symbols", new ArrayList<>(symbols),
+                "exactMatches", feedback.exactMatches,
+                "partialMatches", feedback.partialMatches,
+                "isCorrect", feedback.isCorrect,
+                "submittedAt", Timestamp.now());
+    }
+
+    private Map<String, Object> skockoFeedbackMap(SkockoFeedback feedback) {
+        return mapOf("exactMatches", feedback.exactMatches,
+                "partialMatches", feedback.partialMatches,
+                "isCorrect", feedback.isCorrect);
+    }
+
+    private int skockoScoreForAttempt(int attemptNumber) {
+        if (attemptNumber <= 2) return 20;
+        if (attemptNumber <= 4) return 15;
+        return 10;
+    }
+
+    private List<Object> objectListFromPlayerMap(DocumentSnapshot round, String field, String uid) {
+        Map<String, Object> root = (Map<String, Object>) round.get(field);
+        if (root == null || !(root.get(uid) instanceof List)) {
+            return new ArrayList<>();
+        }
+        return new ArrayList<>((List<Object>) root.get(uid));
+    }
+
+    private List<String> stringList(Object raw) {
+        List<String> values = new ArrayList<>();
+        if (raw instanceof List) {
+            for (Object item : (List<Object>) raw) {
+                if (item != null) {
+                    values.add(String.valueOf(item));
+                }
+            }
+        }
+        return values;
+    }
+
+    private static class SkockoFeedback {
+        final int exactMatches;
+        final int partialMatches;
+        final boolean isCorrect;
+
+        SkockoFeedback(int exactMatches, int partialMatches) {
+            this.exactMatches = exactMatches;
+            this.partialMatches = partialMatches;
+            this.isCorrect = exactMatches == 4;
+        }
     }
 
     public Task<Void> seedConnectionQuestionsIfNeeded() {

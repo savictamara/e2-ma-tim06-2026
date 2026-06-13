@@ -24,6 +24,7 @@ public class StatsRepository {
     private static final String GAME_STEP = "Korak po korak";
     private static final String GAME_CONNECTIONS = "Spojnice";
     private static final String GAME_ASSOCIATIONS = "Asocijacije";
+    private static final String GAME_SKOCKO = "Skocko";
 
     private final FirebaseFirestore db;
 
@@ -217,6 +218,35 @@ public class StatsRepository {
         });
     }
 
+    public Task<Void> recordSkockoGame(String gameId) {
+        if (db == null || gameId == null || gameId.isEmpty()) {
+            return Tasks.forResult(null);
+        }
+        DocumentReference gameRef = db.collection("games").document(gameId);
+        DocumentReference r1Ref = gameRef.collection("rounds").document("skocko_round_1");
+        DocumentReference r2Ref = gameRef.collection("rounds").document("skocko_round_2");
+        return db.runTransaction(transaction -> {
+            DocumentSnapshot game = transaction.get(gameRef);
+            DocumentSnapshot r1 = transaction.get(r1Ref);
+            DocumentSnapshot r2 = transaction.get(r2Ref);
+            if (!isFinishedGame(game) || Boolean.TRUE.equals(game.getBoolean("statsApplied_skocko"))) {
+                return null;
+            }
+            String p1 = game.getString("player1Uid");
+            String p2 = game.getString("player2Uid");
+            StatsDocs p1Docs = readStats(transaction, p1, "skocko");
+            StatsDocs p2Docs = readStats(transaction, p2, "skocko");
+            SkockoResult p1Result = skockoResult(p1, r1, r2);
+            SkockoResult p2Result = skockoResult(p2, r1, r2);
+            int p1Score = intValue(game.get("player1Score"));
+            int p2Score = intValue(game.get("player2Score"));
+            writeSkocko(transaction, p1Docs, p1Result, p1Score, p1Score > p2Score, p1Score < p2Score);
+            writeSkocko(transaction, p2Docs, p2Result, p2Score, p2Score > p1Score, p2Score < p1Score);
+            transaction.set(gameRef, mapOf("statsApplied_skocko", true), SetOptions.merge());
+            return null;
+        });
+    }
+
     private void setIfMissing(Transaction transaction, DocumentReference ref, DocumentSnapshot snapshot, Map<String, Object> defaults) {
         if (!snapshot.exists()) {
             transaction.set(ref, defaults, SetOptions.merge());
@@ -351,6 +381,27 @@ public class StatsRepository {
         writeSummary(transaction, docs, GAME_ASSOCIATIONS, score, won, lost);
     }
 
+    private void writeSkocko(Transaction transaction, StatsDocs docs, SkockoResult result, int score, boolean won, boolean lost) {
+        Map<String, Object> attempts = mergeStepMap(mapFrom(docs.specific, "attemptsByAttempt"), result.attemptsByAttempt);
+        Map<String, Object> hits = mergeStepMap(mapFrom(docs.specific, "hitsByAttempt"), result.hitsByAttempt);
+        Map<String, Object> percentByAttempt = new HashMap<>();
+        for (int i = 1; i <= 6; i++) {
+            String key = String.valueOf(i);
+            percentByAttempt.put(key, percent(longValue(hits.get(key)), longValue(attempts.get(key))));
+        }
+        long games = longValue(docs.specific.get("gamesPlayed")) + 1;
+        long scoreTotal = longValue(docs.specific.get("totalScore")) + score;
+        transaction.set(docs.specificRef, mapOf(
+                "attemptsByAttempt", attempts,
+                "hitsByAttempt", hits,
+                "percentByAttempt", percentByAttempt,
+                "gamesPlayed", games,
+                "totalScore", scoreTotal,
+                "averageScore", scoreTotal * 1.0 / games
+        ), SetOptions.merge());
+        writeSummary(transaction, docs, GAME_SKOCKO, score, won, lost);
+    }
+
     private KnowItResult knowItResult(DocumentSnapshot round, String uid) {
         int correct = 0;
         int wrong = 0;
@@ -443,6 +494,28 @@ public class StatsRepository {
             }
         }
         return new AssociationsResult(solved, unsolved);
+    }
+
+    private SkockoResult skockoResult(String uid, DocumentSnapshot... rounds) {
+        SkockoResult result = new SkockoResult();
+        for (DocumentSnapshot round : rounds) {
+            if (round == null || !round.exists() || uid == null || !uid.equals(round.getString("activePlayerUid"))) {
+                continue;
+            }
+            Map<String, Object> attemptsByPlayer = (Map<String, Object>) round.get("attemptsByPlayer");
+            Object rawAttempts = attemptsByPlayer == null ? null : attemptsByPlayer.get(uid);
+            if (!(rawAttempts instanceof java.util.List) || ((java.util.List<?>) rawAttempts).isEmpty()) {
+                continue;
+            }
+            java.util.List<?> attempts = (java.util.List<?>) rawAttempts;
+            int attemptNumber = Math.max(1, Math.min(6, attempts.size()));
+            increment(result.attemptsByAttempt, attemptNumber);
+            Object lastAttempt = attempts.get(attempts.size() - 1);
+            if (lastAttempt instanceof Map && Boolean.TRUE.equals(((Map<String, Object>) lastAttempt).get("isCorrect"))) {
+                increment(result.hitsByAttempt, attemptNumber);
+            }
+        }
+        return result;
     }
 
     private boolean isFinishedGame(DocumentSnapshot game) {
@@ -617,5 +690,10 @@ public class StatsRepository {
             this.solved = solved;
             this.unsolved = unsolved;
         }
+    }
+
+    private static class SkockoResult {
+        final Map<String, Long> attemptsByAttempt = new HashMap<>();
+        final Map<String, Long> hitsByAttempt = new HashMap<>();
     }
 }
