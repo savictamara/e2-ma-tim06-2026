@@ -41,11 +41,12 @@
                 android:orientation="horizontal">
 
                 <ImageView
+                    android:id="@+id/ivAvatar"
                     android:layout_width="90dp"
                     android:layout_height="90dp"
                     android:background="@drawable/bg_avatar_frame"
                     android:padding="14dp"
-                    android:src="@android:drawable/sym_def_app_icon" />
+                    android:src="@drawable/star" />
 
                 <LinearLayout
                     android:layout_width="0dp"
@@ -55,36 +56,31 @@
                     android:orientation="vertical">
 
                     <TextView
+                        android:id="@+id/tvUsername"
                         android:layout_width="match_parent"
                         android:layout_height="wrap_content"
-                        android:text="@string/profile_username_label"
-                        android:textColor="@color/text_muted" />
-
-                    <TextView
-                        android:layout_width="match_parent"
-                        android:layout_height="wrap_content"
-                        android:text="@string/profile_name_value"
                         android:textColor="@color/text_main"
                         android:textSize="18sp"
                         android:textStyle="bold" />
 
                     <TextView
+                        android:id="@+id/tvEmail"
                         android:layout_width="match_parent"
                         android:layout_height="wrap_content"
-                        android:layout_marginTop="3dp"
-                        android:text="@string/profile_email_label"
+                        android:layout_marginTop="4dp"
                         android:textColor="@color/text_muted" />
 
                     <TextView
+                        android:id="@+id/tvRegionBasic"
                         android:layout_width="match_parent"
                         android:layout_height="wrap_content"
-                        android:layout_marginTop="2dp"
-                        android:text="@string/profile_email_value"
+                        android:layout_marginTop="4dp"
                         android:textColor="@color/text_muted" />
                 </LinearLayout>
             </LinearLayout>
 
             <Button
+                android:id="@+id/btnChangeAvatar"
                 style="@style/Widget.MaterialComponents.Button"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
@@ -104,31 +100,24 @@
             <TextView
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:text="@string/profile_section_league"
+                android:text="Resursi"
                 android:textColor="@color/text_main"
                 android:textSize="16sp"
                 android:textStyle="bold" />
 
-            <LinearLayout
+            <TextView
+                android:id="@+id/tvTokens"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
                 android:layout_marginTop="8dp"
-                android:orientation="horizontal">
+                android:textColor="@color/text_main" />
 
-                <TextView
-                    android:layout_width="0dp"
-                    android:layout_height="wrap_content"
-                    android:layout_weight="1"
-                    android:text="@string/profile_tokens_value"
-                    android:textColor="@color/text_main" />
-
-                <TextView
-                    android:layout_width="0dp"
-                    android:layout_height="wrap_content"
-                    android:layout_weight="1"
-                    android:text="@string/profile_stars_value"
-                    android:textColor="@color/text_main" />
-            </LinearLayout>
+            <TextView
+                android:id="@+id/tvStars"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="4dp"
+                android:textColor="@color/text_main" />
 
             <LinearLayout
                 android:layout_width="match_parent"
@@ -138,55 +127,57 @@
                 android:orientation="horizontal">
 
                 <ImageView
-                    android:layout_width="24dp"
-                    android:layout_height="24dp"
-                    android:src="@android:drawable/btn_star_big_on" />
+                    android:id="@+id/ivLeagueIcon"
+                    android:layout_width="28dp"
+                    android:layout_height="28dp"
+                    android:src="@drawable/star" />
 
                 <TextView
+                    android:id="@+id/tvLeague"
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
                     android:layout_marginStart="8dp"
-                    android:text="@string/profile_league_value"
                     android:textColor="@color/text_main" />
             </LinearLayout>
 
             <TextView
+                android:id="@+id/tvRegion"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
                 android:layout_marginTop="6dp"
-                android:text="@string/profile_region_value"
                 android:textColor="@color/text_main" />
+        </LinearLayout>
+
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="12dp"
+            android:background="@drawable/bg_card"
+            android:orientation="vertical">
 
             <TextView
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
+                android:text="Avatar i QR kod"
+                android:textColor="@color/text_main"
+                android:textSize="16sp"
+                android:textStyle="bold" />
+
+            <ImageView
+                android:id="@+id/ivQrCode"
+                android:layout_width="160dp"
+                android:layout_height="160dp"
+                android:layout_gravity="center_horizontal"
                 android:layout_marginTop="10dp"
-                android:text="@string/profile_qr_label"
-                android:textColor="@color/text_main"
-                android:textStyle="bold" />
-
-            <LinearLayout
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:layout_marginTop="6dp"
                 android:background="@drawable/bg_step"
-                android:gravity="center_vertical"
-                android:orientation="horizontal"
-                android:padding="12dp">
+                android:padding="8dp" />
 
-                <ImageView
-                    android:layout_width="58dp"
-                    android:layout_height="58dp"
-                    android:src="@android:drawable/ic_menu_share" />
-
-                <TextView
-                    android:layout_width="0dp"
-                    android:layout_height="wrap_content"
-                    android:layout_marginStart="10dp"
-                    android:layout_weight="1"
-                    android:text="@string/profile_qr_hint"
-                    android:textColor="@color/text_muted" />
-            </LinearLayout>
+            <TextView
+                android:id="@+id/tvQrValue"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="8dp"
+                android:textColor="@color/text_muted" />
         </LinearLayout>
 
         <LinearLayout
@@ -199,62 +190,30 @@
             <TextView
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:text="@string/profile_section_games"
+                android:text="Statistika"
                 android:textColor="@color/text_main"
                 android:textSize="16sp"
                 android:textStyle="bold" />
 
             <TextView
+                android:id="@+id/tvStatsSummary"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
                 android:layout_marginTop="8dp"
-                android:text="@string/profile_stats_avg"
                 android:textColor="@color/text_main" />
-        </LinearLayout>
-
-        <LinearLayout
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:layout_marginTop="12dp"
-            android:background="@drawable/bg_card"
-            android:orientation="vertical">
 
             <TextView
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:text="@string/profile_section_details"
-                android:textColor="@color/text_main"
-                android:textSize="16sp"
-                android:textStyle="bold" />
-
-            <TextView
+                android:id="@+id/tvStatsGames"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
                 android:layout_marginTop="8dp"
-                android:text="@string/profile_stats_details"
                 android:textColor="@color/text_main" />
-        </LinearLayout>
-
-        <LinearLayout
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:layout_marginTop="12dp"
-            android:background="@drawable/bg_card"
-            android:orientation="vertical">
 
             <TextView
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:text="@string/profile_section_total"
-                android:textColor="@color/text_main"
-                android:textSize="16sp"
-                android:textStyle="bold" />
-
-            <TextView
+                android:id="@+id/tvStatsDetails"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
                 android:layout_marginTop="8dp"
-                android:text="@string/profile_stats_total"
                 android:textColor="@color/text_main" />
         </LinearLayout>
 

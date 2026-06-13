@@ -24,10 +24,12 @@ import java.util.Map;
 
 import rs.ac.uns.ftn.slagalica.data.repository.FirebaseAuthRepository;
 import rs.ac.uns.ftn.slagalica.data.repository.GameRepository;
+import rs.ac.uns.ftn.slagalica.data.repository.StatsRepository;
 import rs.ac.uns.ftn.slagalica.data.repository.UserRepository;
 import rs.ac.uns.ftn.slagalica.domain.service.MyNumberService;
 import rs.ac.uns.ftn.slagalica.util.ExpressionEvaluator;
 import rs.ac.uns.ftn.slagalica.util.FirebaseInitializer;
+import rs.ac.uns.ftn.slagalica.util.GuestSession;
 import rs.ac.uns.ftn.slagalica.util.ShakeDetector;
 
 public class MojBrojActivity extends AppCompatActivity {
@@ -37,6 +39,7 @@ public class MojBrojActivity extends AppCompatActivity {
     private FirebaseAuthRepository authRepository;
     private UserRepository userRepository;
     private GameRepository gameRepository;
+    private StatsRepository statsRepository;
     private ListenerRegistration gameListener;
     private ListenerRegistration roundListener;
     private SensorManager sensorManager;
@@ -55,6 +58,7 @@ public class MojBrojActivity extends AppCompatActivity {
     private CountDownTimer roundTimer;
     private CountDownTimer autoStopTimer;
     private boolean submitted = false;
+    private boolean statsRecordRequested = false;
     private TextView tvTarget;
     private TextView tvTimer;
     private TextView tvNumbers;
@@ -79,6 +83,7 @@ public class MojBrojActivity extends AppCompatActivity {
         authRepository = new FirebaseAuthRepository(this);
         userRepository = new UserRepository(this);
         gameRepository = new GameRepository(this);
+        statsRepository = new StatsRepository(this);
 
         tvTarget = findViewById(R.id.tvTarget);
         tvTimer = findViewById(R.id.tvMojBrojTimer);
@@ -100,18 +105,12 @@ public class MojBrojActivity extends AppCompatActivity {
         shakeDetector = new ShakeDetector(this::stopByCurrentPhase);
 
         FirebaseUser user = authRepository.currentUser();
-        if (user == null) {
-            show("Please login first.");
-            startActivity(new Intent(this, LoginActivity.class));
-            finish();
-            return;
-        }
         if (!firebaseReady || !gameRepository.isReady() || !userRepository.isReady()) {
             show(getString(R.string.firebase_not_ready));
             setPlayControls(false);
             return;
         }
-        uid = user.getUid();
+        uid = user == null ? GuestSession.uid(this) : user.getUid();
         Log.d(TAG, "Current uid=" + uid);
         userRepository.currentGameId(uid)
                 .continueWithTask(task -> {
@@ -324,8 +323,20 @@ public class MojBrojActivity extends AppCompatActivity {
             tvPoints.setText(getString(R.string.points_text, points == null ? 0 : points.intValue()));
             tvResult.setText(getString(R.string.result_text,
                     roundNumber == 1 ? "Runda je završena." : "Finalni rezultat: " + player1Score + " : " + player2Score));
+            if (roundNumber == 2) {
+                recordStatsOnce();
+            }
             moveToNextNumberRound();
         }
+    }
+
+    private void recordStatsOnce() {
+        if (statsRecordRequested || statsRepository == null || !statsRepository.isReady()) {
+            return;
+        }
+        statsRecordRequested = true;
+        statsRepository.recordMyNumberGame(gameId)
+                .addOnFailureListener(e -> Log.e(TAG, "Record my number stats failed", e));
     }
 
     private void startTimer(DocumentSnapshot round) {

@@ -22,8 +22,10 @@ import java.util.Map;
 
 import rs.ac.uns.ftn.slagalica.data.repository.FirebaseAuthRepository;
 import rs.ac.uns.ftn.slagalica.data.repository.GameRepository;
+import rs.ac.uns.ftn.slagalica.data.repository.StatsRepository;
 import rs.ac.uns.ftn.slagalica.data.repository.UserRepository;
 import rs.ac.uns.ftn.slagalica.util.FirebaseInitializer;
+import rs.ac.uns.ftn.slagalica.util.GuestSession;
 
 public class SpojniceActivity extends AppCompatActivity {
     private static final String TAG = "SpojniceActivity";
@@ -34,6 +36,7 @@ public class SpojniceActivity extends AppCompatActivity {
     private FirebaseAuthRepository authRepository;
     private UserRepository userRepository;
     private GameRepository gameRepository;
+    private StatsRepository statsRepository;
     private ListenerRegistration gameListener;
     private ListenerRegistration roundListener;
     private CountDownTimer phaseTimer;
@@ -49,6 +52,7 @@ public class SpojniceActivity extends AppCompatActivity {
     private int selectedRightIndex = -1;
     private int player1Score = 0;
     private int player2Score = 0;
+    private boolean statsRecordRequested = false;
     private Map<String, Object> matchedPairs;
     private Map<String, Object> attemptsByPlayer;
     private List<Integer> remainingLeftIndexes = new ArrayList<>();
@@ -72,6 +76,7 @@ public class SpojniceActivity extends AppCompatActivity {
         authRepository = new FirebaseAuthRepository(this);
         userRepository = new UserRepository(this);
         gameRepository = new GameRepository(this);
+        statsRepository = new StatsRepository(this);
 
         tvRound = findViewById(R.id.tvRound);
         tvCriterion = findViewById(R.id.tvCriterion);
@@ -104,18 +109,12 @@ public class SpojniceActivity extends AppCompatActivity {
         }
 
         FirebaseUser user = authRepository.currentUser();
-        if (user == null) {
-            show("Please login first.");
-            startActivity(new Intent(this, LoginActivity.class));
-            finish();
-            return;
-        }
         if (!firebaseReady || !gameRepository.isReady() || !userRepository.isReady()) {
             show(getString(R.string.firebase_not_ready));
             setPairButtonsEnabled(false);
             return;
         }
-        uid = user.getUid();
+        uid = user == null ? GuestSession.uid(this) : user.getUid();
         Log.d(TAG, "Current uid=" + uid);
         userRepository.currentGameId(uid)
                 .continueWithTask(task -> {
@@ -238,12 +237,22 @@ public class SpojniceActivity extends AppCompatActivity {
                 moveToSecondRound();
             } else {
                 setStatus("Spojnice su završene");
+                recordStatsOnce();
                 tvTimer.setText(getString(R.string.timer_text, 0));
             }
             return;
         }
         setPairButtonsEnabled(canCurrentUserPlay());
         startPhaseTimer(round);
+    }
+
+    private void recordStatsOnce() {
+        if (statsRecordRequested || statsRepository == null || !statsRepository.isReady()) {
+            return;
+        }
+        statsRecordRequested = true;
+        statsRepository.recordConnectionsGame(gameId)
+                .addOnFailureListener(e -> Log.e(TAG, "Record connections stats failed", e));
     }
 
     private void onLeftSelected(int leftIndex) {

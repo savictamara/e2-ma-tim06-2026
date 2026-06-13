@@ -22,8 +22,10 @@ import java.util.Map;
 
 import rs.ac.uns.ftn.slagalica.data.repository.FirebaseAuthRepository;
 import rs.ac.uns.ftn.slagalica.data.repository.GameRepository;
+import rs.ac.uns.ftn.slagalica.data.repository.StatsRepository;
 import rs.ac.uns.ftn.slagalica.data.repository.UserRepository;
 import rs.ac.uns.ftn.slagalica.util.FirebaseInitializer;
+import rs.ac.uns.ftn.slagalica.util.GuestSession;
 
 public class KoZnaZnaActivity extends AppCompatActivity {
     private static final String TAG = "KoZnaZnaActivity";
@@ -34,6 +36,7 @@ public class KoZnaZnaActivity extends AppCompatActivity {
     private FirebaseAuthRepository authRepository;
     private UserRepository userRepository;
     private GameRepository gameRepository;
+    private StatsRepository statsRepository;
     private ListenerRegistration gameListener;
     private ListenerRegistration roundListener;
     private CountDownTimer questionTimer;
@@ -46,6 +49,7 @@ public class KoZnaZnaActivity extends AppCompatActivity {
     private int player1Score = 0;
     private int player2Score = 0;
     private boolean answeredCurrentQuestion = false;
+    private boolean statsRecordRequested = false;
 
     private TextView tvTimer;
     private TextView tvQuestionIndex;
@@ -66,6 +70,7 @@ public class KoZnaZnaActivity extends AppCompatActivity {
         authRepository = new FirebaseAuthRepository(this);
         userRepository = new UserRepository(this);
         gameRepository = new GameRepository(this);
+        statsRepository = new StatsRepository(this);
 
         tvTimer = findViewById(R.id.tvTimer);
         tvQuestionIndex = findViewById(R.id.tvQuestionIndex);
@@ -87,18 +92,12 @@ public class KoZnaZnaActivity extends AppCompatActivity {
         }
 
         FirebaseUser user = authRepository.currentUser();
-        if (user == null) {
-            show("Please login first.");
-            startActivity(new Intent(this, LoginActivity.class));
-            finish();
-            return;
-        }
         if (!firebaseReady || !gameRepository.isReady() || !userRepository.isReady()) {
             show(getString(R.string.firebase_not_ready));
             setAnswerButtonsEnabled(false);
             return;
         }
-        uid = user.getUid();
+        uid = user == null ? GuestSession.uid(this) : user.getUid();
         Log.d(TAG, "Current uid=" + uid);
         userRepository.currentGameId(uid)
                 .continueWithTask(task -> {
@@ -319,6 +318,16 @@ public class KoZnaZnaActivity extends AppCompatActivity {
         for (Button answerButton : answerButtons) {
             answerButton.setBackgroundResource(R.drawable.bg_step);
         }
+        recordStatsOnce();
+    }
+
+    private void recordStatsOnce() {
+        if (statsRecordRequested || statsRepository == null || !statsRepository.isReady()) {
+            return;
+        }
+        statsRecordRequested = true;
+        statsRepository.recordKnowItGame(gameId)
+                .addOnFailureListener(e -> Log.e(TAG, "Record know it stats failed", e));
     }
 
     private List<Map<String, Object>> readQuestions(DocumentSnapshot round) {

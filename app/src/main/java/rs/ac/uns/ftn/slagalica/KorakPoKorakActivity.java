@@ -19,9 +19,11 @@ import java.util.List;
 
 import rs.ac.uns.ftn.slagalica.data.repository.FirebaseAuthRepository;
 import rs.ac.uns.ftn.slagalica.data.repository.GameRepository;
+import rs.ac.uns.ftn.slagalica.data.repository.StatsRepository;
 import rs.ac.uns.ftn.slagalica.data.repository.UserRepository;
 import rs.ac.uns.ftn.slagalica.domain.service.StepByStepService;
 import rs.ac.uns.ftn.slagalica.util.FirebaseInitializer;
+import rs.ac.uns.ftn.slagalica.util.GuestSession;
 
 public class KorakPoKorakActivity extends AppCompatActivity {
     private static final String TAG = "KorakPoKorakActivity";
@@ -30,6 +32,7 @@ public class KorakPoKorakActivity extends AppCompatActivity {
     private FirebaseAuthRepository authRepository;
     private UserRepository userRepository;
     private GameRepository gameRepository;
+    private StatsRepository statsRepository;
     private ListenerRegistration gameListener;
     private ListenerRegistration roundListener;
     private CountDownTimer timer;
@@ -42,6 +45,7 @@ public class KorakPoKorakActivity extends AppCompatActivity {
     private String opponentUid = "";
     private int player1Score = 0;
     private int player2Score = 0;
+    private boolean statsRecordRequested = false;
     private TextView tvTimer;
     private TextView tvPoints;
     private TextView tvPlayer1Score;
@@ -61,6 +65,7 @@ public class KorakPoKorakActivity extends AppCompatActivity {
         authRepository = new FirebaseAuthRepository(this);
         userRepository = new UserRepository(this);
         gameRepository = new GameRepository(this);
+        statsRepository = new StatsRepository(this);
 
         stepViews[0] = findViewById(R.id.step1);
         stepViews[1] = findViewById(R.id.step2);
@@ -80,18 +85,12 @@ public class KorakPoKorakActivity extends AppCompatActivity {
         btnCheckSolution = findViewById(R.id.btnCheckSolution);
 
         FirebaseUser user = authRepository.currentUser();
-        if (user == null) {
-            show("Please login first.");
-            startActivity(new Intent(this, LoginActivity.class));
-            finish();
-            return;
-        }
         if (!firebaseReady || !gameRepository.isReady() || !userRepository.isReady()) {
             show(getString(R.string.firebase_not_ready));
             setControls(false);
             return;
         }
-        uid = user.getUid();
+        uid = user == null ? GuestSession.uid(this) : user.getUid();
         Log.d(TAG, "Current uid=" + uid);
         gameRepository.seedStepQuestionsIfNeeded()
                 .addOnFailureListener(e -> Log.e(TAG, "Seed step questions failed", e));
@@ -276,6 +275,7 @@ public class KorakPoKorakActivity extends AppCompatActivity {
                     });
             listenRound();
         } else {
+            recordStatsOnce();
             gameRepository.getGame(gameId)
                     .addOnSuccessListener(game -> {
                         Long p1 = game.getLong("player1Score");
@@ -297,6 +297,15 @@ public class KorakPoKorakActivity extends AppCompatActivity {
             tvTimer.setText(getString(R.string.timer_text, 0));
             setControls(false);
         }
+    }
+
+    private void recordStatsOnce() {
+        if (statsRecordRequested || statsRepository == null || !statsRepository.isReady()) {
+            return;
+        }
+        statsRecordRequested = true;
+        statsRepository.recordStepGame(gameId)
+                .addOnFailureListener(e -> Log.e(TAG, "Record step stats failed", e));
     }
 
     private void setControls(boolean enabled) {

@@ -37,6 +37,26 @@ public class FirebaseAuthRepository {
         return auth == null ? null : auth.getCurrentUser();
     }
 
+    public Task<FirebaseUser> signInAnonymously() {
+        if (auth == null) {
+            return Tasks.forException(new IllegalStateException("Firebase nije inicijalizovan"));
+        }
+        FirebaseUser current = auth.getCurrentUser();
+        if (current != null) {
+            return Tasks.forResult(current);
+        }
+        return auth.signInAnonymously().continueWith(task -> {
+            if (!task.isSuccessful()) {
+                throw task.getException();
+            }
+            FirebaseUser user = task.getResult().getUser();
+            if (user == null) {
+                throw new IllegalStateException("Anonimni korisnik nije kreiran");
+            }
+            return user;
+        });
+    }
+
     public Task<FirebaseUser> register(String email, String password) {
         if (auth == null) {
             return Tasks.forException(new IllegalStateException("Firebase nije inicijalizovan"));
