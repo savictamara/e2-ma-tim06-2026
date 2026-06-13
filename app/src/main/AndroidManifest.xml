@@ -12,6 +12,9 @@
         android:supportsRtl="true"
         android:theme="@style/Theme.SlagalicaStudent1KT1">
         <activity
+            android:name=".NotificationDetailActivity"
+            android:exported="false" />
+        <activity
             android:name=".NotifikacijeActivity"
             android:exported="false" />
         <activity

@@ -10,7 +10,7 @@ import android.content.Intent;
 import android.content.pm.PackageManager;
 import android.os.Build;
 
-import rs.ac.uns.ftn.slagalica.NotifikacijeActivity;
+import rs.ac.uns.ftn.slagalica.NotificationDetailActivity;
 import rs.ac.uns.ftn.slagalica.R;
 import rs.ac.uns.ftn.slagalica.domain.model.AppNotification;
 
@@ -52,8 +52,8 @@ public final class NotificationHelper {
             return;
         }
         createNotificationChannels(context);
-        Intent intent = new Intent(context, NotifikacijeActivity.class);
-        intent.putExtra("notificationId", notification.id);
+        Intent intent = new Intent(context, NotificationDetailActivity.class);
+        intent.putExtra(NotificationDetailActivity.EXTRA_NOTIFICATION_ID, notification.id);
         intent.setFlags(Intent.FLAG_ACTIVITY_SINGLE_TOP | Intent.FLAG_ACTIVITY_CLEAR_TOP);
         PendingIntent pendingIntent = PendingIntent.getActivity(
                 context,

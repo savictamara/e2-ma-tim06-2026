@@ -29,7 +29,6 @@ import rs.ac.uns.ftn.slagalica.data.repository.FirebaseAuthRepository;
 import rs.ac.uns.ftn.slagalica.data.repository.NotificationRepository;
 import rs.ac.uns.ftn.slagalica.domain.model.AppNotification;
 import rs.ac.uns.ftn.slagalica.util.FirebaseInitializer;
-import rs.ac.uns.ftn.slagalica.util.GuestSession;
 import rs.ac.uns.ftn.slagalica.util.NotificationHelper;
 
 public class NotifikacijeActivity extends AppCompatActivity {
@@ -81,7 +80,13 @@ public class NotifikacijeActivity extends AppCompatActivity {
             setStatus("Firebase nije inicijalizovan");
             return;
         }
-        uid = user == null ? GuestSession.uid(this) : user.getUid();
+        if (user == null) {
+            show("Morate biti ulogovani.");
+            startActivity(new Intent(this, LoginActivity.class));
+            finish();
+            return;
+        }
+        uid = user.getUid();
         Log.d(TAG, "currentUserUid=" + uid);
         listenNotifications();
     }
@@ -237,13 +242,16 @@ public class NotifikacijeActivity extends AppCompatActivity {
     }
 
     private void openNotification(AppNotification notification) {
-        notificationRepository.markRead(uid, notification.id);
-        Class<?> target = targetActivity(notification.targetScreen);
-        if (target == null) {
-            show("Stranica trenutno nije dostupna");
-            return;
-        }
-        startActivity(new Intent(this, target));
+        notificationRepository.markRead(uid, notification.id)
+                .addOnSuccessListener(unused -> {
+                    Intent intent = new Intent(this, NotificationDetailActivity.class);
+                    intent.putExtra(NotificationDetailActivity.EXTRA_NOTIFICATION_ID, notification.id);
+                    startActivity(intent);
+                })
+                .addOnFailureListener(e -> {
+                    Log.e(TAG, "Open notification mark read failed", e);
+                    show("Greška pri označavanju kao pročitano");
+                });
     }
 
     private Class<?> targetActivity(String targetScreen) {
