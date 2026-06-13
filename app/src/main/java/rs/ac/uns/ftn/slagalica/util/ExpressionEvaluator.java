@@ -1,17 +1,26 @@
 package rs.ac.uns.ftn.slagalica.util;
 
+import android.util.Log;
+
 public class ExpressionEvaluator {
+    private static final String TAG = "ExpressionEvaluator";
     private String input;
     private int pos;
 
     public double evaluate(String expression) {
-        input = expression.replaceAll("\\s+", "");
-        pos = 0;
-        double value = parseExpression();
-        if (pos != input.length()) {
-            throw new IllegalArgumentException("Neispravan izraz");
+        try {
+            input = expression.replaceAll("\\s+", "");
+            pos = 0;
+            double value = parseExpression();
+            if (pos != input.length()) {
+                throw new IllegalArgumentException("Neispravan izraz");
+            }
+            Log.d(TAG, "Expression evaluated, expression=" + expression + ", result=" + value);
+            return value;
+        } catch (IllegalArgumentException e) {
+            Log.e(TAG, "Expression invalid, expression=" + expression + ", error=" + e.getMessage());
+            throw e;
         }
-        return value;
     }
 
     private double parseExpression() {

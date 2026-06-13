@@ -28,6 +28,7 @@ import rs.ac.uns.ftn.slagalica.util.FirebaseInitializer;
 public class GameRepository {
     public static final String MINI_STEP_BY_STEP = "STEP_BY_STEP";
     public static final String MINI_MY_NUMBER = "MY_NUMBER";
+    public static final String MINI_KNOW_IT = "KNOW_IT";
     public static final String PHASE_WAITING_TARGET_STOP = "WAITING_TARGET_STOP";
     public static final String PHASE_WAITING_NUMBERS_STOP = "WAITING_NUMBERS_STOP";
     public static final String PHASE_PLAYING = "PLAYING";
@@ -352,6 +353,9 @@ public class GameRepository {
             Log.d(TAG, "Creating my number round, gameId=" + gameId + ", roundNumber=" + roundNumber);
             String p1 = game.getString("player1Uid");
             String p2 = game.getString("player2Uid");
+            if (p1 == null || p2 == null) {
+                throw new IllegalStateException("Moj broj ne moze da pocne bez dva igraca");
+            }
             String active = roundNumber == 1 ? p1 : p2;
             String opponent = roundNumber == 1 ? p2 : p1;
             Map<String, Object> round = new HashMap<>();
@@ -373,7 +377,8 @@ public class GameRepository {
             round.put("awardedPoints", 0);
             round.put("createdAt", FieldValue.serverTimestamp());
             round.put("updatedAt", FieldValue.serverTimestamp());
-            round.put("startedAt", Timestamp.now());
+            round.put("phaseStartedAt", FieldValue.serverTimestamp());
+            round.put("playStartedAt", null);
             round.put("scoreApplied", false);
             transaction.set(roundRef, round);
             transaction.set(gameRef, mapOf("currentMiniGame", MINI_MY_NUMBER, "currentPlayerUid", active,
@@ -386,11 +391,16 @@ public class GameRepository {
         DocumentReference roundRef = db.collection("games").document(gameId).collection("rounds").document(myNumberRoundId(roundNumber));
         return db.runTransaction(transaction -> {
             DocumentSnapshot round = transaction.get(roundRef);
-            if (!PHASE_WAITING_TARGET_STOP.equals(round.getString("phase"))) {
+            if (!PHASE_WAITING_TARGET_STOP.equals(round.getString("phase"))
+                    || Boolean.TRUE.equals(round.getBoolean("finished"))) {
                 return null;
             }
-            transaction.update(roundRef, "targetNumber", 100 + random.nextInt(900), "phase", PHASE_WAITING_NUMBERS_STOP,
-                    "startedAt", Timestamp.now(), "updatedAt", FieldValue.serverTimestamp());
+            int target = 100 + random.nextInt(900);
+            Log.d(TAG, "Stop target gameId=" + gameId + ", round=" + roundNumber + ", target=" + target);
+            transaction.update(roundRef, "targetNumber", target,
+                    "phase", PHASE_WAITING_NUMBERS_STOP,
+                    "phaseStartedAt", FieldValue.serverTimestamp(),
+                    "updatedAt", FieldValue.serverTimestamp());
             return null;
         });
     }
@@ -399,14 +409,19 @@ public class GameRepository {
         DocumentReference roundRef = db.collection("games").document(gameId).collection("rounds").document(myNumberRoundId(roundNumber));
         return db.runTransaction(transaction -> {
             DocumentSnapshot round = transaction.get(roundRef);
-            if (!PHASE_WAITING_NUMBERS_STOP.equals(round.getString("phase"))) {
+            if (!PHASE_WAITING_NUMBERS_STOP.equals(round.getString("phase"))
+                    || Boolean.TRUE.equals(round.getBoolean("finished"))) {
                 return null;
             }
             List<Integer> numbers = Arrays.asList(1 + random.nextInt(9), 1 + random.nextInt(9),
                     1 + random.nextInt(9), 1 + random.nextInt(9),
                     Arrays.asList(10, 15, 20).get(random.nextInt(3)),
                     Arrays.asList(25, 50, 75, 100).get(random.nextInt(4)));
-            transaction.update(roundRef, "numbers", numbers, "phase", PHASE_PLAYING, "startedAt", Timestamp.now(),
+            Log.d(TAG, "Stop numbers gameId=" + gameId + ", round=" + roundNumber + ", numbers=" + numbers);
+            transaction.update(roundRef, "numbers", numbers,
+                    "phase", PHASE_PLAYING,
+                    "phaseStartedAt", FieldValue.serverTimestamp(),
+                    "playStartedAt", FieldValue.serverTimestamp(),
                     "updatedAt", FieldValue.serverTimestamp());
             return null;
         });
@@ -418,16 +433,26 @@ public class GameRepository {
         return db.runTransaction(transaction -> {
             DocumentSnapshot game = transaction.get(gameRef);
             DocumentSnapshot round = transaction.get(roundRef);
-            if (!PHASE_PLAYING.equals(round.getString("phase")) || Boolean.TRUE.equals(round.getBoolean("scoreApplied"))) {
+            if (!PHASE_PLAYING.equals(round.getString("phase"))
+                    || Boolean.TRUE.equals(round.getBoolean("scoreApplied"))
+                    || Boolean.TRUE.equals(round.getBoolean("finished"))) {
                 return null;
             }
             String p1 = game.getString("player1Uid");
             String p2 = game.getString("player2Uid");
+            if (!uid.equals(p1) && !uid.equals(p2)) {
+                Log.d(TAG, "Ignoring my number submit from non-player uid=" + uid + ", gameId=" + gameId);
+                return null;
+            }
             Map<String, Object> submissions = (Map<String, Object>) round.get("submissionsByPlayer");
             boolean p1AlreadySubmitted = submissions != null && submissions.containsKey(p1);
             boolean p2AlreadySubmitted = submissions != null && submissions.containsKey(p2);
             boolean p1Submitted = uid.equals(p1) || p1AlreadySubmitted;
             boolean p2Submitted = uid.equals(p2) || p2AlreadySubmitted;
+            Log.d(TAG, "Submit my number gameId=" + gameId + ", round=" + roundNumber
+                    + ", uid=" + uid + ", expression=" + expression
+                    + ", result=" + result + ", valid=" + valid
+                    + ", p1Submitted=" + p1Submitted + ", p2Submitted=" + p2Submitted);
             transaction.update(roundRef, "submissionsByPlayer." + uid, expression,
                     "resultsByPlayer." + uid, result,
                     "validByPlayer." + uid, valid,
@@ -445,9 +470,11 @@ public class GameRepository {
         return db.runTransaction(transaction -> {
             DocumentSnapshot game = transaction.get(gameRef);
             DocumentSnapshot round = transaction.get(roundRef);
-            if (Boolean.TRUE.equals(round.getBoolean("scoreApplied"))) {
+            if (Boolean.TRUE.equals(round.getBoolean("scoreApplied"))
+                    || Boolean.TRUE.equals(round.getBoolean("finished"))) {
                 return null;
             }
+            Log.d(TAG, "Finish my number round by timeout gameId=" + gameId + ", round=" + roundNumber);
             applyMyNumberScore(transaction, gameRef, roundRef, game, round, null, 0, false, roundNumber);
             return null;
         });
@@ -537,6 +564,286 @@ public class GameRepository {
         return Math.abs(left - right) < 0.000001;
     }
 
+    public Task<Void> seedKnowItQuestionsIfNeeded() {
+        if (db == null) {
+            return Tasks.forException(new IllegalStateException("Firebase nije inicijalizovan"));
+        }
+        return db.collection("knowItQuestions").limit(1).get().continueWithTask(task -> {
+            if (!task.isSuccessful()) {
+                throw task.getException();
+            }
+            if (!task.getResult().isEmpty()) {
+                return Tasks.forResult(null);
+            }
+            Log.d(TAG, "Seeding knowItQuestions");
+            return Tasks.whenAll(
+                    db.collection("knowItQuestions").document("q1").set(knowItQuestion("Koji element ima hemijski simbol Au?",
+                            Arrays.asList("Zlato", "Srebro", "Gvozdje", "Kiseonik"), 0)),
+                    db.collection("knowItQuestions").document("q2").set(knowItQuestion("Koliko kontinenata postoji?",
+                            Arrays.asList("5", "6", "7", "8"), 2)),
+                    db.collection("knowItQuestions").document("q3").set(knowItQuestion("Koja planeta je poznata kao crvena planeta?",
+                            Arrays.asList("Venera", "Mars", "Jupiter", "Merkur"), 1)),
+                    db.collection("knowItQuestions").document("q4").set(knowItQuestion("Ko je napisao Na Drini cuprija?",
+                            Arrays.asList("Mesa Selimovic", "Ivo Andric", "Branko Copic", "Milos Crnjanski"), 1)),
+                    db.collection("knowItQuestions").document("q5").set(knowItQuestion("Koji je glavni grad Francuske?",
+                            Arrays.asList("Madrid", "Pariz", "Rim", "Berlin"), 1)),
+                    db.collection("knowItQuestions").document("q6").set(knowItQuestion("Koliko minuta ima jedan sat?",
+                            Arrays.asList("30", "45", "60", "90"), 2)),
+                    db.collection("knowItQuestions").document("q7").set(knowItQuestion("Koja reka protiče kroz Novi Sad?",
+                            Arrays.asList("Sava", "Tisa", "Dunav", "Morava"), 2)),
+                    db.collection("knowItQuestions").document("q8").set(knowItQuestion("Koji sport koristi reket?",
+                            Arrays.asList("Tenis", "Fudbal", "Kosarka", "Odbojka"), 0)));
+        });
+    }
+
+    private Map<String, Object> knowItQuestion(String text, List<String> options, int correctIndex) {
+        Map<String, Object> data = new HashMap<>();
+        data.put("questionText", text);
+        data.put("options", options);
+        data.put("correctAnswerIndex", correctIndex);
+        return data;
+    }
+
+    public Task<Void> ensureKnowItRound(String gameId) {
+        if (db == null) {
+            return Tasks.forException(new IllegalStateException("Firebase nije inicijalizovan"));
+        }
+        return seedKnowItQuestionsIfNeeded().continueWithTask(seedTask -> {
+            if (!seedTask.isSuccessful()) {
+                Log.e(TAG, "Seed know it questions failed", seedTask.getException());
+                throw seedTask.getException();
+            }
+            return db.collection("knowItQuestions").limit(8).get();
+        }).continueWithTask(questionTask -> {
+            if (!questionTask.isSuccessful()) {
+                Log.e(TAG, "Loading know it questions failed", questionTask.getException());
+                throw questionTask.getException();
+            }
+            List<Map<String, Object>> questions = new ArrayList<>();
+            for (DocumentSnapshot doc : questionTask.getResult().getDocuments()) {
+                String questionText = doc.getString("questionText");
+                List<String> options = (List<String>) doc.get("options");
+                Long correct = doc.getLong("correctAnswerIndex");
+                if (questionText != null && options != null && options.size() == 4 && correct != null) {
+                    Map<String, Object> question = new HashMap<>();
+                    question.put("questionId", doc.getId());
+                    question.put("questionText", questionText);
+                    question.put("options", options);
+                    question.put("correctAnswerIndex", correct.intValue());
+                    questions.add(question);
+                }
+                if (questions.size() == 5) {
+                    break;
+                }
+            }
+            if (questions.size() < 5) {
+                return Tasks.forException(new IllegalStateException("Nema dovoljno Ko zna zna pitanja u Firestore-u"));
+            }
+            return createKnowItRoundIfMissing(gameId, questions);
+        });
+    }
+
+    private Task<Void> createKnowItRoundIfMissing(String gameId, List<Map<String, Object>> questions) {
+        DocumentReference gameRef = db.collection("games").document(gameId);
+        DocumentReference roundRef = gameRef.collection("rounds").document(knowItRoundId());
+        return db.runTransaction(transaction -> {
+            DocumentSnapshot game = transaction.get(gameRef);
+            DocumentSnapshot existing = transaction.get(roundRef);
+            if (existing.exists()) {
+                return null;
+            }
+            String p1 = game.getString("player1Uid");
+            String p2 = game.getString("player2Uid");
+            if (p1 == null || p2 == null) {
+                throw new IllegalStateException("Ko zna zna ne moze da pocne bez dva igraca");
+            }
+            Log.d(TAG, "Creating know it round, gameId=" + gameId + ", p1=" + p1 + ", p2=" + p2);
+            Map<String, Object> round = new HashMap<>();
+            round.put("id", knowItRoundId());
+            round.put("gameId", gameId);
+            round.put("type", MINI_KNOW_IT);
+            round.put("roundIndex", 1);
+            round.put("phase", PHASE_PLAYING);
+            round.put("currentQuestionIndex", 0);
+            round.put("questionStartedAt", FieldValue.serverTimestamp());
+            round.put("questions", questions);
+            round.put("answersByQuestion", new HashMap<String, Object>());
+            round.put("answerTimesByQuestion", new HashMap<String, Object>());
+            round.put("correctnessByQuestion", new HashMap<String, Object>());
+            round.put("scoredQuestions", new HashMap<String, Boolean>());
+            round.put("finished", false);
+            round.put("createdAt", FieldValue.serverTimestamp());
+            round.put("updatedAt", FieldValue.serverTimestamp());
+            transaction.set(roundRef, round);
+            transaction.set(gameRef, mapOf("currentMiniGame", MINI_KNOW_IT, "currentPlayerUid", null,
+                    "updatedAt", FieldValue.serverTimestamp()), SetOptions.merge());
+            return null;
+        });
+    }
+
+    public Task<Void> submitKnowItAnswer(String gameId, String uid, int selectedAnswerIndex, long answerTimeMillis) {
+        DocumentReference gameRef = db.collection("games").document(gameId);
+        DocumentReference roundRef = gameRef.collection("rounds").document(knowItRoundId());
+        return db.runTransaction(transaction -> {
+            DocumentSnapshot game = transaction.get(gameRef);
+            DocumentSnapshot round = transaction.get(roundRef);
+            if (!"active".equals(game.getString("status")) || !PHASE_PLAYING.equals(round.getString("phase"))
+                    || Boolean.TRUE.equals(round.getBoolean("finished"))) {
+                return null;
+            }
+            String p1 = game.getString("player1Uid");
+            String p2 = game.getString("player2Uid");
+            if (!uid.equals(p1) && !uid.equals(p2)) {
+                return null;
+            }
+            Long indexLong = round.getLong("currentQuestionIndex");
+            int questionIndex = indexLong == null ? 0 : indexLong.intValue();
+            Timestamp startedAt = round.getTimestamp("questionStartedAt");
+            long elapsed = startedAt == null ? 0 : answerTimeMillis - startedAt.toDate().getTime();
+            if (elapsed > 5000) {
+                Log.d(TAG, "Ignoring late know it answer, uid=" + uid + ", question=" + questionIndex + ", elapsed=" + elapsed);
+                return null;
+            }
+            String qKey = String.valueOf(questionIndex);
+            Map<String, Object> answersByQuestion = (Map<String, Object>) round.get("answersByQuestion");
+            Map<String, Object> currentAnswers = nestedMap(answersByQuestion, qKey);
+            if (currentAnswers.containsKey(uid)) {
+                return null;
+            }
+            int correctIndex = correctIndexForQuestion(round, questionIndex);
+            boolean correct = selectedAnswerIndex == correctIndex;
+            Log.d(TAG, "Submit know it answer gameId=" + gameId + ", uid=" + uid
+                    + ", questionIndex=" + questionIndex + ", selected=" + selectedAnswerIndex
+                    + ", correct=" + correct + ", answerTime=" + answerTimeMillis);
+            transaction.update(roundRef,
+                    "answersByQuestion." + qKey + "." + uid, selectedAnswerIndex,
+                    "answerTimesByQuestion." + qKey + "." + uid, answerTimeMillis,
+                    "correctnessByQuestion." + qKey + "." + uid, correct,
+                    "updatedAt", FieldValue.serverTimestamp());
+            boolean p1Answered = uid.equals(p1) || currentAnswers.containsKey(p1);
+            boolean p2Answered = uid.equals(p2) || currentAnswers.containsKey(p2);
+            if (p1Answered && p2Answered) {
+                scoreAndAdvanceKnowItQuestion(transaction, gameRef, roundRef, game, round,
+                        questionIndex, uid, selectedAnswerIndex, correct, answerTimeMillis);
+            }
+            return null;
+        });
+    }
+
+    public Task<Void> advanceKnowItQuestion(String gameId, int expectedQuestionIndex) {
+        DocumentReference gameRef = db.collection("games").document(gameId);
+        DocumentReference roundRef = gameRef.collection("rounds").document(knowItRoundId());
+        return db.runTransaction(transaction -> {
+            DocumentSnapshot game = transaction.get(gameRef);
+            DocumentSnapshot round = transaction.get(roundRef);
+            Long indexLong = round.getLong("currentQuestionIndex");
+            int questionIndex = indexLong == null ? 0 : indexLong.intValue();
+            if (questionIndex != expectedQuestionIndex || !PHASE_PLAYING.equals(round.getString("phase"))
+                    || Boolean.TRUE.equals(round.getBoolean("finished"))) {
+                return null;
+            }
+            Log.d(TAG, "Know it timeout advance gameId=" + gameId + ", questionIndex=" + questionIndex);
+            scoreAndAdvanceKnowItQuestion(transaction, gameRef, roundRef, game, round,
+                    questionIndex, null, -1, false, 0);
+            return null;
+        });
+    }
+
+    private void scoreAndAdvanceKnowItQuestion(Transaction transaction, DocumentReference gameRef,
+                                               DocumentReference roundRef, DocumentSnapshot game,
+                                               DocumentSnapshot round, int questionIndex, String pendingUid,
+                                               int pendingAnswer, boolean pendingCorrect, long pendingTime) {
+        String qKey = String.valueOf(questionIndex);
+        Map<String, Object> scored = (Map<String, Object>) round.get("scoredQuestions");
+        if (scored != null && Boolean.TRUE.equals(scored.get(qKey))) {
+            return;
+        }
+        String p1 = game.getString("player1Uid");
+        String p2 = game.getString("player2Uid");
+        Map<String, Object> answers = nestedMap((Map<String, Object>) round.get("answersByQuestion"), qKey);
+        Map<String, Object> correctness = nestedMap((Map<String, Object>) round.get("correctnessByQuestion"), qKey);
+        Map<String, Object> times = nestedMap((Map<String, Object>) round.get("answerTimesByQuestion"), qKey);
+        if (pendingUid != null) {
+            answers.put(pendingUid, pendingAnswer);
+            correctness.put(pendingUid, pendingCorrect);
+            times.put(pendingUid, pendingTime);
+        }
+        boolean p1Answered = answers.containsKey(p1);
+        boolean p2Answered = answers.containsKey(p2);
+        boolean p1Correct = Boolean.TRUE.equals(correctness.get(p1));
+        boolean p2Correct = Boolean.TRUE.equals(correctness.get(p2));
+        int p1Delta = 0;
+        int p2Delta = 0;
+        if (p1Answered && p2Answered) {
+            if (p1Correct && p2Correct) {
+                long t1 = longValue(times.get(p1));
+                long t2 = longValue(times.get(p2));
+                if (t1 <= t2) {
+                    p1Delta = 10;
+                } else {
+                    p2Delta = 10;
+                }
+            } else {
+                p1Delta = p1Correct ? 10 : -5;
+                p2Delta = p2Correct ? 10 : -5;
+            }
+        } else if (p1Answered) {
+            p1Delta = p1Correct ? 10 : -5;
+        } else if (p2Answered) {
+            p2Delta = p2Correct ? 10 : -5;
+        }
+        if (p1Delta != 0) {
+            transaction.update(gameRef, "player1Score", FieldValue.increment(p1Delta),
+                    "updatedAt", FieldValue.serverTimestamp());
+        }
+        if (p2Delta != 0) {
+            transaction.update(gameRef, "player2Score", FieldValue.increment(p2Delta),
+                    "updatedAt", FieldValue.serverTimestamp());
+        }
+        Map<String, Object> updates = new HashMap<>();
+        updates.put("scoredQuestions." + qKey, true);
+        updates.put("updatedAt", FieldValue.serverTimestamp());
+        if (questionIndex < 4) {
+            updates.put("currentQuestionIndex", questionIndex + 1);
+            updates.put("questionStartedAt", FieldValue.serverTimestamp());
+        } else {
+            updates.put("phase", PHASE_FINISHED);
+            updates.put("finished", true);
+            transaction.update(gameRef, "status", "finished", "updatedAt", FieldValue.serverTimestamp());
+        }
+        Log.d(TAG, "Know it score update question=" + questionIndex + ", p1Delta=" + p1Delta
+                + ", p2Delta=" + p2Delta + ", p1Correct=" + p1Correct + ", p2Correct=" + p2Correct);
+        transaction.update(roundRef, updates);
+    }
+
+    private Map<String, Object> nestedMap(Map<String, Object> root, String key) {
+        if (root == null) {
+            return new HashMap<>();
+        }
+        Object value = root.get(key);
+        if (value instanceof Map) {
+            return new HashMap<>((Map<String, Object>) value);
+        }
+        return new HashMap<>();
+    }
+
+    private int correctIndexForQuestion(DocumentSnapshot round, int questionIndex) {
+        List<Object> questions = (List<Object>) round.get("questions");
+        if (questions == null || questionIndex < 0 || questionIndex >= questions.size()) {
+            return -1;
+        }
+        Object item = questions.get(questionIndex);
+        if (!(item instanceof Map)) {
+            return -1;
+        }
+        Object value = ((Map<String, Object>) item).get("correctAnswerIndex");
+        return value instanceof Number ? ((Number) value).intValue() : -1;
+    }
+
+    private long longValue(Object value) {
+        return value instanceof Number ? ((Number) value).longValue() : Long.MAX_VALUE;
+    }
+
     private void applyScore(Transaction transaction, DocumentReference gameRef, DocumentSnapshot game, String uid, int points) {
         String p1 = game.getString("player1Uid");
         String field = uid.equals(p1) ? "player1Score" : "player2Score";
@@ -549,6 +856,10 @@ public class GameRepository {
 
     public String myNumberRoundId(int roundNumber) {
         return "my_number_round_" + roundNumber;
+    }
+
+    public String knowItRoundId() {
+        return "know_it_round_1";
     }
 
     private Map<String, Object> mapOf(Object... values) {

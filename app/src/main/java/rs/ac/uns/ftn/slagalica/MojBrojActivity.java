@@ -47,7 +47,10 @@ public class MojBrojActivity extends AppCompatActivity {
     private String phase = "";
     private String activePlayerUid = "";
     private int roundNumber = 1;
+    private int currentRoundIndex = 1;
     private int targetNumber = 0;
+    private int player1Score = 0;
+    private int player2Score = 0;
     private List<Integer> availableNumbers = new ArrayList<>();
     private CountDownTimer roundTimer;
     private CountDownTimer autoStopTimer;
@@ -57,6 +60,7 @@ public class MojBrojActivity extends AppCompatActivity {
     private TextView tvNumbers;
     private TextView tvResult;
     private TextView tvPoints;
+    private TextView tvStatus;
     private TextView tvPlayer1;
     private TextView tvPlayer2;
     private EditText etExpression;
@@ -81,6 +85,7 @@ public class MojBrojActivity extends AppCompatActivity {
         tvNumbers = findViewById(R.id.tvNumbers);
         tvResult = findViewById(R.id.tvMojBrojResult);
         tvPoints = findViewById(R.id.tvMojBrojPoints);
+        tvStatus = findViewById(R.id.tvMojBrojStatus);
         tvPlayer1 = findViewById(R.id.tvMojBrojPlayer1);
         tvPlayer2 = findViewById(R.id.tvMojBrojPlayer2);
         etExpression = findViewById(R.id.etExpression);
@@ -137,6 +142,7 @@ public class MojBrojActivity extends AppCompatActivity {
                 show(getString(R.string.not_your_turn));
                 return;
             }
+            Log.d(TAG, "STOP target clicked, uid=" + uid + ", gameId=" + gameId + ", round=" + roundNumber);
             gameRepository.stopTarget(gameId, roundNumber)
                     .addOnFailureListener(e -> {
                         Log.e(TAG, "Stop target failed", e);
@@ -149,6 +155,7 @@ public class MojBrojActivity extends AppCompatActivity {
                 show(getString(R.string.not_your_turn));
                 return;
             }
+            Log.d(TAG, "STOP numbers clicked, uid=" + uid + ", gameId=" + gameId + ", round=" + roundNumber);
             gameRepository.stopNumbers(gameId, roundNumber)
                     .addOnFailureListener(e -> {
                         Log.e(TAG, "Stop numbers failed", e);
@@ -216,18 +223,30 @@ public class MojBrojActivity extends AppCompatActivity {
                     + ", miniGame=" + snapshot.getString("currentMiniGame"));
             Long p1 = snapshot.getLong("player1Score");
             Long p2 = snapshot.getLong("player2Score");
-            tvPlayer1.setText(getString(R.string.player_points, p1 == null ? 0 : p1.intValue()));
-            tvPlayer2.setText(getString(R.string.player_points, p2 == null ? 0 : p2.intValue()));
-            if ("waiting".equals(snapshot.getString("status"))) {
+            player1Score = p1 == null ? 0 : p1.intValue();
+            player2Score = p2 == null ? 0 : p2.intValue();
+            tvPlayer1.setText(getString(R.string.player_points, player1Score));
+            tvPlayer2.setText(getString(R.string.player_points, player2Score));
+            String status = snapshot.getString("status");
+            String player2Uid = snapshot.getString("player2Uid");
+            if ("waiting".equals(status) || player2Uid == null) {
+                setStatusText("Čeka se drugi igrač");
                 tvResult.setText(R.string.waiting_opponent);
                 setPlayControls(false);
                 return;
             }
-            if ("finished".equals(snapshot.getString("status"))) {
-                tvResult.setText(getString(R.string.result_text, "Partija je zavrsena."));
+            if ("finished".equals(status)) {
+                setStatusText("Moj broj je završen");
+                tvResult.setText(getString(R.string.result_text,
+                        "Finalni rezultat: " + player1Score + " : " + player2Score));
                 setPlayControls(false);
                 userRepository.updateUserState(uid, true, false, "");
                 return;
+            }
+            if (phase.isEmpty()) {
+                setStatusText("");
+            } else {
+                updateStatusForPhase();
             }
             gameRepository.ensureMyNumberRound(gameId, roundNumber);
             listenRound();
@@ -247,7 +266,11 @@ public class MojBrojActivity extends AppCompatActivity {
             if (snapshot == null || !snapshot.exists()) {
                 return;
             }
-            Log.d(TAG, "My number round snapshot id=" + snapshot.getId() + ", phase=" + snapshot.getString("phase"));
+            Log.d(TAG, "My number round snapshot id=" + snapshot.getId()
+                    + ", phase=" + snapshot.getString("phase")
+                    + ", activePlayerUid=" + snapshot.getString("activePlayerUid")
+                    + ", targetNumber=" + snapshot.getLong("targetNumber")
+                    + ", numbers=" + snapshot.get("numbers"));
             bindRound(snapshot);
         });
     }
@@ -255,6 +278,8 @@ public class MojBrojActivity extends AppCompatActivity {
     private void bindRound(DocumentSnapshot round) {
         phase = value(round.getString("phase"));
         activePlayerUid = value(round.getString("activePlayerUid"));
+        Long roundIndex = round.getLong("roundIndex");
+        currentRoundIndex = roundIndex == null ? roundNumber : roundIndex.intValue();
         Long target = round.getLong("targetNumber");
         targetNumber = target == null ? 0 : target.intValue();
         tvTarget.setText(getString(R.string.target_number, targetNumber));
@@ -269,6 +294,7 @@ public class MojBrojActivity extends AppCompatActivity {
                 + ", numbers=" + availableNumbers
                 + ", submissions=" + submissions
                 + ", results=" + results);
+        updateStatusForPhase();
         btnStopTarget.setEnabled(uid.equals(activePlayerUid) && GameRepository.PHASE_WAITING_TARGET_STOP.equals(phase));
         btnStopNumbers.setEnabled(uid.equals(activePlayerUid) && GameRepository.PHASE_WAITING_NUMBERS_STOP.equals(phase));
         setPlayControls(GameRepository.PHASE_PLAYING.equals(phase) && !submitted);
@@ -281,14 +307,23 @@ public class MojBrojActivity extends AppCompatActivity {
         }
         if (GameRepository.PHASE_PLAYING.equals(phase)) {
             startTimer(round);
+        } else if (roundTimer != null) {
+            roundTimer.cancel();
+            roundTimer = null;
         }
         if (GameRepository.PHASE_FINISHED.equals(phase)) {
             if (roundTimer != null) {
                 roundTimer.cancel();
+                roundTimer = null;
+            }
+            if (autoStopTimer != null) {
+                autoStopTimer.cancel();
+                autoStopTimer = null;
             }
             Long points = round.getLong("awardedPoints");
             tvPoints.setText(getString(R.string.points_text, points == null ? 0 : points.intValue()));
-            tvResult.setText(getString(R.string.result_text, "Runda je zavrsena."));
+            tvResult.setText(getString(R.string.result_text,
+                    roundNumber == 1 ? "Runda je završena." : "Finalni rezultat: " + player1Score + " : " + player2Score));
             moveToNextNumberRound();
         }
     }
@@ -298,9 +333,11 @@ public class MojBrojActivity extends AppCompatActivity {
             return;
         }
         tvTimer.setText(getString(R.string.timer_text_60));
-        Timestamp startedAt = round.getTimestamp("startedAt");
+        Timestamp startedAt = round.getTimestamp("playStartedAt");
         long elapsedMs = startedAt == null ? 0 : Math.max(0, System.currentTimeMillis() - startedAt.toDate().getTime());
         long remainingMs = Math.max(0, 60000 - elapsedMs);
+        Log.d(TAG, "Round timer gameId=" + gameId + ", round=" + roundNumber
+                + ", playStartedAt=" + startedAt + ", remainingMs=" + remainingMs);
         if (remainingMs == 0) {
             tvTimer.setText(getString(R.string.timer_text, 0));
             handleMyNumberRoundTimeout();
@@ -327,10 +364,13 @@ public class MojBrojActivity extends AppCompatActivity {
         if (autoStopTimer != null) {
             return;
         }
-        Timestamp startedAt = round.getTimestamp("startedAt");
+        Timestamp startedAt = round.getTimestamp("phaseStartedAt");
         long elapsedMs = startedAt == null ? 0 : Math.max(0, System.currentTimeMillis() - startedAt.toDate().getTime());
         long remainingMs = Math.max(0, 5000 - elapsedMs);
+        Log.d(TAG, "Auto-stop timer gameId=" + gameId + ", round=" + roundNumber
+                + ", phase=" + phase + ", phaseStartedAt=" + startedAt + ", remainingMs=" + remainingMs);
         if (remainingMs == 0) {
+            Log.d(TAG, "Auto-stop immediate, phase=" + phase + ", round=" + roundNumber);
             stopByCurrentPhase();
             return;
         }
@@ -341,6 +381,7 @@ public class MojBrojActivity extends AppCompatActivity {
 
             @Override
             public void onFinish() {
+                Log.d(TAG, "Auto-stop fired, phase=" + phase + ", round=" + roundNumber);
                 stopByCurrentPhase();
                 autoStopTimer = null;
             }
@@ -356,6 +397,8 @@ public class MojBrojActivity extends AppCompatActivity {
     }
 
     private void stopByCurrentPhase() {
+        Log.d(TAG, "Shake/auto STOP event, uid=" + uid + ", activePlayerUid=" + activePlayerUid
+                + ", phase=" + phase + ", gameId=" + gameId + ", round=" + roundNumber);
         if (!uid.equals(activePlayerUid)) {
             return;
         }
@@ -389,6 +432,7 @@ public class MojBrojActivity extends AppCompatActivity {
 
     private void moveToNextNumberRound() {
         if (roundNumber == 1) {
+            setStatusText("Priprema druge runde");
             roundNumber = 2;
             submitted = false;
             etExpression.setText("");
@@ -402,6 +446,11 @@ public class MojBrojActivity extends AppCompatActivity {
             }
             gameRepository.ensureMyNumberRound(gameId, roundNumber);
             listenRound();
+        } else {
+            setStatusText("Moj broj je završen");
+            setPlayControls(false);
+            btnStopTarget.setEnabled(false);
+            btnStopNumbers.setEnabled(false);
         }
     }
 
@@ -436,6 +485,30 @@ public class MojBrojActivity extends AppCompatActivity {
         etExpression.setEnabled(enabled);
         btnDelete.setEnabled(enabled);
         btnConfirm.setEnabled(enabled);
+    }
+
+    private void updateStatusForPhase() {
+        String status;
+        if (GameRepository.PHASE_WAITING_TARGET_STOP.equals(phase)) {
+            status = uid.equals(activePlayerUid) ? "Zaustavite traženi broj" : "Protivnik bira traženi broj";
+        } else if (GameRepository.PHASE_WAITING_NUMBERS_STOP.equals(phase)) {
+            status = uid.equals(activePlayerUid) ? "Zaustavite ponuđene brojeve" : "Protivnik bira brojeve";
+        } else if (GameRepository.PHASE_PLAYING.equals(phase)) {
+            status = "Unesite izraz";
+        } else if (GameRepository.PHASE_FINISHED.equals(phase)) {
+            status = currentRoundIndex == 1 ? "Priprema druge runde" : "Moj broj je završen";
+        } else {
+            status = "";
+        }
+        setStatusText(status);
+    }
+
+    private void setStatusText(String status) {
+        if (tvStatus != null) {
+            tvStatus.setText(status);
+        }
+        Log.d(TAG, "Status text=" + status + ", gameId=" + gameId + ", round=" + roundNumber
+                + ", phase=" + phase + ", activePlayerUid=" + activePlayerUid);
     }
 
     @Override

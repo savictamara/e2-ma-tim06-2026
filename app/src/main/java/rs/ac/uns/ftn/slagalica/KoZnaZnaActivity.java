@@ -1,31 +1,51 @@
 package rs.ac.uns.ftn.slagalica;
 
+import android.content.Intent;
 import android.os.Bundle;
 import android.os.CountDownTimer;
+import android.util.Log;
+import android.view.View;
 import android.widget.Button;
 import android.widget.TextView;
+import android.widget.Toast;
 
 import androidx.appcompat.app.AppCompatActivity;
 
+import com.google.firebase.Timestamp;
+import com.google.firebase.auth.FirebaseUser;
+import com.google.firebase.firestore.DocumentSnapshot;
+import com.google.firebase.firestore.ListenerRegistration;
+
+import java.util.ArrayList;
+import java.util.List;
+import java.util.Map;
+
+import rs.ac.uns.ftn.slagalica.data.repository.FirebaseAuthRepository;
+import rs.ac.uns.ftn.slagalica.data.repository.GameRepository;
+import rs.ac.uns.ftn.slagalica.data.repository.UserRepository;
+import rs.ac.uns.ftn.slagalica.util.FirebaseInitializer;
+
 public class KoZnaZnaActivity extends AppCompatActivity {
-    private final String[] questions = {
-            "Koji element ima hemijski simbol Au?",
-            "Koliko kontinenata postoji?",
-            "Koja planeta je poznata kao crvena planeta?",
-            "Ko je napisao Na Drini cuprija?",
-            "Koji je hemijski simbol za zlato?"
-    };
+    private static final String TAG = "KoZnaZnaActivity";
+    private static final int QUESTION_COUNT = 5;
+    private static final long QUESTION_DURATION_MS = 5000;
 
-    private final String[][] answers = {
-            {"Zlato", "Srebro", "Gvozdje", "Kiseonik"},
-            {"5", "6", "7", "8"},
-            {"Venera", "Mars", "Jupiter", "Merkur"},
-            {"Mesa Selimovic", "Ivo Andric", "Branko Copic", "Milos Crnjanski"},
-            {"Ag", "Au", "Fe", "Pb"}
-    };
-
-    private final int[] correctIndex = {0, 2, 1, 1, 1};
     private final Button[] answerButtons = new Button[4];
+    private FirebaseAuthRepository authRepository;
+    private UserRepository userRepository;
+    private GameRepository gameRepository;
+    private ListenerRegistration gameListener;
+    private ListenerRegistration roundListener;
+    private CountDownTimer questionTimer;
+    private String uid;
+    private String gameId;
+    private String player1Uid;
+    private String player2Uid;
+    private String phase = "";
+    private int currentQuestionIndex = 0;
+    private int player1Score = 0;
+    private int player2Score = 0;
+    private boolean answeredCurrentQuestion = false;
 
     private TextView tvTimer;
     private TextView tvQuestionIndex;
@@ -36,16 +56,16 @@ public class KoZnaZnaActivity extends AppCompatActivity {
     private TextView tvPlayer2Score;
     private Button btnNextQuestion;
 
-    private int questionIndex = 0;
-    private int points = 0;
-    private final int mockPlayerTwoPoints = 15;
-    private boolean answered = false;
-    private CountDownTimer questionTimer;
-
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_ko_zna_zna);
+
+        boolean firebaseReady = FirebaseInitializer.ensure(this);
+        Log.d(TAG, "Firebase ensure from KoZnaZnaActivity=" + firebaseReady);
+        authRepository = new FirebaseAuthRepository(this);
+        userRepository = new UserRepository(this);
+        gameRepository = new GameRepository(this);
 
         tvTimer = findViewById(R.id.tvTimer);
         tvQuestionIndex = findViewById(R.id.tvQuestionIndex);
@@ -55,124 +75,316 @@ public class KoZnaZnaActivity extends AppCompatActivity {
         tvPlayer1Score = findViewById(R.id.tvKznzPlayer1);
         tvPlayer2Score = findViewById(R.id.tvKznzPlayer2);
         btnNextQuestion = findViewById(R.id.btnNextQuestion);
+        btnNextQuestion.setVisibility(View.GONE);
 
         answerButtons[0] = findViewById(R.id.btnAnswer1);
         answerButtons[1] = findViewById(R.id.btnAnswer2);
         answerButtons[2] = findViewById(R.id.btnAnswer3);
         answerButtons[3] = findViewById(R.id.btnAnswer4);
-
         for (int i = 0; i < answerButtons.length; i++) {
             final int answerIndex = i;
-            answerButtons[i].setOnClickListener(v -> onAnswerSelected(answerIndex));
+            answerButtons[i].setOnClickListener(v -> submitAnswer(answerIndex));
         }
 
-        btnNextQuestion.setOnClickListener(v -> {
-            questionIndex++;
-            if (questionIndex < questions.length) {
-                showQuestion();
-            } else {
-                showFinalResult();
-            }
-        });
-
-        showQuestion();
-    }
-
-    private void showQuestion() {
-        answered = false;
-        updateScoreAndHeader();
-        tvQuestion.setText(questions[questionIndex]);
-        tvRoundResult.setText("");
-        btnNextQuestion.setEnabled(false);
-
-        for (int i = 0; i < answerButtons.length; i++) {
-            answerButtons[i].setEnabled(true);
-            answerButtons[i].setText(answers[questionIndex][i]);
-            answerButtons[i].setBackgroundResource(R.drawable.bg_step);
-        }
-
-        startQuestionTimer();
-    }
-
-    private void onAnswerSelected(int selectedIndex) {
-        if (answered) {
+        FirebaseUser user = authRepository.currentUser();
+        if (user == null) {
+            show("Please login first.");
+            startActivity(new Intent(this, LoginActivity.class));
+            finish();
             return;
         }
-
-        answered = true;
-        if (questionTimer != null) {
-            questionTimer.cancel();
+        if (!firebaseReady || !gameRepository.isReady() || !userRepository.isReady()) {
+            show(getString(R.string.firebase_not_ready));
+            setAnswerButtonsEnabled(false);
+            return;
         }
-
-        for (Button answerButton : answerButtons) {
-            answerButton.setEnabled(false);
-        }
-
-        if (selectedIndex == correctIndex[questionIndex]) {
-            points += 10;
-            answerButtons[selectedIndex].setBackgroundResource(R.drawable.bg_answer_correct);
-            tvRoundResult.setText(getString(R.string.kznz_answer_correct));
-        } else {
-            points -= 5;
-            answerButtons[selectedIndex].setBackgroundResource(R.drawable.bg_answer_wrong);
-            answerButtons[correctIndex[questionIndex]].setBackgroundResource(R.drawable.bg_answer_correct);
-            tvRoundResult.setText(getString(R.string.kznz_answer_wrong));
-        }
-
-        updateScoreAndHeader();
-        btnNextQuestion.setEnabled(true);
+        uid = user.getUid();
+        Log.d(TAG, "Current uid=" + uid);
+        userRepository.currentGameId(uid)
+                .continueWithTask(task -> {
+                    String existingGameId = task.isSuccessful() ? task.getResult() : "";
+                    if (existingGameId != null && !existingGameId.isEmpty()) {
+                        return gameRepository.getGame(existingGameId).continueWithTask(gameTask -> {
+                            if (gameTask.isSuccessful() && isValidKnowItGame(gameTask.getResult())) {
+                                return com.google.android.gms.tasks.Tasks.forResult(existingGameId);
+                            }
+                            return gameRepository.joinOrCreateGame(uid, GameRepository.MINI_KNOW_IT);
+                        });
+                    }
+                    return gameRepository.joinOrCreateGame(uid, GameRepository.MINI_KNOW_IT);
+                })
+                .addOnSuccessListener(id -> {
+                    gameId = id;
+                    Log.d(TAG, "Know it gameId=" + gameId);
+                    userRepository.updateUserState(uid, true, true, gameId);
+                    listenGame();
+                })
+                .addOnFailureListener(e -> {
+                    Log.e(TAG, "Know it matchmaking failed", e);
+                    show(e.getMessage());
+                });
     }
 
-    private void startQuestionTimer() {
+    private void listenGame() {
+        gameListener = gameRepository.listenGame(gameId, (snapshot, error) -> {
+            if (error != null) {
+                Log.e(TAG, "Game snapshot error", error);
+                show(error.getMessage());
+                return;
+            }
+            if (snapshot == null || !snapshot.exists()) {
+                return;
+            }
+            String status = snapshot.getString("status");
+            player1Uid = snapshot.getString("player1Uid");
+            player2Uid = snapshot.getString("player2Uid");
+            Long p1 = snapshot.getLong("player1Score");
+            Long p2 = snapshot.getLong("player2Score");
+            player1Score = p1 == null ? 0 : p1.intValue();
+            player2Score = p2 == null ? 0 : p2.intValue();
+            tvPlayer1Score.setText(getString(R.string.player_points, player1Score));
+            tvPlayer2Score.setText(getString(R.string.player_points, player2Score));
+            tvPoints.setText(getString(R.string.points_text, uid.equals(player1Uid) ? player1Score : player2Score));
+            Log.d(TAG, "Game snapshot gameId=" + snapshot.getId() + ", status=" + status
+                    + ", player1Uid=" + player1Uid + ", player2Uid=" + player2Uid
+                    + ", currentMiniGame=" + snapshot.getString("currentMiniGame"));
+            if ("waiting".equals(status) || player2Uid == null) {
+                setStatus("Čeka se drugi igrač");
+                setAnswerButtonsEnabled(false);
+                return;
+            }
+            if ("finished".equals(status) && GameRepository.PHASE_FINISHED.equals(phase)) {
+                setStatus("Ko zna zna je završeno");
+                setAnswerButtonsEnabled(false);
+                userRepository.updateUserState(uid, true, false, "");
+                return;
+            }
+            gameRepository.ensureKnowItRound(gameId)
+                    .addOnFailureListener(e -> {
+                        Log.e(TAG, "Ensure know it round failed", e);
+                        show(e.getMessage());
+                    });
+            listenRound();
+        });
+    }
+
+    private void listenRound() {
+        if (roundListener != null) {
+            return;
+        }
+        roundListener = gameRepository.listenRound(gameId, gameRepository.knowItRoundId(), (snapshot, error) -> {
+            if (error != null) {
+                Log.e(TAG, "Round snapshot error", error);
+                show(error.getMessage());
+                return;
+            }
+            if (snapshot == null || !snapshot.exists()) {
+                return;
+            }
+            Log.d(TAG, "Round snapshot roundId=" + snapshot.getId()
+                    + ", phase=" + snapshot.getString("phase")
+                    + ", currentQuestionIndex=" + snapshot.getLong("currentQuestionIndex")
+                    + ", questionStartedAt=" + snapshot.getTimestamp("questionStartedAt"));
+            bindRound(snapshot);
+        });
+    }
+
+    private void bindRound(DocumentSnapshot round) {
+        phase = value(round.getString("phase"));
+        Long indexLong = round.getLong("currentQuestionIndex");
+        currentQuestionIndex = indexLong == null ? 0 : indexLong.intValue();
+        List<Map<String, Object>> questions = readQuestions(round);
+        Map<String, Object> question = currentQuestionIndex < questions.size() ? questions.get(currentQuestionIndex) : null;
+        if (GameRepository.PHASE_FINISHED.equals(phase) || Boolean.TRUE.equals(round.getBoolean("finished"))) {
+            showFinished();
+            return;
+        }
+        if (question == null) {
+            setStatus("Nema pitanja za prikaz");
+            setAnswerButtonsEnabled(false);
+            return;
+        }
+        tvQuestionIndex.setText(getString(R.string.kznz_question_counter, currentQuestionIndex + 1, QUESTION_COUNT));
+        tvQuestion.setText(value((String) question.get("questionText")));
+        List<String> options = (List<String>) question.get("options");
+        for (int i = 0; i < answerButtons.length; i++) {
+            answerButtons[i].setText(options != null && i < options.size() ? options.get(i) : "");
+            answerButtons[i].setBackgroundResource(R.drawable.bg_step);
+        }
+        Map<String, Object> answersByQuestion = (Map<String, Object>) round.get("answersByQuestion");
+        Map<String, Object> currentAnswers = nestedMap(answersByQuestion, String.valueOf(currentQuestionIndex));
+        answeredCurrentQuestion = currentAnswers.containsKey(uid);
+        String otherPlayerUid = uid.equals(player1Uid) ? player2Uid : player1Uid;
+        boolean otherPlayerAnswered = otherPlayerUid != null && currentAnswers.containsKey(otherPlayerUid);
+        if (answeredCurrentQuestion && otherPlayerAnswered) {
+            setStatus("Oba igrača su odgovorila", answeredCurrentQuestion, otherPlayerAnswered);
+        } else if (answeredCurrentQuestion) {
+            setStatus("Odgovor je poslat", true, otherPlayerAnswered);
+        } else {
+            setStatus("Odgovorite na pitanje", false, otherPlayerAnswered);
+        }
+        setAnswerButtonsEnabled(!answeredCurrentQuestion && GameRepository.PHASE_PLAYING.equals(phase));
+        startQuestionTimer(round);
+    }
+
+    private void submitAnswer(int selectedAnswerIndex) {
+        if (!GameRepository.PHASE_PLAYING.equals(phase) || answeredCurrentQuestion) {
+            return;
+        }
+        long answerTime = System.currentTimeMillis();
+        Log.d(TAG, "Submit answer uid=" + uid + ", gameId=" + gameId
+                + ", questionIndex=" + currentQuestionIndex
+                + ", selectedAnswerIndex=" + selectedAnswerIndex
+                + ", answerTime=" + answerTime);
+        answeredCurrentQuestion = true;
+        setAnswerButtonsEnabled(false);
+        setStatus("Odgovor je poslat", true, false);
+        gameRepository.submitKnowItAnswer(gameId, uid, selectedAnswerIndex, answerTime)
+                .addOnFailureListener(e -> {
+                    Log.e(TAG, "Submit know it answer failed", e);
+                    answeredCurrentQuestion = false;
+                    setAnswerButtonsEnabled(true);
+                    show(e.getMessage());
+                });
+    }
+
+    private void startQuestionTimer(DocumentSnapshot round) {
         if (questionTimer != null) {
             questionTimer.cancel();
         }
-
-        questionTimer = new CountDownTimer(5000, 1000) {
+        Timestamp startedAt = round.getTimestamp("questionStartedAt");
+        long elapsedMs = startedAt == null ? 0 : Math.max(0, System.currentTimeMillis() - startedAt.toDate().getTime());
+        long remainingMs = Math.max(0, QUESTION_DURATION_MS - elapsedMs);
+        Log.d(TAG, "Question timer questionIndex=" + currentQuestionIndex
+                + ", questionStartedAt=" + startedAt + ", remainingMs=" + remainingMs);
+        if (remainingMs == 0) {
+            tvTimer.setText(getString(R.string.timer_text, 0));
+            advanceQuestionByTimeout();
+            return;
+        }
+        questionTimer = new CountDownTimer(remainingMs, 1000) {
             @Override
             public void onTick(long millisUntilFinished) {
-                tvTimer.setText(getString(R.string.timer_text, millisUntilFinished / 1000));
+                tvTimer.setText(getString(R.string.timer_text, Math.max(1, millisUntilFinished / 1000)));
             }
 
             @Override
             public void onFinish() {
                 tvTimer.setText(getString(R.string.timer_text, 0));
-                if (!answered) {
-                    answered = true;
-                    for (Button answerButton : answerButtons) {
-                        answerButton.setEnabled(false);
-                    }
-                    answerButtons[correctIndex[questionIndex]].setBackgroundResource(R.drawable.bg_answer_correct);
-                    tvRoundResult.setText(getString(R.string.kznz_timeout));
-                    btnNextQuestion.setEnabled(true);
-                }
+                setAnswerButtonsEnabled(false);
+                advanceQuestionByTimeout();
             }
-        };
-        questionTimer.start();
+        }.start();
     }
 
-    private void updateScoreAndHeader() {
-        tvQuestionIndex.setText(getString(R.string.kznz_question_counter, questionIndex + 1, questions.length));
-        tvPoints.setText(getString(R.string.points_text, points));
-        tvPlayer1Score.setText(getString(R.string.player_points, points));
-        tvPlayer2Score.setText(getString(R.string.player_points, mockPlayerTwoPoints));
+    private void advanceQuestionByTimeout() {
+        Log.d(TAG, "Timeout advance gameId=" + gameId + ", questionIndex=" + currentQuestionIndex);
+        setStatus("Sledeće pitanje", answeredCurrentQuestion, false);
+        gameRepository.advanceKnowItQuestion(gameId, currentQuestionIndex)
+                .addOnFailureListener(e -> {
+                    Log.e(TAG, "Advance know it question failed", e);
+                    show(e.getMessage());
+                });
     }
 
-    private void showFinalResult() {
+    private boolean isValidKnowItGame(DocumentSnapshot game) {
+        if (game == null || !game.exists()) {
+            return false;
+        }
+        String status = game.getString("status");
+        String miniGame = game.getString("currentMiniGame");
+        String p1 = game.getString("player1Uid");
+        String p2 = game.getString("player2Uid");
+        boolean containsUser = uid.equals(p1) || uid.equals(p2);
+        boolean waitingAsPlayer1 = "waiting".equals(status) && uid.equals(p1) && p2 == null;
+        boolean activeWithBothPlayers = "active".equals(status) && p1 != null && p2 != null;
+        boolean valid = GameRepository.MINI_KNOW_IT.equals(miniGame)
+                && containsUser
+                && (waitingAsPlayer1 || activeWithBothPlayers);
+        Log.d(TAG, "Validate currentGameId=" + game.getId() + ", valid=" + valid
+                + ", status=" + status + ", player1=" + p1 + ", player2=" + p2 + ", miniGame=" + miniGame);
+        return valid;
+    }
+
+    private void showFinished() {
+        if (questionTimer != null) {
+            questionTimer.cancel();
+            questionTimer = null;
+        }
+        tvQuestionIndex.setText(getString(R.string.kznz_question_counter, QUESTION_COUNT, QUESTION_COUNT));
+        tvTimer.setText(getString(R.string.timer_text, 0));
+        tvQuestion.setText("Finalni rezultat: " + player1Score + " : " + player2Score);
+        setStatus("Ko zna zna je završeno");
+        setAnswerButtonsEnabled(false);
+        for (Button answerButton : answerButtons) {
+            answerButton.setBackgroundResource(R.drawable.bg_step);
+        }
+    }
+
+    private List<Map<String, Object>> readQuestions(DocumentSnapshot round) {
+        List<Map<String, Object>> questions = new ArrayList<>();
+        List<Object> raw = (List<Object>) round.get("questions");
+        if (raw == null) {
+            return questions;
+        }
+        for (Object item : raw) {
+            if (item instanceof Map) {
+                questions.add((Map<String, Object>) item);
+            }
+        }
+        return questions;
+    }
+
+    private Map<String, Object> nestedMap(Map<String, Object> root, String key) {
+        if (root == null) {
+            return new java.util.HashMap<>();
+        }
+        Object value = root.get(key);
+        if (value instanceof Map) {
+            return (Map<String, Object>) value;
+        }
+        return new java.util.HashMap<>();
+    }
+
+    private void setAnswerButtonsEnabled(boolean enabled) {
+        for (Button answerButton : answerButtons) {
+            answerButton.setEnabled(enabled);
+        }
+    }
+
+    private void setStatus(String status) {
+        setStatus(status, answeredCurrentQuestion, false);
+    }
+
+    private void setStatus(String status, boolean hasCurrentUserAnswered, boolean hasOtherPlayerAnswered) {
+        tvRoundResult.setText(status);
+        Log.d(TAG, "Status text=" + status + ", gameId=" + gameId
+                + ", currentQuestionIndex=" + currentQuestionIndex
+                + ", currentUserUid=" + uid
+                + ", hasCurrentUserAnswered=" + hasCurrentUserAnswered
+                + ", hasOtherPlayerAnswered=" + hasOtherPlayerAnswered
+                + ", phase=" + phase);
+    }
+
+    @Override
+    protected void onDestroy() {
         if (questionTimer != null) {
             questionTimer.cancel();
         }
-
-        tvQuestionIndex.setText(getString(R.string.kznz_finished));
-        tvQuestion.setText(getString(R.string.kznz_final_score, points));
-        tvTimer.setText(getString(R.string.timer_text, 0));
-        tvRoundResult.setText(getString(R.string.kznz_mock_speed_rule));
-        btnNextQuestion.setEnabled(false);
-        btnNextQuestion.setText(R.string.kznz_done);
-
-        for (Button answerButton : answerButtons) {
-            answerButton.setEnabled(false);
-            answerButton.setBackgroundResource(R.drawable.bg_step);
+        if (gameListener != null) {
+            gameListener.remove();
         }
+        if (roundListener != null) {
+            roundListener.remove();
+        }
+        super.onDestroy();
+    }
+
+    private String value(String value) {
+        return value == null ? "" : value;
+    }
+
+    private void show(String message) {
+        Toast.makeText(this, message == null ? getString(R.string.firebase_not_ready) : message, Toast.LENGTH_SHORT).show();
     }
 }

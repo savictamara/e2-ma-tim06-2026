@@ -14,7 +14,7 @@
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
             android:text="@string/kznz_title"
-            android:textColor="@color/text_main"
+            android:textColor="@color/game_text_color"
             android:textSize="24sp"
             android:textStyle="bold" />
 
@@ -36,7 +36,7 @@
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
                     android:text="@string/player_one"
-                    android:textColor="@color/text_main"
+                    android:textColor="@color/game_text_color"
                     android:textStyle="bold" />
 
                 <TextView
@@ -60,7 +60,7 @@
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
                     android:text="@string/player_two"
-                    android:textColor="@color/text_main"
+                    android:textColor="@color/game_text_color"
                     android:textStyle="bold" />
 
                 <TextView
@@ -106,7 +106,7 @@
                 android:layout_marginTop="10dp"
                 android:background="@drawable/bg_step"
                 android:padding="12dp"
-                android:textColor="@color/text_main"
+                android:textColor="@color/game_text_color"
                 android:textStyle="bold" />
 
             <Button
@@ -116,7 +116,7 @@
                 android:layout_height="wrap_content"
                 android:layout_marginTop="10dp"
                 android:background="@drawable/bg_step"
-                android:textColor="@color/text_main" />
+                android:textColor="@color/game_text_color" />
 
             <Button
                 android:id="@+id/btnAnswer2"
@@ -125,7 +125,7 @@
                 android:layout_height="wrap_content"
                 android:layout_marginTop="8dp"
                 android:background="@drawable/bg_step"
-                android:textColor="@color/text_main" />
+                android:textColor="@color/game_text_color" />
 
             <Button
                 android:id="@+id/btnAnswer3"
@@ -134,7 +134,7 @@
                 android:layout_height="wrap_content"
                 android:layout_marginTop="8dp"
                 android:background="@drawable/bg_step"
-                android:textColor="@color/text_main" />
+                android:textColor="@color/game_text_color" />
 
             <Button
                 android:id="@+id/btnAnswer4"
@@ -143,7 +143,7 @@
                 android:layout_height="wrap_content"
                 android:layout_marginTop="8dp"
                 android:background="@drawable/bg_step"
-                android:textColor="@color/text_main" />
+                android:textColor="@color/game_text_color" />
 
             <TextView
                 android:id="@+id/tvRoundResult"
