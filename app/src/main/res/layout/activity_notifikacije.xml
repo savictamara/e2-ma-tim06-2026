@@ -25,52 +25,23 @@
             android:text="@string/notifikacije_subtitle"
             android:textColor="@color/text_muted" />
 
-        <LinearLayout
+        <Button
+            android:id="@+id/btnTestNotifications"
+            style="@style/Widget.MaterialComponents.Button"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:layout_marginTop="12dp"
-            android:background="@drawable/bg_card"
-            android:orientation="vertical">
-
-            <TextView
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:text="@string/notifikacije_section_settings"
-                android:textColor="@color/text_main"
-                android:textStyle="bold" />
-
-            <Switch
-                android:id="@+id/swChat"
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:layout_marginTop="10dp"
-                android:text="@string/notifikacije_channel_chat" />
-
-            <Switch
-                android:id="@+id/swRank"
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:text="@string/notifikacije_channel_rank" />
-
-            <Switch
-                android:id="@+id/swRewards"
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:text="@string/notifikacije_channel_rewards" />
-
-            <Switch
-                android:id="@+id/swOther"
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:text="@string/notifikacije_channel_other" />
-        </LinearLayout>
+            android:background="@drawable/bg_button_primary"
+            android:text="Pošalji test notifikacije"
+            android:textColor="@color/white" />
 
         <LinearLayout
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:layout_marginTop="12dp"
             android:background="@drawable/bg_card"
-            android:orientation="vertical">
+            android:orientation="vertical"
+            android:padding="12dp">
 
             <TextView
                 android:layout_width="match_parent"
@@ -86,35 +57,44 @@
                 android:orientation="horizontal">
 
                 <Button
-                    android:id="@+id/btnTabUnread"
+                    android:id="@+id/btnFilterAll"
                     style="@style/Widget.MaterialComponents.Button"
                     android:layout_width="0dp"
                     android:layout_height="wrap_content"
+                    android:layout_weight="1"
+                    android:background="@drawable/bg_button_secondary"
+                    android:text="Sve"
+                    android:textColor="@color/text_main" />
+
+                <Button
+                    android:id="@+id/btnFilterUnread"
+                    style="@style/Widget.MaterialComponents.Button"
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_marginStart="6dp"
                     android:layout_weight="1"
                     android:background="@drawable/bg_button_secondary"
                     android:text="@string/notifikacije_tab_unread"
                     android:textColor="@color/text_main" />
 
                 <Button
-                    android:id="@+id/btnTabRead"
+                    android:id="@+id/btnFilterRead"
                     style="@style/Widget.MaterialComponents.Button"
                     android:layout_width="0dp"
                     android:layout_height="wrap_content"
-                    android:layout_marginStart="8dp"
+                    android:layout_marginStart="6dp"
                     android:layout_weight="1"
                     android:background="@drawable/bg_button_secondary"
                     android:text="@string/notifikacije_tab_read"
                     android:textColor="@color/text_main" />
             </LinearLayout>
 
-            <ListView
-                android:id="@+id/lvNotifications"
+            <LinearLayout
+                android:id="@+id/notificationsContainer"
                 android:layout_width="match_parent"
-                android:layout_height="220dp"
-                android:layout_marginTop="10dp"
-                android:background="@drawable/bg_step"
-                android:dividerHeight="6dp"
-                android:padding="4dp" />
+                android:layout_height="wrap_content"
+                android:layout_marginTop="8dp"
+                android:orientation="vertical" />
 
             <Button
                 android:id="@+id/btnMarkAll"
