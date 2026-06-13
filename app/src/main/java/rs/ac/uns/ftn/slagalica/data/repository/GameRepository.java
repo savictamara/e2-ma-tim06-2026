@@ -18,6 +18,7 @@ import com.google.firebase.firestore.Transaction;
 
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -29,6 +30,7 @@ public class GameRepository {
     public static final String MINI_STEP_BY_STEP = "STEP_BY_STEP";
     public static final String MINI_MY_NUMBER = "MY_NUMBER";
     public static final String MINI_KNOW_IT = "KNOW_IT";
+    public static final String MINI_CONNECTIONS = "CONNECTIONS";
     public static final String PHASE_WAITING_TARGET_STOP = "WAITING_TARGET_STOP";
     public static final String PHASE_WAITING_NUMBERS_STOP = "WAITING_NUMBERS_STOP";
     public static final String PHASE_PLAYING = "PLAYING";
@@ -860,6 +862,319 @@ public class GameRepository {
 
     public String knowItRoundId() {
         return "know_it_round_1";
+    }
+
+    public Task<Void> seedConnectionQuestionsIfNeeded() {
+        if (db == null) {
+            return Tasks.forException(new IllegalStateException("Firebase nije inicijalizovan"));
+        }
+        return db.collection("connectionQuestions").limit(1).get().continueWithTask(task -> {
+            if (!task.isSuccessful()) {
+                throw task.getException();
+            }
+            if (!task.getResult().isEmpty()) {
+                return Tasks.forResult(null);
+            }
+            Log.d(TAG, "Seeding connectionQuestions");
+            return Tasks.whenAll(
+                    db.collection("connectionQuestions").document("poznati").set(connectionQuestion("Poznate licnosti",
+                            Arrays.asList("Tesla", "Andric", "Novak", "Nusic", "Mokranjac"),
+                            Arrays.asList("Naucnik", "Pisac", "Teniser", "Dramaturg", "Kompozitor"))),
+                    db.collection("connectionQuestions").document("gradovi").set(connectionQuestion("Drzave i gradovi",
+                            Arrays.asList("Francuska", "Italija", "Spanija", "Nemacka", "Grcka"),
+                            Arrays.asList("Pariz", "Rim", "Madrid", "Berlin", "Atina"))),
+                    db.collection("connectionQuestions").document("sport").set(connectionQuestion("Sport i oprema",
+                            Arrays.asList("Tenis", "Fudbal", "Kosarka", "Hokej", "Boks"),
+                            Arrays.asList("Reket", "Lopta", "Kos", "Pak", "Rukavice"))),
+                    db.collection("connectionQuestions").document("hemija").set(connectionQuestion("Elementi i simboli",
+                            Arrays.asList("Zlato", "Srebro", "Gvozdje", "Kiseonik", "Vodonik"),
+                            Arrays.asList("Au", "Ag", "Fe", "O", "H"))),
+                    db.collection("connectionQuestions").document("knjige").set(connectionQuestion("Dela i autori",
+                            Arrays.asList("Na Drini cuprija", "Tvrdjava", "Seobe", "Necista krv", "Zona Zamfirova"),
+                            Arrays.asList("Ivo Andric", "Mesa Selimovic", "Milos Crnjanski", "Bora Stankovic", "Stevan Sremac"))));
+        });
+    }
+
+    private Map<String, Object> connectionQuestion(String title, List<String> leftItems, List<String> rightItems) {
+        Map<String, Object> data = new HashMap<>();
+        Map<String, Object> correctPairs = new HashMap<>();
+        for (int i = 0; i < leftItems.size(); i++) {
+            correctPairs.put(String.valueOf(i), i);
+        }
+        data.put("title", title);
+        data.put("leftItems", leftItems);
+        data.put("rightItems", rightItems);
+        data.put("correctPairs", correctPairs);
+        return data;
+    }
+
+    public Task<Void> ensureConnectionsRound(String gameId, int roundNumber) {
+        if (db == null) {
+            return Tasks.forException(new IllegalStateException("Firebase nije inicijalizovan"));
+        }
+        return seedConnectionQuestionsIfNeeded().continueWithTask(seedTask -> {
+            if (!seedTask.isSuccessful()) {
+                Log.e(TAG, "Seed connection questions failed", seedTask.getException());
+                throw seedTask.getException();
+            }
+            return db.collection("connectionQuestions").get();
+        }).continueWithTask(questionTask -> {
+            if (!questionTask.isSuccessful()) {
+                Log.e(TAG, "Loading connection questions failed", questionTask.getException());
+                throw questionTask.getException();
+            }
+            List<DocumentSnapshot> questions = questionTask.getResult().getDocuments();
+            if (questions.isEmpty()) {
+                return Tasks.forException(new IllegalStateException("Nema Spojnice zadataka u Firestore-u"));
+            }
+            DocumentSnapshot question = questions.get(Math.abs(roundNumber - 1) % questions.size());
+            String title = question.getString("title");
+            List<String> leftItems = (List<String>) question.get("leftItems");
+            List<String> rightItems = (List<String>) question.get("rightItems");
+            Map<String, Object> correctPairs = (Map<String, Object>) question.get("correctPairs");
+            if (leftItems == null || rightItems == null || correctPairs == null
+                    || leftItems.size() != 5 || rightItems.size() != 5) {
+                return Tasks.forException(new IllegalStateException("Spojnice zadatak nema 5 parova"));
+            }
+            return createConnectionsRoundIfMissing(gameId, roundNumber, title, leftItems, rightItems, correctPairs, question.getId());
+        });
+    }
+
+    private Task<Void> createConnectionsRoundIfMissing(String gameId, int roundNumber, String title,
+                                                       List<String> leftItems, List<String> rightItems,
+                                                       Map<String, Object> correctPairs, String questionId) {
+        String roundId = connectionsRoundId(roundNumber);
+        DocumentReference gameRef = db.collection("games").document(gameId);
+        DocumentReference roundRef = gameRef.collection("rounds").document(roundId);
+        return db.runTransaction(transaction -> {
+            DocumentSnapshot game = transaction.get(gameRef);
+            DocumentSnapshot existing = transaction.get(roundRef);
+            if (existing.exists()) {
+                return null;
+            }
+            String p1 = game.getString("player1Uid");
+            String p2 = game.getString("player2Uid");
+            if (p1 == null || p2 == null) {
+                throw new IllegalStateException("Spojnice ne mogu da pocnu bez dva igraca");
+            }
+            String active = roundNumber == 1 ? p1 : p2;
+            String opponent = roundNumber == 1 ? p2 : p1;
+            ShuffledConnections shuffled = shuffleConnectionRights(rightItems, correctPairs);
+            Log.d(TAG, "Creating connections round gameId=" + gameId + ", roundId=" + roundId
+                    + ", questionId=" + questionId + ", active=" + active + ", opponent=" + opponent);
+            Map<String, Object> round = new HashMap<>();
+            round.put("id", roundId);
+            round.put("gameId", gameId);
+            round.put("type", MINI_CONNECTIONS);
+            round.put("roundIndex", roundNumber);
+            round.put("title", title == null ? "" : title);
+            round.put("activePlayerUid", active);
+            round.put("opponentUid", opponent);
+            round.put("phase", "ACTIVE_PLAYER");
+            round.put("leftItems", leftItems);
+            round.put("rightItems", shuffled.rightItems);
+            round.put("correctPairs", shuffled.correctPairs);
+            round.put("matchedPairs", new HashMap<String, Object>());
+            round.put("attemptsByPlayer", new HashMap<String, Object>());
+            round.put("usedLeftIndexes", new ArrayList<Integer>());
+            round.put("remainingLeftIndexes", Arrays.asList(0, 1, 2, 3, 4));
+            round.put("currentLeftIndex", null);
+            round.put("finished", false);
+            round.put("phaseStartedAt", FieldValue.serverTimestamp());
+            round.put("createdAt", FieldValue.serverTimestamp());
+            round.put("updatedAt", FieldValue.serverTimestamp());
+            transaction.set(roundRef, round);
+            transaction.set(gameRef, mapOf("currentMiniGame", MINI_CONNECTIONS, "currentPlayerUid", active,
+                    "updatedAt", FieldValue.serverTimestamp()), SetOptions.merge());
+            return null;
+        });
+    }
+
+    public Task<Boolean> submitConnectionPair(String gameId, int roundNumber, String uid, int leftIndex, int rightIndex) {
+        DocumentReference gameRef = db.collection("games").document(gameId);
+        DocumentReference roundRef = gameRef.collection("rounds").document(connectionsRoundId(roundNumber));
+        return db.runTransaction(transaction -> {
+            DocumentSnapshot game = transaction.get(gameRef);
+            DocumentSnapshot round = transaction.get(roundRef);
+            String phase = round.getString("phase");
+            String active = round.getString("activePlayerUid");
+            String opponent = round.getString("opponentUid");
+            Boolean finished = round.getBoolean("finished");
+            if (Boolean.TRUE.equals(finished) || (!"ACTIVE_PLAYER".equals(phase) && !"OPPONENT_CHANCE".equals(phase))) {
+                return false;
+            }
+            boolean canPlay = ("ACTIVE_PLAYER".equals(phase) && uid.equals(active))
+                    || ("OPPONENT_CHANCE".equals(phase) && uid.equals(opponent));
+            if (!canPlay) {
+                return false;
+            }
+            Map<String, Object> matchedPairs = (Map<String, Object>) round.get("matchedPairs");
+            if (matchedPairs != null && matchedPairs.containsKey(String.valueOf(leftIndex))) {
+                return false;
+            }
+            Map<String, Object> attemptsByPlayer = (Map<String, Object>) round.get("attemptsByPlayer");
+            Map<String, Object> updatedAttemptsByPlayer = attemptsByPlayer == null
+                    ? new HashMap<>()
+                    : new HashMap<>(attemptsByPlayer);
+            List<Integer> playerAttempts = attemptsByPlayer == null
+                    ? new ArrayList<>()
+                    : intList(attemptsByPlayer.get(uid));
+            if (playerAttempts.contains(leftIndex)) {
+                return false;
+            }
+            playerAttempts.add(leftIndex);
+            List<Integer> usedLeftIndexes = intList(round.get("usedLeftIndexes"));
+            if (!usedLeftIndexes.contains(leftIndex)) {
+                usedLeftIndexes.add(leftIndex);
+            }
+            int correctRight = intFromMap((Map<String, Object>) round.get("correctPairs"), String.valueOf(leftIndex), -1);
+            boolean correct = correctRight == rightIndex;
+            Log.d(TAG, "Submit connection pair gameId=" + gameId + ", round=" + roundNumber
+                    + ", uid=" + uid + ", phase=" + phase + ", selectedLeftIndex=" + leftIndex
+                    + ", selectedRightIndex=" + rightIndex + ", correct=" + correct);
+            updatedAttemptsByPlayer.put(uid, playerAttempts);
+            if (!correct) {
+                transaction.update(roundRef,
+                        "attemptsByPlayer", updatedAttemptsByPlayer,
+                        "usedLeftIndexes", usedLeftIndexes,
+                        "updatedAt", FieldValue.serverTimestamp());
+                return false;
+            }
+            Map<String, Object> match = new HashMap<>();
+            match.put("rightIndex", rightIndex);
+            match.put("uid", uid);
+            match.put("correct", true);
+            List<Integer> remaining = intList(round.get("remainingLeftIndexes"));
+            remaining.remove(Integer.valueOf(leftIndex));
+            transaction.update(roundRef,
+                    "attemptsByPlayer", updatedAttemptsByPlayer,
+                    "usedLeftIndexes", usedLeftIndexes,
+                    "matchedPairs." + leftIndex, match,
+                    "remainingLeftIndexes", remaining,
+                    "updatedAt", FieldValue.serverTimestamp());
+            applyScore(transaction, gameRef, game, uid, 2);
+            if (remaining.isEmpty()) {
+                transaction.update(roundRef, "phase", "FINISHED", "finished", true,
+                        "updatedAt", FieldValue.serverTimestamp());
+                if (roundNumber == 2) {
+                    transaction.update(gameRef, "status", "finished", "updatedAt", FieldValue.serverTimestamp());
+                }
+            }
+            Log.d(TAG, "Connections score update uid=" + uid + ", points=2, remainingLeftIndexes=" + remaining);
+            return true;
+        });
+    }
+
+    public Task<Void> advanceConnectionsPhase(String gameId, int roundNumber, String expectedPhase) {
+        DocumentReference gameRef = db.collection("games").document(gameId);
+        DocumentReference roundRef = gameRef.collection("rounds").document(connectionsRoundId(roundNumber));
+        return db.runTransaction(transaction -> {
+            DocumentSnapshot game = transaction.get(gameRef);
+            DocumentSnapshot round = transaction.get(roundRef);
+            String phase = round.getString("phase");
+            if (!expectedPhase.equals(phase) || Boolean.TRUE.equals(round.getBoolean("finished"))) {
+                return null;
+            }
+            List<Integer> remaining = intList(round.get("remainingLeftIndexes"));
+            Map<String, Object> updates = new HashMap<>();
+            if ("ACTIVE_PLAYER".equals(phase) && !remaining.isEmpty()) {
+                updates.put("phase", "OPPONENT_CHANCE");
+                updates.put("phaseStartedAt", FieldValue.serverTimestamp());
+            } else {
+                updates.put("phase", "FINISHED");
+                updates.put("finished", true);
+                if (roundNumber == 2) {
+                    transaction.update(gameRef, "status", "finished", "updatedAt", FieldValue.serverTimestamp());
+                }
+            }
+            updates.put("updatedAt", FieldValue.serverTimestamp());
+            Log.d(TAG, "Advance connections phase gameId=" + gameId + ", round=" + roundNumber
+                    + ", oldPhase=" + phase + ", remainingLeftIndexes=" + remaining + ", updates=" + updates);
+            transaction.update(roundRef, updates);
+            return null;
+        });
+    }
+
+    private ShuffledConnections shuffleConnectionRights(List<String> rightItems, Map<String, Object> correctPairs) {
+        List<Integer> order = new ArrayList<>();
+        for (int i = 0; i < rightItems.size(); i++) {
+            order.add(i);
+        }
+        Map<String, Object> shuffledPairs = new HashMap<>();
+        int fixedPairs = rightItems.size();
+        for (int attempt = 0; attempt < 10 && fixedPairs > 2; attempt++) {
+            Collections.shuffle(order, random);
+            shuffledPairs = remapConnectionPairs(order, correctPairs);
+            fixedPairs = countFixedConnectionPairs(shuffledPairs);
+        }
+        for (int attempt = 0; attempt < rightItems.size() && fixedPairs > 2; attempt++) {
+            Collections.rotate(order, 1);
+            shuffledPairs = remapConnectionPairs(order, correctPairs);
+            fixedPairs = countFixedConnectionPairs(shuffledPairs);
+        }
+        List<String> shuffledRightItems = new ArrayList<>();
+        for (Integer oldIndex : order) {
+            shuffledRightItems.add(rightItems.get(oldIndex));
+        }
+        return new ShuffledConnections(shuffledRightItems, shuffledPairs);
+    }
+
+    private Map<String, Object> remapConnectionPairs(List<Integer> order, Map<String, Object> correctPairs) {
+        Map<Integer, Integer> oldToNew = new HashMap<>();
+        for (int newIndex = 0; newIndex < order.size(); newIndex++) {
+            oldToNew.put(order.get(newIndex), newIndex);
+        }
+        Map<String, Object> shuffledPairs = new HashMap<>();
+        for (int leftIndex = 0; leftIndex < order.size(); leftIndex++) {
+            int oldRightIndex = intFromMap(correctPairs, String.valueOf(leftIndex), leftIndex);
+            Integer newRightIndex = oldToNew.get(oldRightIndex);
+            shuffledPairs.put(String.valueOf(leftIndex), newRightIndex == null ? oldRightIndex : newRightIndex);
+        }
+        return shuffledPairs;
+    }
+
+    private int countFixedConnectionPairs(Map<String, Object> correctPairs) {
+        int count = 0;
+        for (int i = 0; i < correctPairs.size(); i++) {
+            if (intFromMap(correctPairs, String.valueOf(i), -1) == i) {
+                count++;
+            }
+        }
+        return count;
+    }
+
+    private static class ShuffledConnections {
+        final List<String> rightItems;
+        final Map<String, Object> correctPairs;
+
+        ShuffledConnections(List<String> rightItems, Map<String, Object> correctPairs) {
+            this.rightItems = rightItems;
+            this.correctPairs = correctPairs;
+        }
+    }
+
+    public String connectionsRoundId(int roundNumber) {
+        return "connections_round_" + roundNumber;
+    }
+
+    private int intFromMap(Map<String, Object> map, String key, int defaultValue) {
+        if (map == null) {
+            return defaultValue;
+        }
+        Object value = map.get(key);
+        return value instanceof Number ? ((Number) value).intValue() : defaultValue;
+    }
+
+    private List<Integer> intList(Object raw) {
+        List<Integer> values = new ArrayList<>();
+        if (raw instanceof List) {
+            for (Object item : (List<Object>) raw) {
+                if (item instanceof Number) {
+                    values.add(((Number) item).intValue());
+                }
+            }
+        }
+        return values;
     }
 
     private Map<String, Object> mapOf(Object... values) {
