@@ -153,7 +153,7 @@ public class ProfileActivity extends AppCompatActivity {
     private void bindUser(DocumentSnapshot user) {
         String email = firstNonEmpty(user.getString("email"), currentUser == null ? "" : currentUser.getEmail(), "");
         String username = firstNonEmpty(user.getString("username"), usernameFromEmail(email), uid);
-        String region = firstNonEmpty(user.getString("region"), "Nije izabran");
+        String region = firstNonEmpty(user.getString("region"), "Region nije podešen");
         long tokens = longValue(user.get("tokens"));
         long stars = longValue(user.get("stars"));
         League league = leagueForStars(stars);

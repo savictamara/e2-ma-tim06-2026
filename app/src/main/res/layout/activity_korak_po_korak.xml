@@ -3,12 +3,14 @@
     android:layout_width="match_parent"
     android:layout_height="match_parent"
     android:background="@drawable/bg_screen"
-    android:padding="16dp">
+    android:padding="10dp">
 
     <LinearLayout
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
         android:orientation="vertical">
+
+        <include layout="@layout/include_game_header" />
 
         <TextView
             android:layout_width="wrap_content"
@@ -16,23 +18,25 @@
             android:text="@string/korak_title"
             android:textColor="@color/text_main"
             android:textSize="24sp"
-            android:textStyle="bold" />
+            android:textStyle="bold"
+            android:visibility="gone" />
 
         <TextView
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
-            android:layout_marginTop="6dp"
+            android:layout_marginTop="2dp"
             android:text="@string/round_one_of_two"
             android:textColor="@color/text_muted" />
 
-        <TextView android:id="@+id/tvTimer" android:layout_width="wrap_content" android:layout_height="wrap_content" android:layout_marginTop="6dp" android:textColor="@color/text_muted"/>
-        <TextView android:id="@+id/tvPoints" android:layout_width="wrap_content" android:layout_height="wrap_content" android:layout_marginTop="4dp" android:textColor="@color/text_muted"/>
+        <TextView android:id="@+id/tvTimer" android:layout_width="wrap_content" android:layout_height="wrap_content" android:layout_marginTop="3dp" android:textColor="@color/text_muted"/>
+        <TextView android:id="@+id/tvPoints" android:layout_width="wrap_content" android:layout_height="wrap_content" android:layout_marginTop="2dp" android:textColor="@color/text_muted"/>
 
         <LinearLayout
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:layout_marginTop="10dp"
-            android:orientation="horizontal">
+            android:layout_marginTop="4dp"
+            android:orientation="horizontal"
+            android:visibility="gone">
 
             <LinearLayout
                 android:layout_width="0dp"
@@ -40,7 +44,7 @@
                 android:layout_weight="1"
                 android:background="@drawable/bg_step"
                 android:orientation="vertical"
-                android:padding="10dp">
+                android:padding="6dp">
 
                 <TextView
                     android:layout_width="wrap_content"
@@ -64,7 +68,7 @@
                 android:layout_weight="1"
                 android:background="@drawable/bg_step"
                 android:orientation="vertical"
-                android:padding="10dp">
+                android:padding="6dp">
 
                 <TextView
                     android:layout_width="wrap_content"
@@ -85,24 +89,24 @@
         <LinearLayout
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:layout_marginTop="12dp"
+            android:layout_marginTop="6dp"
             android:background="@drawable/bg_card"
             android:orientation="vertical">
 
-            <TextView android:id="@+id/step1" android:layout_width="match_parent" android:layout_height="wrap_content" android:background="@drawable/bg_step" android:padding="10dp" android:text="1. ?" android:textColor="@color/game_text_color"/>
-            <TextView android:id="@+id/step2" android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginTop="6dp" android:background="@drawable/bg_step" android:padding="10dp" android:text="2. ?" android:textColor="@color/game_text_color"/>
-            <TextView android:id="@+id/step3" android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginTop="6dp" android:background="@drawable/bg_step" android:padding="10dp" android:text="3. ?" android:textColor="@color/game_text_color"/>
-            <TextView android:id="@+id/step4" android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginTop="6dp" android:background="@drawable/bg_step" android:padding="10dp" android:text="4. ?" android:textColor="@color/game_text_color"/>
-            <TextView android:id="@+id/step5" android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginTop="6dp" android:background="@drawable/bg_step" android:padding="10dp" android:text="5. ?" android:textColor="@color/game_text_color"/>
-            <TextView android:id="@+id/step6" android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginTop="6dp" android:background="@drawable/bg_step" android:padding="10dp" android:text="6. ?" android:textColor="@color/game_text_color"/>
-            <TextView android:id="@+id/step7" android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginTop="6dp" android:background="@drawable/bg_step" android:padding="10dp" android:text="7. ?" android:textColor="@color/game_text_color"/>
+            <TextView android:id="@+id/step1" android:layout_width="match_parent" android:layout_height="wrap_content" android:background="@drawable/bg_step" android:padding="6dp" android:text="1. ?" android:textColor="@color/game_text_color" android:textSize="13sp"/>
+            <TextView android:id="@+id/step2" android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginTop="3dp" android:background="@drawable/bg_step" android:padding="6dp" android:text="2. ?" android:textColor="@color/game_text_color" android:textSize="13sp"/>
+            <TextView android:id="@+id/step3" android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginTop="3dp" android:background="@drawable/bg_step" android:padding="6dp" android:text="3. ?" android:textColor="@color/game_text_color" android:textSize="13sp"/>
+            <TextView android:id="@+id/step4" android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginTop="3dp" android:background="@drawable/bg_step" android:padding="6dp" android:text="4. ?" android:textColor="@color/game_text_color" android:textSize="13sp"/>
+            <TextView android:id="@+id/step5" android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginTop="3dp" android:background="@drawable/bg_step" android:padding="6dp" android:text="5. ?" android:textColor="@color/game_text_color" android:textSize="13sp"/>
+            <TextView android:id="@+id/step6" android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginTop="3dp" android:background="@drawable/bg_step" android:padding="6dp" android:text="6. ?" android:textColor="@color/game_text_color" android:textSize="13sp"/>
+            <TextView android:id="@+id/step7" android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginTop="3dp" android:background="@drawable/bg_step" android:padding="6dp" android:text="7. ?" android:textColor="@color/game_text_color" android:textSize="13sp"/>
 
-            <EditText android:id="@+id/etSolution" android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginTop="10dp" android:background="@drawable/bg_step" android:hint="@string/hint_solution" android:padding="12dp" android:textColor="@color/game_text_color" android:textColorHint="@color/input_hint_color"/>
+            <EditText android:id="@+id/etSolution" android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginTop="6dp" android:background="@drawable/bg_step" android:hint="@string/hint_solution" android:padding="8dp" android:textColor="@color/game_text_color" android:textColorHint="@color/input_hint_color"/>
 
-            <TextView android:id="@+id/tvStepStatus" android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginTop="10dp" android:gravity="start" android:text="@string/open_step" android:textColor="@color/game_text_color"/>
-            <Button android:id="@+id/btnCheckSolution" style="@style/Widget.MaterialComponents.Button" android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginTop="8dp" android:background="@drawable/bg_button_primary" android:text="@string/check_solution" android:textColor="@color/white"/>
+            <TextView android:id="@+id/tvStepStatus" android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginTop="4dp" android:gravity="start" android:text="@string/open_step" android:textColor="@color/game_text_color" android:visibility="gone"/>
+            <Button android:id="@+id/btnCheckSolution" style="@style/Widget.MaterialComponents.Button" android:layout_width="match_parent" android:layout_height="44dp" android:layout_marginTop="6dp" android:background="@drawable/bg_button_primary" android:text="@string/check_solution" android:textColor="@color/white"/>
 
-            <TextView android:id="@+id/tvResult" android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginTop="10dp" android:textColor="@color/text_muted"/>
+            <TextView android:id="@+id/tvResult" android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginTop="4dp" android:textColor="@color/text_muted"/>
         </LinearLayout>
     </LinearLayout>
 </ScrollView>

@@ -25,6 +25,7 @@ import rs.ac.uns.ftn.slagalica.data.repository.GameRepository;
 import rs.ac.uns.ftn.slagalica.data.repository.StatsRepository;
 import rs.ac.uns.ftn.slagalica.data.repository.UserRepository;
 import rs.ac.uns.ftn.slagalica.util.FirebaseInitializer;
+import rs.ac.uns.ftn.slagalica.util.GameHeaderHelper;
 import rs.ac.uns.ftn.slagalica.util.GuestSession;
 
 public class KoZnaZnaActivity extends AppCompatActivity {
@@ -59,6 +60,7 @@ public class KoZnaZnaActivity extends AppCompatActivity {
     private TextView tvPlayer1Score;
     private TextView tvPlayer2Score;
     private Button btnNextQuestion;
+    private GameHeaderHelper headerHelper;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -81,6 +83,8 @@ public class KoZnaZnaActivity extends AppCompatActivity {
         tvPlayer2Score = findViewById(R.id.tvKznzPlayer2);
         btnNextQuestion = findViewById(R.id.btnNextQuestion);
         btnNextQuestion.setVisibility(View.GONE);
+        headerHelper = new GameHeaderHelper(this, findViewById(android.R.id.content));
+        headerHelper.updateGameTitle("Ko zna zna");
 
         answerButtons[0] = findViewById(R.id.btnAnswer1);
         answerButtons[1] = findViewById(R.id.btnAnswer2);
@@ -99,19 +103,7 @@ public class KoZnaZnaActivity extends AppCompatActivity {
         }
         uid = user == null ? GuestSession.uid(this) : user.getUid();
         Log.d(TAG, "Current uid=" + uid);
-        userRepository.currentGameId(uid)
-                .continueWithTask(task -> {
-                    String existingGameId = task.isSuccessful() ? task.getResult() : "";
-                    if (existingGameId != null && !existingGameId.isEmpty()) {
-                        return gameRepository.getGame(existingGameId).continueWithTask(gameTask -> {
-                            if (gameTask.isSuccessful() && isValidKnowItGame(gameTask.getResult())) {
-                                return com.google.android.gms.tasks.Tasks.forResult(existingGameId);
-                            }
-                            return gameRepository.joinOrCreateGame(uid, GameRepository.MINI_KNOW_IT);
-                        });
-                    }
-                    return gameRepository.joinOrCreateGame(uid, GameRepository.MINI_KNOW_IT);
-                })
+        gameRepository.joinOrCreateGame(uid, GameRepository.MINI_KNOW_IT)
                 .addOnSuccessListener(id -> {
                     gameId = id;
                     Log.d(TAG, "Know it gameId=" + gameId);
@@ -135,8 +127,8 @@ public class KoZnaZnaActivity extends AppCompatActivity {
                 return;
             }
             String status = snapshot.getString("status");
-            player1Uid = snapshot.getString("player1Uid");
-            player2Uid = snapshot.getString("player2Uid");
+            player1Uid = value(snapshot.getString("player1Uid"));
+            player2Uid = value(snapshot.getString("player2Uid"));
             Long p1 = snapshot.getLong("player1Score");
             Long p2 = snapshot.getLong("player2Score");
             player1Score = p1 == null ? 0 : p1.intValue();
@@ -144,14 +136,26 @@ public class KoZnaZnaActivity extends AppCompatActivity {
             tvPlayer1Score.setText(getString(R.string.player_points, player1Score));
             tvPlayer2Score.setText(getString(R.string.player_points, player2Score));
             tvPoints.setText(getString(R.string.points_text, uid.equals(player1Uid) ? player1Score : player2Score));
-            Log.d(TAG, "Game snapshot gameId=" + snapshot.getId() + ", status=" + status
+            headerHelper.updatePlayers(player1Uid, player1Score, player2Uid, player2Score);
+            Log.d(TAG, "Game snapshot currentUserUid=" + uid
+                    + ", gameId=" + snapshot.getId() + ", status=" + status
                     + ", player1Uid=" + player1Uid + ", player2Uid=" + player2Uid
                     + ", currentMiniGame=" + snapshot.getString("currentMiniGame"));
-            if ("waiting".equals(status) || player2Uid == null) {
+            if (!GameRepository.MINI_KNOW_IT.equals(snapshot.getString("currentMiniGame"))) {
+                setStatus("Ko zna zna nije aktivna igra");
+                setAnswerButtonsEnabled(false);
+                Log.d(TAG, "Ignoring game snapshot for different mini game, gameId=" + gameId
+                        + ", currentMiniGame=" + snapshot.getString("currentMiniGame"));
+                return;
+            }
+            if ("waiting".equals(status) || player2Uid.isEmpty()) {
                 setStatus("Čeka se drugi igrač");
                 setAnswerButtonsEnabled(false);
                 return;
             }
+            Log.d(TAG, "Game became active, currentUserUid=" + uid + ", gameId=" + gameId
+                    + ", player1Uid=" + player1Uid + ", player2Uid=" + player2Uid
+                    + ", currentMiniGame=" + snapshot.getString("currentMiniGame"));
             if ("finished".equals(status) && GameRepository.PHASE_FINISHED.equals(phase)) {
                 setStatus("Ko zna zna je završeno");
                 setAnswerButtonsEnabled(false);
@@ -359,6 +363,11 @@ public class KoZnaZnaActivity extends AppCompatActivity {
         for (Button answerButton : answerButtons) {
             answerButton.setEnabled(enabled);
         }
+        Log.d(TAG, "Answer buttons enabled=" + enabled + ", gameId=" + gameId
+                + ", roundId=" + gameRepository.knowItRoundId()
+                + ", currentUserUid=" + uid + ", phase=" + phase
+                + ", currentQuestionIndex=" + currentQuestionIndex
+                + ", answeredCurrentQuestion=" + answeredCurrentQuestion);
     }
 
     private void setStatus(String status) {
@@ -367,6 +376,7 @@ public class KoZnaZnaActivity extends AppCompatActivity {
 
     private void setStatus(String status, boolean hasCurrentUserAnswered, boolean hasOtherPlayerAnswered) {
         tvRoundResult.setText(status);
+        headerHelper.updateStatus(status);
         Log.d(TAG, "Status text=" + status + ", gameId=" + gameId
                 + ", currentQuestionIndex=" + currentQuestionIndex
                 + ", currentUserUid=" + uid

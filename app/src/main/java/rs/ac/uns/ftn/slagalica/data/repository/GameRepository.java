@@ -65,56 +65,118 @@ public class GameRepository {
         if (db == null) {
             return Tasks.forException(new IllegalStateException("Firebase nije inicijalizovan"));
         }
-        Log.d(TAG, "Searching waiting game, miniGame=" + miniGame + ", uid=" + uid);
+        if (isBlank(uid) || isBlank(miniGame)) {
+            return Tasks.forException(new IllegalArgumentException("Nedostaje uid ili tip igre"));
+        }
+        return joinOrCreateGameInternal(uid, miniGame, 0)
+                .addOnSuccessListener(gameId -> Log.d(TAG, "joinOrCreateGame final returned gameId="
+                        + gameId + ", uid=" + uid + ", miniGameType=" + miniGame))
+                .addOnFailureListener(e -> Log.e(TAG, "joinOrCreateGame failed, uid=" + uid
+                        + ", miniGameType=" + miniGame, e));
+    }
+
+    private Task<String> joinOrCreateGameInternal(String uid, String miniGame, int attempt) {
+        Log.d(TAG, "Searching waiting game, miniGameType=" + miniGame + ", uid=" + uid + ", attempt=" + attempt);
         return db.collection("games")
                 .whereEqualTo("status", "waiting")
                 .whereEqualTo("currentMiniGame", miniGame)
-                .limit(10)
+                .limit(50)
                 .get()
                 .continueWithTask(task -> {
                     if (!task.isSuccessful()) {
                         Log.e(TAG, "Waiting game query failed", task.getException());
                         throw task.getException();
                     }
-                    DocumentReference candidate = null;
-                    DocumentReference ownWaiting = null;
+                    QueryDocumentSnapshot candidate = null;
+                    QueryDocumentSnapshot ownWaiting = null;
                     for (QueryDocumentSnapshot doc : task.getResult()) {
                         String player1 = doc.getString("player1Uid");
                         String player2 = doc.getString("player2Uid");
-                        if (player1 != null && !player1.equals(uid) && player2 == null) {
-                            candidate = doc.getReference();
-                            break;
-                        } else if (player1 != null && player1.equals(uid) && player2 == null) {
-                            ownWaiting = doc.getReference();
+                        Log.d(TAG, "Waiting candidate scan gameId=" + doc.getId()
+                                + ", uid=" + uid + ", miniGameType=" + miniGame
+                                + ", player1Uid=" + player1 + ", player2Uid=" + player2
+                                + ", createdAt=" + doc.getTimestamp("createdAt"));
+                        if (isJoinableWaiting(doc, uid, miniGame)) {
+                            if (candidate == null || createdAtMillis(doc) < createdAtMillis(candidate)) {
+                                candidate = doc;
+                            }
+                        } else if (isOwnWaiting(doc, uid, miniGame)) {
+                            if (ownWaiting == null || createdAtMillis(doc) < createdAtMillis(ownWaiting)) {
+                                ownWaiting = doc;
+                            }
                         }
                     }
                     if (candidate != null) {
-                        DocumentReference finalCandidate = candidate;
-                        return db.runTransaction(transaction -> {
-                            DocumentSnapshot waiting = transaction.get(finalCandidate);
-                            String player1 = waiting.getString("player1Uid");
-                            String player2 = waiting.getString("player2Uid");
-                            if (waiting.exists() && "waiting".equals(waiting.getString("status"))
-                                    && player1 != null && !player1.equals(uid) && player2 == null) {
-                                Log.d(TAG, "Joining existing gameId=" + finalCandidate.getId() + ", uid=" + uid);
-                                transaction.update(finalCandidate, "player2Uid", uid, "status", "active",
-                                        "currentPlayerUid", player1, "updatedAt", FieldValue.serverTimestamp());
-                                return finalCandidate.getId();
-                            }
-                            return createGameInTransaction(transaction, uid, miniGame);
-                        });
+                        DocumentReference candidateRef = candidate.getReference();
+                        QueryDocumentSnapshot finalOwnWaiting = ownWaiting;
+                        Log.d(TAG, "Found waiting gameId=" + candidate.getId()
+                                + ", found player1Uid=" + candidate.getString("player1Uid")
+                                + ", uid=" + uid + ", miniGameType=" + miniGame);
+                        return joinWaitingGame(candidateRef, uid, miniGame)
+                                .continueWithTask(joinTask -> {
+                                    if (!joinTask.isSuccessful()) {
+                                        throw joinTask.getException();
+                                    }
+                                    String joinedGameId = joinTask.getResult();
+                                    if (!isBlank(joinedGameId)) {
+                                        return Tasks.forResult(joinedGameId);
+                                    }
+                                    if (attempt < 1) {
+                                        Log.d(TAG, "Waiting game changed before join, retrying search, uid="
+                                                + uid + ", miniGameType=" + miniGame);
+                                        return joinOrCreateGameInternal(uid, miniGame, attempt + 1);
+                                    }
+                                    if (finalOwnWaiting != null) {
+                                        Log.d(TAG, "Reusing own waiting after retry gameId=" + finalOwnWaiting.getId()
+                                                + ", uid=" + uid + ", miniGameType=" + miniGame);
+                                        return Tasks.forResult(finalOwnWaiting.getId());
+                                    }
+                                    return db.runTransaction(transaction -> createGameInTransaction(transaction, uid, miniGame));
+                                });
                     }
                     if (ownWaiting != null) {
-                        Log.d(TAG, "Reusing own waiting gameId=" + ownWaiting.getId() + ", uid=" + uid);
+                        Log.d(TAG, "Reusing own waiting gameId=" + ownWaiting.getId()
+                                + ", uid=" + uid + ", miniGameType=" + miniGame);
                         return Tasks.forResult(ownWaiting.getId());
                     }
                     return db.runTransaction(transaction -> createGameInTransaction(transaction, uid, miniGame));
                 });
     }
 
+    private Task<String> joinWaitingGame(DocumentReference gameRef, String uid, String miniGame) {
+        return db.runTransaction(transaction -> {
+            DocumentSnapshot waiting = transaction.get(gameRef);
+            String statusBefore = waiting.getString("status");
+            String currentMiniGame = waiting.getString("currentMiniGame");
+            String player1 = waiting.getString("player1Uid");
+            String player2 = waiting.getString("player2Uid");
+            Log.d(TAG, "Join transaction before gameId=" + gameRef.getId()
+                    + ", uid=" + uid + ", miniGameType=" + miniGame
+                    + ", status=" + statusBefore + ", currentMiniGame=" + currentMiniGame
+                    + ", player1Uid=" + player1 + ", player2Uid=" + player2);
+            if (waiting.exists()
+                    && "waiting".equals(statusBefore)
+                    && miniGame.equals(currentMiniGame)
+                    && !isBlank(player1)
+                    && !player1.equals(uid)
+                    && isBlank(player2)) {
+                transaction.update(gameRef, "player2Uid", uid, "status", "active",
+                        "currentPlayerUid", player1, "updatedAt", FieldValue.serverTimestamp());
+                Log.d(TAG, "Joined gameId=" + gameRef.getId() + ", uid=" + uid
+                        + ", miniGameType=" + miniGame + ", status before=waiting, status after=active");
+                return gameRef.getId();
+                            }
+            Log.d(TAG, "Waiting game not joinable in transaction gameId=" + gameRef.getId()
+                    + ", uid=" + uid + ", miniGameType=" + miniGame
+                    + ", status before=" + statusBefore + ", player1Uid=" + player1
+                    + ", player2Uid=" + player2);
+            return "";
+        });
+    }
+
     private String createGameInTransaction(Transaction transaction, String uid, String miniGame) {
         DocumentReference ref = db.collection("games").document();
-        Log.d(TAG, "Creating new gameId=" + ref.getId() + ", miniGame=" + miniGame + ", uid=" + uid);
+        Log.d(TAG, "Creating new gameId=" + ref.getId() + ", miniGameType=" + miniGame + ", uid=" + uid);
         Map<String, Object> game = new HashMap<>();
         game.put("player1Uid", uid);
         game.put("player2Uid", null);
@@ -126,7 +188,37 @@ public class GameRepository {
         game.put("createdAt", FieldValue.serverTimestamp());
         game.put("updatedAt", FieldValue.serverTimestamp());
         transaction.set(ref, game);
+        Log.d(TAG, "Created new gameId=" + ref.getId() + ", uid=" + uid
+                + ", miniGameType=" + miniGame + ", status=waiting");
         return ref.getId();
+    }
+
+    private boolean isJoinableWaiting(DocumentSnapshot doc, String uid, String miniGame) {
+        String player1 = doc.getString("player1Uid");
+        return doc.exists()
+                && "waiting".equals(doc.getString("status"))
+                && miniGame.equals(doc.getString("currentMiniGame"))
+                && !isBlank(player1)
+                && !player1.equals(uid)
+                && isBlank(doc.getString("player2Uid"));
+    }
+
+    private boolean isOwnWaiting(DocumentSnapshot doc, String uid, String miniGame) {
+        String player1 = doc.getString("player1Uid");
+        return doc.exists()
+                && "waiting".equals(doc.getString("status"))
+                && miniGame.equals(doc.getString("currentMiniGame"))
+                && uid.equals(player1)
+                && isBlank(doc.getString("player2Uid"));
+    }
+
+    private long createdAtMillis(DocumentSnapshot doc) {
+        Timestamp createdAt = doc.getTimestamp("createdAt");
+        return createdAt == null ? Long.MAX_VALUE : createdAt.toDate().getTime();
+    }
+
+    private boolean isBlank(String value) {
+        return value == null || value.trim().isEmpty();
     }
 
     public ListenerRegistration listenGame(String gameId, EventListener<DocumentSnapshot> listener) {
@@ -222,8 +314,8 @@ public class GameRepository {
                     + ", roundId=" + roundId + ", questionId=" + questionId);
             String p1 = game.getString("player1Uid");
             String p2 = game.getString("player2Uid");
-            if (p1 == null || p2 == null) {
-                throw new IllegalStateException("Korak po korak ne moze da pocne bez dva igraca");
+            if (p1 == null || p2 == null || p1.equals(p2)) {
+                throw new IllegalStateException("Korak po korak ne moze da pocne bez dva razlicita igraca");
             }
             String active = roundNumber == 1 ? p1 : p2;
             String opponent = roundNumber == 1 ? p2 : p1;
@@ -255,7 +347,8 @@ public class GameRepository {
 
     public Task<Void> openNextStep(String gameId, int roundNumber, String uid, boolean timeout) {
         String roundId = stepRoundId(roundNumber);
-        DocumentReference roundRef = db.collection("games").document(gameId).collection("rounds").document(roundId);
+        DocumentReference gameRef = db.collection("games").document(gameId);
+        DocumentReference roundRef = gameRef.collection("rounds").document(roundId);
         return db.runTransaction(transaction -> {
             DocumentSnapshot round = transaction.get(roundRef);
             String phase = round.getString("phase");
@@ -272,6 +365,8 @@ public class GameRepository {
                 updates.put("openedStepIndex", index + 1);
             } else {
                 updates.put("phase", "OPPONENT_CHANCE");
+                transaction.update(gameRef, "currentPlayerUid", round.getString("opponentUid"),
+                        "updatedAt", FieldValue.serverTimestamp());
             }
             updates.put("phaseStartedAt", FieldValue.serverTimestamp());
             updates.put("updatedAt", FieldValue.serverTimestamp());
@@ -357,8 +452,8 @@ public class GameRepository {
             Log.d(TAG, "Creating my number round, gameId=" + gameId + ", roundNumber=" + roundNumber);
             String p1 = game.getString("player1Uid");
             String p2 = game.getString("player2Uid");
-            if (p1 == null || p2 == null) {
-                throw new IllegalStateException("Moj broj ne moze da pocne bez dva igraca");
+            if (p1 == null || p2 == null || p1.equals(p2)) {
+                throw new IllegalStateException("Moj broj ne moze da pocne bez dva razlicita igraca");
             }
             String active = roundNumber == 1 ? p1 : p2;
             String opponent = roundNumber == 1 ? p2 : p1;
@@ -426,6 +521,8 @@ public class GameRepository {
                     "phase", PHASE_PLAYING,
                     "phaseStartedAt", FieldValue.serverTimestamp(),
                     "playStartedAt", FieldValue.serverTimestamp(),
+                    "updatedAt", FieldValue.serverTimestamp());
+            transaction.update(db.collection("games").document(gameId), "currentPlayerUid", null,
                     "updatedAt", FieldValue.serverTimestamp());
             return null;
         });
@@ -658,8 +755,8 @@ public class GameRepository {
             }
             String p1 = game.getString("player1Uid");
             String p2 = game.getString("player2Uid");
-            if (p1 == null || p2 == null) {
-                throw new IllegalStateException("Ko zna zna ne moze da pocne bez dva igraca");
+            if (p1 == null || p2 == null || p1.equals(p2)) {
+                throw new IllegalStateException("Ko zna zna ne moze da pocne bez dva razlicita igraca");
             }
             Log.d(TAG, "Creating know it round, gameId=" + gameId + ", p1=" + p1 + ", p2=" + p2);
             Map<String, Object> round = new HashMap<>();
@@ -1217,8 +1314,8 @@ public class GameRepository {
             }
             String p1 = game.getString("player1Uid");
             String p2 = game.getString("player2Uid");
-            if (p1 == null || p2 == null) {
-                throw new IllegalStateException("Spojnice ne mogu da pocnu bez dva igraca");
+            if (p1 == null || p2 == null || p1.equals(p2)) {
+                throw new IllegalStateException("Spojnice ne mogu da pocnu bez dva razlicita igraca");
             }
             String active = roundNumber == 1 ? p1 : p2;
             String opponent = roundNumber == 1 ? p2 : p1;
@@ -1343,6 +1440,8 @@ public class GameRepository {
             if ("ACTIVE_PLAYER".equals(phase) && !remaining.isEmpty()) {
                 updates.put("phase", "OPPONENT_CHANCE");
                 updates.put("phaseStartedAt", FieldValue.serverTimestamp());
+                transaction.update(gameRef, "currentPlayerUid", round.getString("opponentUid"),
+                        "updatedAt", FieldValue.serverTimestamp());
             } else {
                 updates.put("phase", "FINISHED");
                 updates.put("finished", true);

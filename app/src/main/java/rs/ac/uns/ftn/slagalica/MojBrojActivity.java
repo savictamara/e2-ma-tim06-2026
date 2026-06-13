@@ -29,6 +29,7 @@ import rs.ac.uns.ftn.slagalica.data.repository.UserRepository;
 import rs.ac.uns.ftn.slagalica.domain.service.MyNumberService;
 import rs.ac.uns.ftn.slagalica.util.ExpressionEvaluator;
 import rs.ac.uns.ftn.slagalica.util.FirebaseInitializer;
+import rs.ac.uns.ftn.slagalica.util.GameHeaderHelper;
 import rs.ac.uns.ftn.slagalica.util.GuestSession;
 import rs.ac.uns.ftn.slagalica.util.ShakeDetector;
 
@@ -72,6 +73,7 @@ public class MojBrojActivity extends AppCompatActivity {
     private Button btnStopNumbers;
     private Button btnDelete;
     private Button btnConfirm;
+    private GameHeaderHelper headerHelper;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -99,6 +101,8 @@ public class MojBrojActivity extends AppCompatActivity {
         btnStopNumbers = findViewById(R.id.btnStopNumbers);
         btnDelete = findViewById(R.id.btnDelete);
         btnConfirm = findViewById(R.id.btnConfirm);
+        headerHelper = new GameHeaderHelper(this, findViewById(android.R.id.content));
+        headerHelper.updateGameTitle("Moj broj");
 
         sensorManager = (SensorManager) getSystemService(SENSOR_SERVICE);
         accelerometer = sensorManager == null ? null : sensorManager.getDefaultSensor(Sensor.TYPE_ACCELEROMETER);
@@ -112,19 +116,7 @@ public class MojBrojActivity extends AppCompatActivity {
         }
         uid = user == null ? GuestSession.uid(this) : user.getUid();
         Log.d(TAG, "Current uid=" + uid);
-        userRepository.currentGameId(uid)
-                .continueWithTask(task -> {
-                    String existingGameId = task.isSuccessful() ? task.getResult() : "";
-                    if (existingGameId != null && !existingGameId.isEmpty()) {
-                        return gameRepository.getGame(existingGameId).continueWithTask(gameTask -> {
-                            if (gameTask.isSuccessful() && isValidMyNumberGame(gameTask.getResult())) {
-                                return com.google.android.gms.tasks.Tasks.forResult(existingGameId);
-                            }
-                            return gameRepository.joinOrCreateGame(uid, GameRepository.MINI_MY_NUMBER);
-                        });
-                    }
-                    return gameRepository.joinOrCreateGame(uid, GameRepository.MINI_MY_NUMBER);
-                })
+        gameRepository.joinOrCreateGame(uid, GameRepository.MINI_MY_NUMBER)
                 .addOnSuccessListener(id -> {
                     gameId = id;
                     Log.d(TAG, "My number gameId=" + gameId);
@@ -216,7 +208,8 @@ public class MojBrojActivity extends AppCompatActivity {
             if (snapshot == null || !snapshot.exists()) {
                 return;
             }
-            Log.d(TAG, "Game snapshot gameId=" + snapshot.getId() + ", status=" + snapshot.getString("status")
+            Log.d(TAG, "Game snapshot currentUserUid=" + uid
+                    + ", gameId=" + snapshot.getId() + ", status=" + snapshot.getString("status")
                     + ", player1=" + snapshot.getString("player1Uid")
                     + ", player2=" + snapshot.getString("player2Uid")
                     + ", miniGame=" + snapshot.getString("currentMiniGame"));
@@ -226,14 +219,29 @@ public class MojBrojActivity extends AppCompatActivity {
             player2Score = p2 == null ? 0 : p2.intValue();
             tvPlayer1.setText(getString(R.string.player_points, player1Score));
             tvPlayer2.setText(getString(R.string.player_points, player2Score));
+            headerHelper.updatePlayers(snapshot.getString("player1Uid"), player1Score,
+                    snapshot.getString("player2Uid"), player2Score);
             String status = snapshot.getString("status");
-            String player2Uid = snapshot.getString("player2Uid");
-            if ("waiting".equals(status) || player2Uid == null) {
+            String player2Uid = value(snapshot.getString("player2Uid"));
+            if (!GameRepository.MINI_MY_NUMBER.equals(snapshot.getString("currentMiniGame"))) {
+                setStatusText("Moj broj nije aktivna igra");
+                setPlayControls(false);
+                btnStopTarget.setEnabled(false);
+                btnStopNumbers.setEnabled(false);
+                Log.d(TAG, "Ignoring game snapshot for different mini game, gameId=" + gameId
+                        + ", currentMiniGame=" + snapshot.getString("currentMiniGame"));
+                return;
+            }
+            if ("waiting".equals(status) || player2Uid.isEmpty()) {
                 setStatusText("Čeka se drugi igrač");
                 tvResult.setText(R.string.waiting_opponent);
                 setPlayControls(false);
                 return;
             }
+            Log.d(TAG, "Game became active, currentUserUid=" + uid + ", gameId=" + gameId
+                    + ", player1Uid=" + snapshot.getString("player1Uid")
+                    + ", player2Uid=" + snapshot.getString("player2Uid")
+                    + ", currentMiniGame=" + snapshot.getString("currentMiniGame"));
             if ("finished".equals(status)) {
                 setStatusText("Moj broj je završen");
                 tvResult.setText(getString(R.string.result_text,
@@ -247,7 +255,11 @@ public class MojBrojActivity extends AppCompatActivity {
             } else {
                 updateStatusForPhase();
             }
-            gameRepository.ensureMyNumberRound(gameId, roundNumber);
+            gameRepository.ensureMyNumberRound(gameId, roundNumber)
+                    .addOnFailureListener(e -> {
+                        Log.e(TAG, "Ensure my number round failed", e);
+                        show(e.getMessage());
+                    });
             listenRound();
         });
     }
@@ -496,6 +508,10 @@ public class MojBrojActivity extends AppCompatActivity {
         etExpression.setEnabled(enabled);
         btnDelete.setEnabled(enabled);
         btnConfirm.setEnabled(enabled);
+        Log.d(TAG, "Play controls enabled=" + enabled + ", gameId=" + gameId + ", roundId="
+                + gameRepository.myNumberRoundId(roundNumber) + ", currentUserUid=" + uid
+                + ", phase=" + phase + ", activePlayerUid=" + activePlayerUid
+                + ", submitted=" + submitted);
     }
 
     private void updateStatusForPhase() {
@@ -518,6 +534,7 @@ public class MojBrojActivity extends AppCompatActivity {
         if (tvStatus != null) {
             tvStatus.setText(status);
         }
+        headerHelper.updateStatus(status);
         Log.d(TAG, "Status text=" + status + ", gameId=" + gameId + ", round=" + roundNumber
                 + ", phase=" + phase + ", activePlayerUid=" + activePlayerUid);
     }

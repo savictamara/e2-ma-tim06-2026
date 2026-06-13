@@ -3,12 +3,14 @@
     android:layout_width="match_parent"
     android:layout_height="match_parent"
     android:background="@drawable/bg_screen"
-    android:padding="16dp">
+    android:padding="10dp">
 
     <LinearLayout
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
         android:orientation="vertical">
+
+        <include layout="@layout/include_game_header" />
 
         <TextView
             android:layout_width="wrap_content"
@@ -16,13 +18,15 @@
             android:text="@string/kznz_title"
             android:textColor="@color/game_text_color"
             android:textSize="24sp"
-            android:textStyle="bold" />
+            android:textStyle="bold"
+            android:visibility="gone" />
 
         <LinearLayout
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:layout_marginTop="10dp"
-            android:orientation="horizontal">
+            android:layout_marginTop="2dp"
+            android:orientation="horizontal"
+            android:visibility="gone">
 
             <LinearLayout
                 android:layout_width="0dp"
@@ -75,7 +79,7 @@
         <LinearLayout
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:layout_marginTop="12dp"
+            android:layout_marginTop="6dp"
             android:background="@drawable/bg_card"
             android:orientation="vertical">
 
@@ -89,23 +93,23 @@
                 android:id="@+id/tvTimer"
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
-                android:layout_marginTop="4dp"
+                android:layout_marginTop="2dp"
                 android:textColor="@color/text_muted" />
 
             <TextView
                 android:id="@+id/tvPoints"
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
-                android:layout_marginTop="4dp"
+                android:layout_marginTop="2dp"
                 android:textColor="@color/text_muted" />
 
             <TextView
                 android:id="@+id/tvQuestion"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:layout_marginTop="10dp"
+                android:layout_marginTop="6dp"
                 android:background="@drawable/bg_step"
-                android:padding="12dp"
+                android:padding="8dp"
                 android:textColor="@color/game_text_color"
                 android:textStyle="bold" />
 
@@ -113,8 +117,8 @@
                 android:id="@+id/btnAnswer1"
                 style="@style/Widget.MaterialComponents.Button"
                 android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:layout_marginTop="10dp"
+                android:layout_height="42dp"
+                android:layout_marginTop="6dp"
                 android:background="@drawable/bg_step"
                 android:textColor="@color/game_text_color" />
 
@@ -122,8 +126,8 @@
                 android:id="@+id/btnAnswer2"
                 style="@style/Widget.MaterialComponents.Button"
                 android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:layout_marginTop="8dp"
+                android:layout_height="42dp"
+                android:layout_marginTop="5dp"
                 android:background="@drawable/bg_step"
                 android:textColor="@color/game_text_color" />
 
@@ -131,8 +135,8 @@
                 android:id="@+id/btnAnswer3"
                 style="@style/Widget.MaterialComponents.Button"
                 android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:layout_marginTop="8dp"
+                android:layout_height="42dp"
+                android:layout_marginTop="5dp"
                 android:background="@drawable/bg_step"
                 android:textColor="@color/game_text_color" />
 
@@ -140,8 +144,8 @@
                 android:id="@+id/btnAnswer4"
                 style="@style/Widget.MaterialComponents.Button"
                 android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:layout_marginTop="8dp"
+                android:layout_height="42dp"
+                android:layout_marginTop="5dp"
                 android:background="@drawable/bg_step"
                 android:textColor="@color/game_text_color" />
 
@@ -149,15 +153,16 @@
                 android:id="@+id/tvRoundResult"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:layout_marginTop="10dp"
-                android:textColor="@color/text_muted" />
+                android:layout_marginTop="4dp"
+                android:textColor="@color/text_muted"
+                android:visibility="gone" />
 
             <Button
                 android:id="@+id/btnNextQuestion"
                 style="@style/Widget.MaterialComponents.Button"
                 android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:layout_marginTop="10dp"
+                android:layout_height="42dp"
+                android:layout_marginTop="5dp"
                 android:background="@drawable/bg_button_primary"
                 android:text="@string/kznz_next_question"
                 android:textColor="@color/white" />

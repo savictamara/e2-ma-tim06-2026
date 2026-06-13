@@ -25,6 +25,7 @@ import rs.ac.uns.ftn.slagalica.data.repository.GameRepository;
 import rs.ac.uns.ftn.slagalica.data.repository.StatsRepository;
 import rs.ac.uns.ftn.slagalica.data.repository.UserRepository;
 import rs.ac.uns.ftn.slagalica.util.FirebaseInitializer;
+import rs.ac.uns.ftn.slagalica.util.GameHeaderHelper;
 import rs.ac.uns.ftn.slagalica.util.GuestSession;
 
 public class AsocijacijeActivity extends AppCompatActivity {
@@ -71,6 +72,7 @@ public class AsocijacijeActivity extends AppCompatActivity {
     private Button btnEndTurn;
     private Button btnGuessFinal;
     private Button btnNextRound;
+    private GameHeaderHelper headerHelper;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -117,6 +119,8 @@ public class AsocijacijeActivity extends AppCompatActivity {
         btnEndTurn = findViewById(R.id.btnOpenField);
         btnGuessFinal = findViewById(R.id.btnGuessFinal);
         btnNextRound = findViewById(R.id.btnNextRound);
+        headerHelper = new GameHeaderHelper(this, findViewById(android.R.id.content));
+        headerHelper.updateGameTitle("Asocijacije");
         columnInputs = new EditText[] {
                 findViewById(R.id.etAnswerA),
                 findViewById(R.id.etAnswerB),
@@ -168,13 +172,18 @@ public class AsocijacijeActivity extends AppCompatActivity {
             player1Score = intValue(snapshot.get("player1Score"));
             player2Score = intValue(snapshot.get("player2Score"));
             updateScore();
-            Log.d(TAG, "Game snapshot gameId=" + gameId + ", status=" + status
+            headerHelper.updatePlayers(player1Uid, player1Score, player2Uid, player2Score);
+            Log.d(TAG, "Game snapshot currentUserUid=" + uid
+                    + ", gameId=" + gameId + ", status=" + status
                     + ", p1=" + player1Uid + ", p2=" + player2Uid + ", round=" + roundNumber);
             if ("waiting".equals(status) || player2Uid.isEmpty()) {
                 setStatus("Čeka se drugi igrač");
                 setControls(false);
                 return;
             }
+            Log.d(TAG, "Game became active, currentUserUid=" + uid + ", gameId=" + gameId
+                    + ", player1Uid=" + player1Uid + ", player2Uid=" + player2Uid
+                    + ", currentMiniGame=" + snapshot.getString("currentMiniGame"));
             gameRepository.ensureAssociationsRound(gameId, roundNumber)
                     .addOnFailureListener(e -> Log.e(TAG, "Ensure associations round failed", e));
             listenRound();
@@ -443,6 +452,7 @@ public class AsocijacijeActivity extends AppCompatActivity {
 
     private void setStatus(String status) {
         tvStatus.setText(status);
+        headerHelper.updateStatus(status);
         Log.d(TAG, "Status text=" + status + ", gameId=" + gameId + ", round=" + roundNumber
                 + ", phase=" + phase + ", currentTurnUid=" + currentTurnUid + ", uid=" + uid);
     }

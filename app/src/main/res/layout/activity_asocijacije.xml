@@ -3,66 +3,73 @@
     android:layout_width="match_parent"
     android:layout_height="match_parent"
     android:background="@drawable/bg_screen"
-    android:padding="16dp">
+    android:padding="8dp">
 
     <LinearLayout
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
         android:orientation="vertical">
 
+        <include layout="@layout/include_game_header" />
+
         <TextView
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
             android:text="@string/asocijacije_title"
             android:textColor="@color/text_main"
-            android:textSize="24sp"
-            android:textStyle="bold" />
+            android:textSize="20sp"
+            android:textStyle="bold"
+            android:visibility="gone" />
 
         <TextView
             android:id="@+id/tvRound"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
-            android:layout_marginTop="6dp"
-            android:textColor="@color/text_muted" />
+            android:textColor="@color/text_muted"
+            android:textSize="12sp" />
 
         <TextView
             android:id="@+id/tvCurrentPlayer"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
-            android:layout_marginTop="4dp"
-            android:textColor="@color/text_muted" />
+            android:layout_marginTop="1dp"
+            android:textColor="@color/text_muted"
+            android:textSize="12sp" />
 
         <TextView
             android:id="@+id/tvTimer"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
-            android:layout_marginTop="4dp"
-            android:textColor="@color/text_muted" />
+            android:layout_marginTop="1dp"
+            android:textColor="@color/text_muted"
+            android:textSize="12sp" />
 
         <TextView
             android:id="@+id/tvScoreP1"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
-            android:layout_marginTop="4dp"
-            android:textColor="@color/text_muted" />
+            android:textColor="@color/text_muted"
+            android:visibility="gone" />
 
         <TextView
             android:id="@+id/tvScoreP2"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
-            android:layout_marginTop="2dp"
-            android:textColor="@color/text_muted" />
+            android:textColor="@color/text_muted"
+            android:visibility="gone" />
 
         <LinearLayout
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:layout_marginTop="12dp"
+            android:layout_marginTop="4dp"
             android:background="@drawable/bg_card"
-            android:orientation="vertical">
+            android:orientation="vertical"
+            android:padding="4dp">
 
             <LinearLayout
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
+                android:baselineAligned="false"
                 android:orientation="horizontal">
 
                 <LinearLayout
@@ -71,189 +78,113 @@
                     android:layout_weight="1"
                     android:orientation="vertical">
 
-                    <TextView
-                        android:layout_width="match_parent"
-                        android:layout_height="wrap_content"
-                        android:text="Kolona A"
-                        android:textColor="@color/text_main"
-                        android:textStyle="bold" />
-
-                    <TextView android:id="@+id/cell1" android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginTop="6dp" android:background="@drawable/bg_step" android:padding="10dp" android:text="A1: ?" />
-                    <TextView android:id="@+id/cell2" android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginTop="4dp" android:background="@drawable/bg_step" android:padding="10dp" android:text="A2: ?" />
-                    <TextView android:id="@+id/cell3" android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginTop="4dp" android:background="@drawable/bg_step" android:padding="10dp" android:text="A3: ?" />
-                    <TextView android:id="@+id/cell4" android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginTop="4dp" android:background="@drawable/bg_step" android:padding="10dp" android:text="A4: ?" />
-                    <EditText
-                        android:id="@+id/etAnswerA"
-                        android:layout_width="match_parent"
-                        android:layout_height="wrap_content"
-                        android:layout_marginTop="6dp"
-                        android:background="@drawable/bg_step"
-                        android:hint="@string/asocijacije_hint_column"
-                        android:padding="12dp" />
-                    <Button
-                        android:id="@+id/btnGuessA"
-                        style="@style/Widget.MaterialComponents.Button"
-                        android:layout_width="match_parent"
-                        android:layout_height="wrap_content"
-                        android:layout_marginTop="6dp"
-                        android:background="@drawable/bg_button_primary"
-                        android:text="Proveri"
-                        android:textColor="@color/white" />
+                    <TextView android:layout_width="match_parent" android:layout_height="wrap_content" android:gravity="center" android:text="A" android:textColor="@color/text_main" android:textSize="12sp" android:textStyle="bold" />
+                    <TextView android:id="@+id/cell1" android:layout_width="match_parent" android:layout_height="30dp" android:layout_marginTop="2dp" android:background="@drawable/bg_step" android:gravity="center" android:padding="2dp" android:text="A1" android:textSize="11sp" />
+                    <TextView android:id="@+id/cell2" android:layout_width="match_parent" android:layout_height="30dp" android:layout_marginTop="2dp" android:background="@drawable/bg_step" android:gravity="center" android:padding="2dp" android:text="A2" android:textSize="11sp" />
+                    <TextView android:id="@+id/cell3" android:layout_width="match_parent" android:layout_height="30dp" android:layout_marginTop="2dp" android:background="@drawable/bg_step" android:gravity="center" android:padding="2dp" android:text="A3" android:textSize="11sp" />
+                    <TextView android:id="@+id/cell4" android:layout_width="match_parent" android:layout_height="30dp" android:layout_marginTop="2dp" android:background="@drawable/bg_step" android:gravity="center" android:padding="2dp" android:text="A4" android:textSize="11sp" />
+                    <EditText android:id="@+id/etAnswerA" android:layout_width="match_parent" android:layout_height="36dp" android:layout_marginTop="3dp" android:background="@drawable/bg_step" android:hint="@string/asocijacije_hint_column" android:padding="4dp" android:singleLine="true" android:textSize="12sp" />
+                    <Button android:id="@+id/btnGuessA" style="@style/Widget.MaterialComponents.Button" android:layout_width="match_parent" android:layout_height="38dp" android:layout_marginTop="3dp" android:background="@drawable/bg_button_primary" android:padding="0dp" android:text="OK" android:textColor="@color/white" android:textSize="11sp" />
                 </LinearLayout>
 
                 <LinearLayout
                     android:layout_width="0dp"
                     android:layout_height="wrap_content"
-                    android:layout_marginStart="10dp"
+                    android:layout_marginStart="4dp"
                     android:layout_weight="1"
                     android:orientation="vertical">
 
-                    <TextView
-                        android:layout_width="match_parent"
-                        android:layout_height="wrap_content"
-                        android:text="Kolona B"
-                        android:textColor="@color/text_main"
-                        android:textStyle="bold" />
-
-                    <TextView android:id="@+id/cell5" android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginTop="6dp" android:background="@drawable/bg_step" android:padding="10dp" android:text="B1: ?" />
-                    <TextView android:id="@+id/cell6" android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginTop="4dp" android:background="@drawable/bg_step" android:padding="10dp" android:text="B2: ?" />
-                    <TextView android:id="@+id/cell7" android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginTop="4dp" android:background="@drawable/bg_step" android:padding="10dp" android:text="B3: ?" />
-                    <TextView android:id="@+id/cell8" android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginTop="4dp" android:background="@drawable/bg_step" android:padding="10dp" android:text="B4: ?" />
-                    <EditText
-                        android:id="@+id/etAnswerB"
-                        android:layout_width="match_parent"
-                        android:layout_height="wrap_content"
-                        android:layout_marginTop="6dp"
-                        android:background="@drawable/bg_step"
-                        android:hint="@string/asocijacije_hint_column"
-                        android:padding="12dp" />
-                    <Button
-                        android:id="@+id/btnGuessB"
-                        style="@style/Widget.MaterialComponents.Button"
-                        android:layout_width="match_parent"
-                        android:layout_height="wrap_content"
-                        android:layout_marginTop="6dp"
-                        android:background="@drawable/bg_button_primary"
-                        android:text="Proveri"
-                        android:textColor="@color/white" />
-                </LinearLayout>
-            </LinearLayout>
-
-            <LinearLayout
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:layout_marginTop="10dp"
-                android:orientation="horizontal">
-
-                <LinearLayout
-                    android:layout_width="0dp"
-                    android:layout_height="wrap_content"
-                    android:layout_weight="1"
-                    android:orientation="vertical">
-
-                    <TextView
-                        android:layout_width="match_parent"
-                        android:layout_height="wrap_content"
-                        android:text="Kolona C"
-                        android:textColor="@color/text_main"
-                        android:textStyle="bold" />
-
-                    <TextView android:id="@+id/cell9" android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginTop="6dp" android:background="@drawable/bg_step" android:padding="10dp" android:text="C1: ?" />
-                    <TextView android:id="@+id/cell10" android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginTop="4dp" android:background="@drawable/bg_step" android:padding="10dp" android:text="C2: ?" />
-                    <TextView android:id="@+id/cell11" android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginTop="4dp" android:background="@drawable/bg_step" android:padding="10dp" android:text="C3: ?" />
-                    <TextView android:id="@+id/cell12" android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginTop="4dp" android:background="@drawable/bg_step" android:padding="10dp" android:text="C4: ?" />
-                    <EditText
-                        android:id="@+id/etAnswerC"
-                        android:layout_width="match_parent"
-                        android:layout_height="wrap_content"
-                        android:layout_marginTop="6dp"
-                        android:background="@drawable/bg_step"
-                        android:hint="@string/asocijacije_hint_column"
-                        android:padding="12dp" />
-                    <Button
-                        android:id="@+id/btnGuessC"
-                        style="@style/Widget.MaterialComponents.Button"
-                        android:layout_width="match_parent"
-                        android:layout_height="wrap_content"
-                        android:layout_marginTop="6dp"
-                        android:background="@drawable/bg_button_primary"
-                        android:text="Proveri"
-                        android:textColor="@color/white" />
+                    <TextView android:layout_width="match_parent" android:layout_height="wrap_content" android:gravity="center" android:text="B" android:textColor="@color/text_main" android:textSize="12sp" android:textStyle="bold" />
+                    <TextView android:id="@+id/cell5" android:layout_width="match_parent" android:layout_height="30dp" android:layout_marginTop="2dp" android:background="@drawable/bg_step" android:gravity="center" android:padding="2dp" android:text="B1" android:textSize="11sp" />
+                    <TextView android:id="@+id/cell6" android:layout_width="match_parent" android:layout_height="30dp" android:layout_marginTop="2dp" android:background="@drawable/bg_step" android:gravity="center" android:padding="2dp" android:text="B2" android:textSize="11sp" />
+                    <TextView android:id="@+id/cell7" android:layout_width="match_parent" android:layout_height="30dp" android:layout_marginTop="2dp" android:background="@drawable/bg_step" android:gravity="center" android:padding="2dp" android:text="B3" android:textSize="11sp" />
+                    <TextView android:id="@+id/cell8" android:layout_width="match_parent" android:layout_height="30dp" android:layout_marginTop="2dp" android:background="@drawable/bg_step" android:gravity="center" android:padding="2dp" android:text="B4" android:textSize="11sp" />
+                    <EditText android:id="@+id/etAnswerB" android:layout_width="match_parent" android:layout_height="36dp" android:layout_marginTop="3dp" android:background="@drawable/bg_step" android:hint="@string/asocijacije_hint_column" android:padding="4dp" android:singleLine="true" android:textSize="12sp" />
+                    <Button android:id="@+id/btnGuessB" style="@style/Widget.MaterialComponents.Button" android:layout_width="match_parent" android:layout_height="38dp" android:layout_marginTop="3dp" android:background="@drawable/bg_button_primary" android:padding="0dp" android:text="OK" android:textColor="@color/white" android:textSize="11sp" />
                 </LinearLayout>
 
                 <LinearLayout
                     android:layout_width="0dp"
                     android:layout_height="wrap_content"
-                    android:layout_marginStart="10dp"
+                    android:layout_marginStart="4dp"
                     android:layout_weight="1"
                     android:orientation="vertical">
 
-                    <TextView
-                        android:layout_width="match_parent"
-                        android:layout_height="wrap_content"
-                        android:text="Kolona D"
-                        android:textColor="@color/text_main"
-                        android:textStyle="bold" />
+                    <TextView android:layout_width="match_parent" android:layout_height="wrap_content" android:gravity="center" android:text="C" android:textColor="@color/text_main" android:textSize="12sp" android:textStyle="bold" />
+                    <TextView android:id="@+id/cell9" android:layout_width="match_parent" android:layout_height="30dp" android:layout_marginTop="2dp" android:background="@drawable/bg_step" android:gravity="center" android:padding="2dp" android:text="C1" android:textSize="11sp" />
+                    <TextView android:id="@+id/cell10" android:layout_width="match_parent" android:layout_height="30dp" android:layout_marginTop="2dp" android:background="@drawable/bg_step" android:gravity="center" android:padding="2dp" android:text="C2" android:textSize="11sp" />
+                    <TextView android:id="@+id/cell11" android:layout_width="match_parent" android:layout_height="30dp" android:layout_marginTop="2dp" android:background="@drawable/bg_step" android:gravity="center" android:padding="2dp" android:text="C3" android:textSize="11sp" />
+                    <TextView android:id="@+id/cell12" android:layout_width="match_parent" android:layout_height="30dp" android:layout_marginTop="2dp" android:background="@drawable/bg_step" android:gravity="center" android:padding="2dp" android:text="C4" android:textSize="11sp" />
+                    <EditText android:id="@+id/etAnswerC" android:layout_width="match_parent" android:layout_height="36dp" android:layout_marginTop="3dp" android:background="@drawable/bg_step" android:hint="@string/asocijacije_hint_column" android:padding="4dp" android:singleLine="true" android:textSize="12sp" />
+                    <Button android:id="@+id/btnGuessC" style="@style/Widget.MaterialComponents.Button" android:layout_width="match_parent" android:layout_height="38dp" android:layout_marginTop="3dp" android:background="@drawable/bg_button_primary" android:padding="0dp" android:text="OK" android:textColor="@color/white" android:textSize="11sp" />
+                </LinearLayout>
 
-                    <TextView android:id="@+id/cell13" android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginTop="6dp" android:background="@drawable/bg_step" android:padding="10dp" android:text="D1: ?" />
-                    <TextView android:id="@+id/cell14" android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginTop="4dp" android:background="@drawable/bg_step" android:padding="10dp" android:text="D2: ?" />
-                    <TextView android:id="@+id/cell15" android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginTop="4dp" android:background="@drawable/bg_step" android:padding="10dp" android:text="D3: ?" />
-                    <TextView android:id="@+id/cell16" android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginTop="4dp" android:background="@drawable/bg_step" android:padding="10dp" android:text="D4: ?" />
-                    <EditText
-                        android:id="@+id/etAnswerD"
-                        android:layout_width="match_parent"
-                        android:layout_height="wrap_content"
-                        android:layout_marginTop="6dp"
-                        android:background="@drawable/bg_step"
-                        android:hint="@string/asocijacije_hint_column"
-                        android:padding="12dp" />
-                    <Button
-                        android:id="@+id/btnGuessD"
-                        style="@style/Widget.MaterialComponents.Button"
-                        android:layout_width="match_parent"
-                        android:layout_height="wrap_content"
-                        android:layout_marginTop="6dp"
-                        android:background="@drawable/bg_button_primary"
-                        android:text="Proveri"
-                        android:textColor="@color/white" />
+                <LinearLayout
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_marginStart="4dp"
+                    android:layout_weight="1"
+                    android:orientation="vertical">
+
+                    <TextView android:layout_width="match_parent" android:layout_height="wrap_content" android:gravity="center" android:text="D" android:textColor="@color/text_main" android:textSize="12sp" android:textStyle="bold" />
+                    <TextView android:id="@+id/cell13" android:layout_width="match_parent" android:layout_height="30dp" android:layout_marginTop="2dp" android:background="@drawable/bg_step" android:gravity="center" android:padding="2dp" android:text="D1" android:textSize="11sp" />
+                    <TextView android:id="@+id/cell14" android:layout_width="match_parent" android:layout_height="30dp" android:layout_marginTop="2dp" android:background="@drawable/bg_step" android:gravity="center" android:padding="2dp" android:text="D2" android:textSize="11sp" />
+                    <TextView android:id="@+id/cell15" android:layout_width="match_parent" android:layout_height="30dp" android:layout_marginTop="2dp" android:background="@drawable/bg_step" android:gravity="center" android:padding="2dp" android:text="D3" android:textSize="11sp" />
+                    <TextView android:id="@+id/cell16" android:layout_width="match_parent" android:layout_height="30dp" android:layout_marginTop="2dp" android:background="@drawable/bg_step" android:gravity="center" android:padding="2dp" android:text="D4" android:textSize="11sp" />
+                    <EditText android:id="@+id/etAnswerD" android:layout_width="match_parent" android:layout_height="36dp" android:layout_marginTop="3dp" android:background="@drawable/bg_step" android:hint="@string/asocijacije_hint_column" android:padding="4dp" android:singleLine="true" android:textSize="12sp" />
+                    <Button android:id="@+id/btnGuessD" style="@style/Widget.MaterialComponents.Button" android:layout_width="match_parent" android:layout_height="38dp" android:layout_marginTop="3dp" android:background="@drawable/bg_button_primary" android:padding="0dp" android:text="OK" android:textColor="@color/white" android:textSize="11sp" />
                 </LinearLayout>
             </LinearLayout>
 
             <EditText
                 android:id="@+id/etFinal"
                 android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:layout_marginTop="10dp"
+                android:layout_height="38dp"
+                android:layout_marginTop="5dp"
                 android:background="@drawable/bg_step"
                 android:hint="@string/asocijacije_hint_final"
-                android:padding="12dp" />
+                android:padding="6dp"
+                android:singleLine="true"
+                android:textSize="13sp" />
 
-            <Button
-                android:id="@+id/btnOpenField"
-                style="@style/Widget.MaterialComponents.Button"
+            <LinearLayout
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:layout_marginTop="10dp"
-                android:background="@drawable/bg_button_secondary"
-                android:text="@string/asocijacije_open_field"
-                android:textColor="@color/text_main" />
+                android:layout_marginTop="4dp"
+                android:orientation="horizontal">
 
-            <Button
-                android:id="@+id/btnGuessFinal"
-                style="@style/Widget.MaterialComponents.Button"
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:layout_marginTop="8dp"
-                android:background="@drawable/bg_button_secondary"
-                android:text="Pogodi konacno"
-                android:textColor="@color/text_main" />
+                <Button
+                    android:id="@+id/btnOpenField"
+                    style="@style/Widget.MaterialComponents.Button"
+                    android:layout_width="0dp"
+                    android:layout_height="40dp"
+                    android:layout_weight="1"
+                    android:background="@drawable/bg_button_secondary"
+                    android:padding="0dp"
+                    android:text="@string/asocijacije_open_field"
+                    android:textColor="@color/text_main"
+                    android:textSize="12sp" />
+
+                <Button
+                    android:id="@+id/btnGuessFinal"
+                    style="@style/Widget.MaterialComponents.Button"
+                    android:layout_width="0dp"
+                    android:layout_height="40dp"
+                    android:layout_marginStart="6dp"
+                    android:layout_weight="1"
+                    android:background="@drawable/bg_button_secondary"
+                    android:padding="0dp"
+                    android:text="Pogodi konacno"
+                    android:textColor="@color/text_main"
+                    android:textSize="12sp" />
+            </LinearLayout>
 
             <Button
                 android:id="@+id/btnNextRound"
                 style="@style/Widget.MaterialComponents.Button"
                 android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:layout_marginTop="8dp"
+                android:layout_height="40dp"
+                android:layout_marginTop="4dp"
                 android:background="@drawable/bg_button_primary"
                 android:text="@string/asocijacije_next_round"
                 android:textColor="@color/white"
@@ -263,8 +194,8 @@
                 android:id="@+id/tvStatus"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:layout_marginTop="10dp"
-                android:textColor="@color/text_muted" />
+                android:textColor="@color/text_muted"
+                android:visibility="gone" />
         </LinearLayout>
     </LinearLayout>
 </ScrollView>

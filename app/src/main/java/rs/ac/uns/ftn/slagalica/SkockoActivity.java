@@ -30,6 +30,7 @@ import rs.ac.uns.ftn.slagalica.data.repository.GameRepository;
 import rs.ac.uns.ftn.slagalica.data.repository.StatsRepository;
 import rs.ac.uns.ftn.slagalica.data.repository.UserRepository;
 import rs.ac.uns.ftn.slagalica.util.FirebaseInitializer;
+import rs.ac.uns.ftn.slagalica.util.GameHeaderHelper;
 import rs.ac.uns.ftn.slagalica.util.GuestSession;
 
 public class SkockoActivity extends AppCompatActivity {
@@ -96,6 +97,7 @@ public class SkockoActivity extends AppCompatActivity {
     private ImageView[] guessSlots;
     private ViewGroup paletteBar;
     private Button btnCheck;
+    private GameHeaderHelper headerHelper;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -116,6 +118,8 @@ public class SkockoActivity extends AppCompatActivity {
         tvScoreP2 = findViewById(R.id.tvScoreP2);
         tvStatus = findViewById(R.id.tvStatus);
         paletteBar = findViewById(R.id.paletteBar);
+        headerHelper = new GameHeaderHelper(this, findViewById(android.R.id.content));
+        headerHelper.updateGameTitle("Skočko");
         guessSlots = new ImageView[] {
                 findViewById(R.id.ivGuessSlot1),
                 findViewById(R.id.ivGuessSlot2),
@@ -184,12 +188,16 @@ public class SkockoActivity extends AppCompatActivity {
                     + ", currentMiniGame=" + snapshot.getString("currentMiniGame")
                     + ", score=" + player1Score + ":" + player2Score);
             updateScoreViews();
+            headerHelper.updatePlayers(player1Uid, player1Score, player2Uid, player2Score);
             if ("waiting".equals(status) || player2Uid.isEmpty()) {
                 setStatusText("Čeka se drugi igrač");
                 setControls(false);
                 tvRound.setText("Runda: -/2");
                 return;
             }
+            Log.d(TAG, "Game became active, currentUserUid=" + uid + ", gameId=" + gameId
+                    + ", player1Uid=" + player1Uid + ", player2Uid=" + player2Uid
+                    + ", currentMiniGame=" + snapshot.getString("currentMiniGame"));
             if ("finished".equals(status)) {
                 setStatusText("Skočko je završen");
                 setControls(false);
@@ -537,6 +545,7 @@ public class SkockoActivity extends AppCompatActivity {
 
     private void setStatusText(String status) {
         tvStatus.setText(status);
+        headerHelper.updateStatus(status);
         Log.d(TAG, "Status text=" + status + ", currentUserUid=" + uid + ", gameId=" + gameId
                 + ", roundId=" + (gameId.isEmpty() ? "" : gameRepository.skockoRoundId(roundNumber))
                 + ", phase=" + phase + ", activePlayerUid=" + activePlayerUid

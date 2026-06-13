@@ -3,12 +3,14 @@
     android:layout_width="match_parent"
     android:layout_height="match_parent"
     android:background="@drawable/bg_screen"
-    android:padding="16dp">
+    android:padding="10dp">
 
     <LinearLayout
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
         android:orientation="vertical">
+
+        <include layout="@layout/include_game_header" />
 
         <TextView
             android:layout_width="wrap_content"
@@ -16,13 +18,15 @@
             android:text="@string/spojnice_title"
             android:textColor="@color/game_text_color"
             android:textSize="24sp"
-            android:textStyle="bold" />
+            android:textStyle="bold"
+            android:visibility="gone" />
 
         <LinearLayout
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:layout_marginTop="10dp"
-            android:orientation="horizontal">
+            android:layout_marginTop="2dp"
+            android:orientation="horizontal"
+            android:visibility="gone">
 
             <LinearLayout
                 android:layout_width="0dp"
@@ -75,7 +79,7 @@
         <LinearLayout
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:layout_marginTop="12dp"
+            android:layout_marginTop="5dp"
             android:background="@drawable/bg_card"
             android:orientation="vertical">
 
@@ -89,7 +93,7 @@
                 android:id="@+id/tvCriterion"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:layout_marginTop="6dp"
+                android:layout_marginTop="3dp"
                 android:textColor="@color/game_text_color"
                 android:textStyle="bold" />
 
@@ -97,20 +101,20 @@
                 android:id="@+id/tvTimer"
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
-                android:layout_marginTop="4dp"
+                android:layout_marginTop="2dp"
                 android:textColor="@color/text_muted" />
 
             <TextView
                 android:id="@+id/tvPoints"
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
-                android:layout_marginTop="4dp"
+                android:layout_marginTop="2dp"
                 android:textColor="@color/text_muted" />
 
             <LinearLayout
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:layout_marginTop="10dp"
+                android:layout_marginTop="6dp"
                 android:orientation="horizontal">
 
                 <LinearLayout
@@ -123,7 +127,7 @@
                         android:id="@+id/btnLeft1"
                         style="@style/Widget.MaterialComponents.Button"
                         android:layout_width="match_parent"
-                        android:layout_height="wrap_content"
+                        android:layout_height="38dp"
                         android:background="@drawable/bg_step"
                         android:textColor="@color/game_text_color" />
 
@@ -131,8 +135,8 @@
                         android:id="@+id/btnLeft2"
                         style="@style/Widget.MaterialComponents.Button"
                         android:layout_width="match_parent"
-                        android:layout_height="wrap_content"
-                        android:layout_marginTop="8dp"
+                        android:layout_height="38dp"
+                        android:layout_marginTop="4dp"
                         android:background="@drawable/bg_step"
                         android:textColor="@color/game_text_color" />
 
@@ -140,8 +144,8 @@
                         android:id="@+id/btnLeft3"
                         style="@style/Widget.MaterialComponents.Button"
                         android:layout_width="match_parent"
-                        android:layout_height="wrap_content"
-                        android:layout_marginTop="8dp"
+                        android:layout_height="38dp"
+                        android:layout_marginTop="4dp"
                         android:background="@drawable/bg_step"
                         android:textColor="@color/game_text_color" />
 
@@ -149,8 +153,8 @@
                         android:id="@+id/btnLeft4"
                         style="@style/Widget.MaterialComponents.Button"
                         android:layout_width="match_parent"
-                        android:layout_height="wrap_content"
-                        android:layout_marginTop="8dp"
+                        android:layout_height="38dp"
+                        android:layout_marginTop="4dp"
                         android:background="@drawable/bg_step"
                         android:textColor="@color/game_text_color" />
 
@@ -158,8 +162,8 @@
                         android:id="@+id/btnLeft5"
                         style="@style/Widget.MaterialComponents.Button"
                         android:layout_width="match_parent"
-                        android:layout_height="wrap_content"
-                        android:layout_marginTop="8dp"
+                        android:layout_height="38dp"
+                        android:layout_marginTop="4dp"
                         android:background="@drawable/bg_step"
                         android:textColor="@color/game_text_color" />
                 </LinearLayout>
@@ -167,7 +171,7 @@
                 <LinearLayout
                     android:layout_width="0dp"
                     android:layout_height="wrap_content"
-                    android:layout_marginStart="10dp"
+                    android:layout_marginStart="8dp"
                     android:layout_weight="1"
                     android:orientation="vertical">
 
@@ -175,7 +179,7 @@
                         android:id="@+id/btnRight1"
                         style="@style/Widget.MaterialComponents.Button"
                         android:layout_width="match_parent"
-                        android:layout_height="wrap_content"
+                        android:layout_height="38dp"
                         android:background="@drawable/bg_step"
                         android:textColor="@color/game_text_color" />
 
@@ -183,8 +187,8 @@
                         android:id="@+id/btnRight2"
                         style="@style/Widget.MaterialComponents.Button"
                         android:layout_width="match_parent"
-                        android:layout_height="wrap_content"
-                        android:layout_marginTop="8dp"
+                        android:layout_height="38dp"
+                        android:layout_marginTop="4dp"
                         android:background="@drawable/bg_step"
                         android:textColor="@color/game_text_color" />
 
@@ -192,8 +196,8 @@
                         android:id="@+id/btnRight3"
                         style="@style/Widget.MaterialComponents.Button"
                         android:layout_width="match_parent"
-                        android:layout_height="wrap_content"
-                        android:layout_marginTop="8dp"
+                        android:layout_height="38dp"
+                        android:layout_marginTop="4dp"
                         android:background="@drawable/bg_step"
                         android:textColor="@color/game_text_color" />
 
@@ -201,8 +205,8 @@
                         android:id="@+id/btnRight4"
                         style="@style/Widget.MaterialComponents.Button"
                         android:layout_width="match_parent"
-                        android:layout_height="wrap_content"
-                        android:layout_marginTop="8dp"
+                        android:layout_height="38dp"
+                        android:layout_marginTop="4dp"
                         android:background="@drawable/bg_step"
                         android:textColor="@color/game_text_color" />
 
@@ -210,8 +214,8 @@
                         android:id="@+id/btnRight5"
                         style="@style/Widget.MaterialComponents.Button"
                         android:layout_width="match_parent"
-                        android:layout_height="wrap_content"
-                        android:layout_marginTop="8dp"
+                        android:layout_height="38dp"
+                        android:layout_marginTop="4dp"
                         android:background="@drawable/bg_step"
                         android:textColor="@color/game_text_color" />
                 </LinearLayout>
@@ -221,15 +225,16 @@
                 android:id="@+id/tvStatus"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:layout_marginTop="10dp"
-                android:textColor="@color/game_text_color" />
+                android:layout_marginTop="4dp"
+                android:textColor="@color/game_text_color"
+                android:visibility="gone" />
 
             <Button
                 android:id="@+id/btnCheckRound"
                 style="@style/Widget.MaterialComponents.Button"
                 android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:layout_marginTop="10dp"
+                android:layout_height="40dp"
+                android:layout_marginTop="5dp"
                 android:background="@drawable/bg_button_primary"
                 android:text="@string/spojnice_check_round"
                 android:textColor="@color/white" />

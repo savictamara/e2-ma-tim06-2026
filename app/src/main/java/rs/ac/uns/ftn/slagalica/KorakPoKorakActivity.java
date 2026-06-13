@@ -23,6 +23,7 @@ import rs.ac.uns.ftn.slagalica.data.repository.StatsRepository;
 import rs.ac.uns.ftn.slagalica.data.repository.UserRepository;
 import rs.ac.uns.ftn.slagalica.domain.service.StepByStepService;
 import rs.ac.uns.ftn.slagalica.util.FirebaseInitializer;
+import rs.ac.uns.ftn.slagalica.util.GameHeaderHelper;
 import rs.ac.uns.ftn.slagalica.util.GuestSession;
 
 public class KorakPoKorakActivity extends AppCompatActivity {
@@ -54,6 +55,7 @@ public class KorakPoKorakActivity extends AppCompatActivity {
     private TextView tvStepStatus;
     private EditText etSolution;
     private android.widget.Button btnCheckSolution;
+    private GameHeaderHelper headerHelper;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -83,6 +85,8 @@ public class KorakPoKorakActivity extends AppCompatActivity {
         tvResult = findViewById(R.id.tvResult);
         tvStepStatus = findViewById(R.id.tvStepStatus);
         btnCheckSolution = findViewById(R.id.btnCheckSolution);
+        headerHelper = new GameHeaderHelper(this, findViewById(android.R.id.content));
+        headerHelper.updateGameTitle("Korak po korak");
 
         FirebaseUser user = authRepository.currentUser();
         if (!firebaseReady || !gameRepository.isReady() || !userRepository.isReady()) {
@@ -136,7 +140,8 @@ public class KorakPoKorakActivity extends AppCompatActivity {
             if (snapshot == null || !snapshot.exists()) {
                 return;
             }
-            Log.d(TAG, "Game snapshot gameId=" + snapshot.getId() + ", status=" + snapshot.getString("status")
+            Log.d(TAG, "Game snapshot currentUserUid=" + uid
+                    + ", gameId=" + snapshot.getId() + ", status=" + snapshot.getString("status")
                     + ", player1=" + snapshot.getString("player1Uid")
                     + ", player2=" + snapshot.getString("player2Uid")
                     + ", miniGame=" + snapshot.getString("currentMiniGame"));
@@ -146,7 +151,9 @@ public class KorakPoKorakActivity extends AppCompatActivity {
             player2Score = p2 == null ? 0 : p2.intValue();
             tvPlayer1Score.setText(getString(R.string.player_points, player1Score));
             tvPlayer2Score.setText(getString(R.string.player_points, player2Score));
-            if ("waiting".equals(snapshot.getString("status"))) {
+            headerHelper.updatePlayers(snapshot.getString("player1Uid"), player1Score,
+                    snapshot.getString("player2Uid"), player2Score);
+            if ("waiting".equals(snapshot.getString("status")) || value(snapshot.getString("player2Uid")).isEmpty()) {
                 tvResult.setText(R.string.waiting_opponent);
                 setControls(false);
                 setStatusText("Čeka se protivnik");
@@ -161,6 +168,10 @@ public class KorakPoKorakActivity extends AppCompatActivity {
             if (getString(R.string.waiting_opponent).contentEquals(tvResult.getText())) {
                 tvResult.setText("");
             }
+            Log.d(TAG, "Game became active, currentUserUid=" + uid + ", gameId=" + gameId
+                    + ", player1Uid=" + snapshot.getString("player1Uid")
+                    + ", player2Uid=" + snapshot.getString("player2Uid")
+                    + ", currentMiniGame=" + snapshot.getString("currentMiniGame"));
             gameRepository.ensureStepRound(gameId, roundNumber)
                     .addOnFailureListener(e -> {
                         Log.e(TAG, "Ensure step round failed", e);
@@ -337,6 +348,7 @@ public class KorakPoKorakActivity extends AppCompatActivity {
 
     private void setStatusText(String statusText) {
         tvStepStatus.setText(statusText);
+        headerHelper.updateStatus(statusText);
         Log.d(TAG, "Status text=" + statusText + ", uid=" + uid
                 + ", phase=" + phase + ", activePlayerUid=" + activePlayerUid
                 + ", opponentUid=" + opponentUid + ", openedStepIndex=" + openedSteps);

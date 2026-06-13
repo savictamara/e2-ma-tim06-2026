@@ -3,12 +3,14 @@
     android:layout_width="match_parent"
     android:layout_height="match_parent"
     android:background="@drawable/bg_screen"
-    android:padding="16dp">
+    android:padding="10dp">
 
     <LinearLayout
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
         android:orientation="vertical">
+
+        <include layout="@layout/include_game_header" />
 
         <TextView
             android:layout_width="wrap_content"
@@ -16,13 +18,14 @@
             android:text="@string/moj_broj_title"
             android:textColor="@color/text_main"
             android:textSize="24sp"
-            android:textStyle="bold" />
+            android:textStyle="bold"
+            android:visibility="gone" />
 
         <TextView
             android:id="@+id/tvMojBrojRound"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
-            android:layout_marginTop="6dp"
+            android:layout_marginTop="2dp"
             android:text="@string/round_one_of_two"
             android:textColor="@color/text_muted" />
 
@@ -30,7 +33,7 @@
             android:id="@+id/tvMojBrojTimer"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
-            android:layout_marginTop="4dp"
+            android:layout_marginTop="2dp"
             android:text="@string/timer_text_60"
             android:textColor="@color/text_muted" />
 
@@ -40,16 +43,17 @@
             android:layout_height="wrap_content"
             android:layout_marginTop="4dp"
             android:textColor="@color/game_text_color"
-            android:textStyle="bold" />
+            android:textStyle="bold"
+            android:visibility="gone" />
 
         <LinearLayout
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:layout_marginTop="10dp"
+            android:layout_marginTop="6dp"
             android:background="@drawable/bg_target_number"
             android:gravity="center_horizontal"
             android:orientation="vertical"
-            android:padding="14dp">
+            android:padding="8dp">
 
             <TextView
                 android:layout_width="wrap_content"
@@ -63,17 +67,18 @@
                 android:layout_height="wrap_content"
                 android:gravity="center"
                 android:textColor="@color/text_main"
-                android:textSize="48sp"
+                android:textSize="38sp"
                 android:textStyle="bold" />
         </LinearLayout>
 
-        <TextView android:id="@+id/tvMojBrojPoints" android:layout_width="wrap_content" android:layout_height="wrap_content" android:layout_marginTop="4dp" android:textColor="@color/text_muted"/>
+        <TextView android:id="@+id/tvMojBrojPoints" android:layout_width="wrap_content" android:layout_height="wrap_content" android:layout_marginTop="2dp" android:textColor="@color/text_muted"/>
 
         <LinearLayout
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:layout_marginTop="10dp"
-            android:orientation="horizontal">
+            android:layout_marginTop="2dp"
+            android:orientation="horizontal"
+            android:visibility="gone">
 
             <LinearLayout
                 android:layout_width="0dp"
@@ -126,7 +131,7 @@
         <LinearLayout
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:layout_marginTop="12dp"
+            android:layout_marginTop="6dp"
             android:background="@drawable/bg_card"
             android:orientation="vertical">
 
@@ -135,26 +140,26 @@
                 android:layout_height="wrap_content"
                 android:orientation="horizontal">
 
-                <Button android:id="@+id/btnStopTarget" style="@style/Widget.MaterialComponents.Button" android:layout_width="0dp" android:layout_height="wrap_content" android:layout_weight="1" android:background="@drawable/bg_button_primary" android:text="@string/stop_button" android:textColor="@color/white"/>
-                <Button android:id="@+id/btnStopNumbers" style="@style/Widget.MaterialComponents.Button" android:layout_width="0dp" android:layout_height="wrap_content" android:layout_marginStart="8dp" android:layout_weight="1" android:background="@drawable/bg_button_secondary" android:text="@string/stop_button" android:textColor="@color/text_main"/>
+                <Button android:id="@+id/btnStopTarget" style="@style/Widget.MaterialComponents.Button" android:layout_width="0dp" android:layout_height="42dp" android:layout_weight="1" android:background="@drawable/bg_button_primary" android:text="@string/stop_button" android:textColor="@color/white"/>
+                <Button android:id="@+id/btnStopNumbers" style="@style/Widget.MaterialComponents.Button" android:layout_width="0dp" android:layout_height="42dp" android:layout_marginStart="8dp" android:layout_weight="1" android:background="@drawable/bg_button_secondary" android:text="@string/stop_button" android:textColor="@color/text_main"/>
             </LinearLayout>
 
-            <TextView android:id="@+id/tvNumbers" android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginTop="10dp" android:text="- - - - - -" android:textColor="@color/game_text_color" android:textSize="20sp" android:textStyle="bold"/>
-            <TextView android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginTop="8dp" android:text="( ) + - * /" android:textColor="@color/text_muted"/>
+            <TextView android:id="@+id/tvNumbers" android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginTop="6dp" android:text="- - - - - -" android:textColor="@color/game_text_color" android:textSize="18sp" android:textStyle="bold"/>
+            <TextView android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginTop="3dp" android:text="( ) + - * /" android:textColor="@color/text_muted"/>
 
-            <EditText android:id="@+id/etExpression" android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginTop="8dp" android:background="@drawable/bg_step" android:hint="@string/hint_expression" android:padding="12dp" android:textColor="@color/game_text_color" android:textColorHint="@color/input_hint_color"/>
+            <EditText android:id="@+id/etExpression" android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginTop="5dp" android:background="@drawable/bg_step" android:hint="@string/hint_expression" android:padding="8dp" android:textColor="@color/game_text_color" android:textColorHint="@color/input_hint_color"/>
 
             <LinearLayout
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:layout_marginTop="8dp"
+                android:layout_marginTop="5dp"
                 android:orientation="horizontal">
 
-                <Button android:id="@+id/btnDelete" style="@style/Widget.MaterialComponents.Button" android:layout_width="0dp" android:layout_height="wrap_content" android:layout_weight="1" android:background="@drawable/bg_button_secondary" android:text="@string/delete_last" android:textColor="@color/text_main"/>
-                <Button android:id="@+id/btnConfirm" style="@style/Widget.MaterialComponents.Button" android:layout_width="0dp" android:layout_height="wrap_content" android:layout_marginStart="8dp" android:layout_weight="1" android:background="@drawable/bg_button_primary" android:text="@string/submit_result" android:textColor="@color/white"/>
+                <Button android:id="@+id/btnDelete" style="@style/Widget.MaterialComponents.Button" android:layout_width="0dp" android:layout_height="42dp" android:layout_weight="1" android:background="@drawable/bg_button_secondary" android:text="@string/delete_last" android:textColor="@color/text_main"/>
+                <Button android:id="@+id/btnConfirm" style="@style/Widget.MaterialComponents.Button" android:layout_width="0dp" android:layout_height="42dp" android:layout_marginStart="8dp" android:layout_weight="1" android:background="@drawable/bg_button_primary" android:text="@string/submit_result" android:textColor="@color/white"/>
             </LinearLayout>
 
-            <TextView android:id="@+id/tvMojBrojResult" android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginTop="10dp" android:textColor="@color/text_muted"/>
+            <TextView android:id="@+id/tvMojBrojResult" android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginTop="4dp" android:textColor="@color/text_muted"/>
         </LinearLayout>
     </LinearLayout>
 </ScrollView>
