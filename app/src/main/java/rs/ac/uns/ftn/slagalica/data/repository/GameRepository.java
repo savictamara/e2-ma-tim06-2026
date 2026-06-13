@@ -31,6 +31,7 @@ public class GameRepository {
     public static final String MINI_MY_NUMBER = "MY_NUMBER";
     public static final String MINI_KNOW_IT = "KNOW_IT";
     public static final String MINI_CONNECTIONS = "CONNECTIONS";
+    public static final String MINI_ASSOCIATIONS = "ASSOCIATIONS";
     public static final String PHASE_WAITING_TARGET_STOP = "WAITING_TARGET_STOP";
     public static final String PHASE_WAITING_NUMBERS_STOP = "WAITING_NUMBERS_STOP";
     public static final String PHASE_PLAYING = "PLAYING";
@@ -1157,12 +1158,386 @@ public class GameRepository {
         return "connections_round_" + roundNumber;
     }
 
+    public Task<Void> seedAssociationQuestionsIfNeeded() {
+        if (db == null) {
+            return Tasks.forException(new IllegalStateException("Firebase nije inicijalizovan"));
+        }
+        return db.collection("associationQuestions").limit(1).get().continueWithTask(task -> {
+            if (!task.isSuccessful()) {
+                throw task.getException();
+            }
+            if (!task.getResult().isEmpty()) {
+                return Tasks.forResult(null);
+            }
+            Log.d(TAG, "Seeding associationQuestions");
+            return Tasks.whenAll(
+                    db.collection("associationQuestions").document("godisnja_doba").set(associationQuestion(
+                            "Godisnja doba",
+                            associationColumn("TOPLO", "LETO", "PLAZA", "SUNCE", "MORE"),
+                            associationColumn("HLADNO", "SNEG", "LED", "SKIJANJE", "ZIMA"),
+                            associationColumn("VETAR", "MUNJA", "OBLAK", "KISA", "VREME"),
+                            associationColumn("JUTRO", "NOC", "KALENDAR", "MESEC", "DAN"))),
+                    db.collection("associationQuestions").document("sport").set(associationQuestion(
+                            "Sport",
+                            associationColumn("REKET", "MREZA", "SERVIS", "SET", "TENIS"),
+                            associationColumn("GOL", "KOPACKE", "STADION", "LOPTA", "FUDBAL"),
+                            associationColumn("KOS", "TABLA", "DRIBLING", "TROJKA", "KOSARKA"),
+                            associationColumn("PAK", "LED", "PALICA", "KLIZALJKE", "HOKEJ"))),
+                    db.collection("associationQuestions").document("srbija").set(associationQuestion(
+                            "Srbija",
+                            associationColumn("KALEMEGDAN", "SAVA", "DUNAV", "AVALA", "BEOGRAD"),
+                            associationColumn("PETROVARADIN", "EXIT", "DUNAVSKA", "KEJ", "NOVI SAD"),
+                            associationColumn("MERAK", "TVRDJAVA", "CAIR", "NISAVA", "NIS"),
+                            associationColumn("ZLATIBOR", "TARA", "KOPAONIK", "RTANJ", "PLANINA"))),
+                    db.collection("associationQuestions").document("film").set(associationQuestion(
+                            "Film",
+                            associationColumn("KAMERA", "SCENA", "REZISER", "GLUMAC", "FILM"),
+                            associationColumn("OSKAR", "CRVENI TEPIH", "STATUA", "NAGRADA", "HOLIVUD"),
+                            associationColumn("KOKICE", "PLATNO", "SEDISTA", "PROJEKTOR", "BIOSKOP"),
+                            associationColumn("EPIZODA", "SEZONA", "LIK", "ZAPLET", "SERIJA"))),
+                    db.collection("associationQuestions").document("muzika").set(associationQuestion(
+                            "Muzika",
+                            associationColumn("DIRKE", "PEDALE", "KONCERT", "KLAVIR", "PIJANINO"),
+                            associationColumn("ZICE", "TRZALICA", "AKORD", "SOLO", "GITARA"),
+                            associationColumn("RITAM", "PALICE", "CINELE", "BUBANJ", "BUBNJEVI"),
+                            associationColumn("GLAS", "TEKST", "REFREN", "STROFA", "PESMA"))));
+        });
+    }
+
+    private Map<String, Object> associationQuestion(String finalAnswer, Map<String, Object> c1,
+                                                    Map<String, Object> c2, Map<String, Object> c3,
+                                                    Map<String, Object> c4) {
+        Map<String, Object> data = new HashMap<>();
+        data.put("finalAnswer", finalAnswer);
+        data.put("columns", Arrays.asList(c1, c2, c3, c4));
+        return data;
+    }
+
+    private Map<String, Object> associationColumn(String clue1, String clue2, String clue3, String clue4,
+                                                  String answer) {
+        Map<String, Object> column = new HashMap<>();
+        column.put("clues", Arrays.asList(clue1, clue2, clue3, clue4));
+        column.put("columnAnswer", answer);
+        return column;
+    }
+
+    public Task<Void> ensureAssociationsRound(String gameId, int roundNumber) {
+        if (db == null) {
+            return Tasks.forException(new IllegalStateException("Firebase nije inicijalizovan"));
+        }
+        return seedAssociationQuestionsIfNeeded().continueWithTask(seedTask -> {
+            if (!seedTask.isSuccessful()) {
+                throw seedTask.getException();
+            }
+            return db.collection("associationQuestions").get();
+        }).continueWithTask(questionTask -> {
+            if (!questionTask.isSuccessful()) {
+                throw questionTask.getException();
+            }
+            List<DocumentSnapshot> questions = questionTask.getResult().getDocuments();
+            if (questions.isEmpty()) {
+                return Tasks.forException(new IllegalStateException("Nema Asocijacije zadataka u Firestore-u"));
+            }
+            DocumentSnapshot question = questions.get(Math.abs(roundNumber - 1) % questions.size());
+            List<Object> columns = (List<Object>) question.get("columns");
+            String finalAnswer = question.getString("finalAnswer");
+            if (columns == null || columns.size() != 4 || finalAnswer == null || finalAnswer.trim().isEmpty()) {
+                return Tasks.forException(new IllegalStateException("Asocijacije zadatak nije ispravan"));
+            }
+            return createAssociationsRoundIfMissing(gameId, roundNumber, columns, finalAnswer, question.getId());
+        });
+    }
+
+    private Task<Void> createAssociationsRoundIfMissing(String gameId, int roundNumber, List<Object> columns,
+                                                        String finalAnswer, String questionId) {
+        String roundId = associationsRoundId(roundNumber);
+        DocumentReference gameRef = db.collection("games").document(gameId);
+        DocumentReference roundRef = gameRef.collection("rounds").document(roundId);
+        return db.runTransaction(transaction -> {
+            DocumentSnapshot game = transaction.get(gameRef);
+            DocumentSnapshot existing = transaction.get(roundRef);
+            if (existing.exists()) {
+                return null;
+            }
+            String p1 = game.getString("player1Uid");
+            String p2 = game.getString("player2Uid");
+            if (p1 == null || p2 == null) {
+                throw new IllegalStateException("Asocijacije ne mogu da pocnu bez dva igraca");
+            }
+            String active = roundNumber == 1 ? p1 : p2;
+            String opponent = roundNumber == 1 ? p2 : p1;
+            Map<String, Object> round = new HashMap<>();
+            round.put("id", roundId);
+            round.put("gameId", gameId);
+            round.put("type", MINI_ASSOCIATIONS);
+            round.put("roundIndex", roundNumber);
+            round.put("activePlayerUid", active);
+            round.put("opponentUid", opponent);
+            round.put("currentTurnUid", active);
+            round.put("phase", PHASE_PLAYING);
+            round.put("columns", columns);
+            round.put("finalAnswer", finalAnswer);
+            round.put("openedFields", new HashMap<String, Object>());
+            round.put("solvedColumns", new HashMap<String, Object>());
+            round.put("solvedColumnAnswers", new HashMap<String, Object>());
+            round.put("finalSolvedByUid", null);
+            round.put("lastOpenedByUid", null);
+            round.put("mustGuessAfterOpen", false);
+            round.put("canContinueGuessingUid", null);
+            round.put("roundAwardedPoints", 0);
+            round.put("finished", false);
+            round.put("phaseStartedAt", FieldValue.serverTimestamp());
+            round.put("createdAt", FieldValue.serverTimestamp());
+            round.put("updatedAt", FieldValue.serverTimestamp());
+            Log.d(TAG, "Creating associations round gameId=" + gameId + ", roundId=" + roundId
+                    + ", questionId=" + questionId + ", active=" + active + ", opponent=" + opponent);
+            transaction.set(roundRef, round);
+            transaction.set(gameRef, mapOf("currentMiniGame", MINI_ASSOCIATIONS, "currentPlayerUid", active,
+                    "updatedAt", FieldValue.serverTimestamp()), SetOptions.merge());
+            return null;
+        });
+    }
+
+    public Task<Boolean> openAssociationField(String gameId, int roundNumber, String uid, int columnIndex, int fieldIndex) {
+        DocumentReference gameRef = db.collection("games").document(gameId);
+        DocumentReference roundRef = gameRef.collection("rounds").document(associationsRoundId(roundNumber));
+        return db.runTransaction(transaction -> {
+            DocumentSnapshot round = transaction.get(roundRef);
+            if (!canAssociationPlayerAct(round, uid)) {
+                return false;
+            }
+            if (Boolean.TRUE.equals(round.getBoolean("mustGuessAfterOpen"))) {
+                return false;
+            }
+            if (columnIndex < 0 || columnIndex > 3 || fieldIndex < 0 || fieldIndex > 3) {
+                return false;
+            }
+            Map<String, Object> solved = (Map<String, Object>) round.get("solvedColumns");
+            if (solved != null && solved.containsKey(String.valueOf(columnIndex))) {
+                return false;
+            }
+            String key = associationFieldKey(columnIndex, fieldIndex);
+            Map<String, Object> opened = (Map<String, Object>) round.get("openedFields");
+            if (opened != null && Boolean.TRUE.equals(opened.get(key))) {
+                return false;
+            }
+            Log.d(TAG, "Open association field gameId=" + gameId + ", round=" + roundNumber
+                    + ", uid=" + uid + ", key=" + key);
+            transaction.update(roundRef, "openedFields." + key, true,
+                    "lastOpenedByUid", uid,
+                    "mustGuessAfterOpen", true,
+                    "canContinueGuessingUid", uid,
+                    "currentTurnUid", uid,
+                    "updatedAt", FieldValue.serverTimestamp());
+            transaction.update(gameRef, "currentPlayerUid", uid, "updatedAt", FieldValue.serverTimestamp());
+            return true;
+        });
+    }
+
+    public Task<Void> endAssociationTurn(String gameId, int roundNumber, String uid) {
+        DocumentReference gameRef = db.collection("games").document(gameId);
+        DocumentReference roundRef = gameRef.collection("rounds").document(associationsRoundId(roundNumber));
+        return db.runTransaction(transaction -> {
+            DocumentSnapshot round = transaction.get(roundRef);
+            if (!canAssociationPlayerAct(round, uid)) {
+                return null;
+            }
+            String next = associationOtherPlayer(round, uid);
+            Log.d(TAG, "End association turn gameId=" + gameId + ", round=" + roundNumber
+                    + ", uid=" + uid + ", next=" + next);
+            transaction.update(roundRef,
+                    "currentTurnUid", next,
+                    "mustGuessAfterOpen", false,
+                    "canContinueGuessingUid", null,
+                    "updatedAt", FieldValue.serverTimestamp());
+            transaction.update(gameRef, "currentPlayerUid", next, "updatedAt", FieldValue.serverTimestamp());
+            return null;
+        });
+    }
+
+    public Task<Boolean> guessAssociationColumn(String gameId, int roundNumber, String uid, int columnIndex, String answer) {
+        DocumentReference gameRef = db.collection("games").document(gameId);
+        DocumentReference roundRef = gameRef.collection("rounds").document(associationsRoundId(roundNumber));
+        return db.runTransaction(transaction -> {
+            DocumentSnapshot game = transaction.get(gameRef);
+            DocumentSnapshot round = transaction.get(roundRef);
+            if (!canAssociationPlayerAct(round, uid) || columnIndex < 0 || columnIndex > 3) {
+                return false;
+            }
+            Map<String, Object> solved = (Map<String, Object>) round.get("solvedColumns");
+            String colKey = String.valueOf(columnIndex);
+            if (solved != null && solved.containsKey(colKey)) {
+                return false;
+            }
+            String expected = associationColumnAnswer(round, columnIndex);
+            boolean correct = expected != null && expected.trim().equalsIgnoreCase(answer == null ? "" : answer.trim());
+            Log.d(TAG, "Guess association column gameId=" + gameId + ", round=" + roundNumber
+                    + ", uid=" + uid + ", column=" + columnIndex + ", correct=" + correct);
+            if (!correct) {
+                String next = associationOtherPlayer(round, uid);
+                transaction.update(roundRef,
+                        "currentTurnUid", next,
+                        "mustGuessAfterOpen", false,
+                        "canContinueGuessingUid", null,
+                        "updatedAt", FieldValue.serverTimestamp());
+                transaction.update(gameRef, "currentPlayerUid", next, "updatedAt", FieldValue.serverTimestamp());
+                return false;
+            }
+            int points = Math.min(calculateAssociationColumnPoints(round, columnIndex),
+                    Math.max(0, 30 - intValue(round.get("roundAwardedPoints"))));
+            Map<String, Object> updates = new HashMap<>();
+            updates.put("solvedColumns." + colKey, uid);
+            updates.put("solvedColumnAnswers." + colKey, true);
+            updates.put("roundAwardedPoints", intValue(round.get("roundAwardedPoints")) + points);
+            updates.put("currentTurnUid", uid);
+            updates.put("mustGuessAfterOpen", false);
+            updates.put("canContinueGuessingUid", uid);
+            updates.put("updatedAt", FieldValue.serverTimestamp());
+            transaction.update(roundRef, updates);
+            if (points > 0) {
+                applyScore(transaction, gameRef, game, uid, points);
+            }
+            transaction.update(gameRef, "currentPlayerUid", uid, "updatedAt", FieldValue.serverTimestamp());
+            Log.d(TAG, "Association column score uid=" + uid + ", points=" + points);
+            return true;
+        });
+    }
+
+    public Task<Boolean> guessAssociationFinal(String gameId, int roundNumber, String uid, String answer) {
+        DocumentReference gameRef = db.collection("games").document(gameId);
+        DocumentReference roundRef = gameRef.collection("rounds").document(associationsRoundId(roundNumber));
+        return db.runTransaction(transaction -> {
+            DocumentSnapshot game = transaction.get(gameRef);
+            DocumentSnapshot round = transaction.get(roundRef);
+            if (!canAssociationPlayerAct(round, uid) || round.getString("finalSolvedByUid") != null) {
+                return false;
+            }
+            String expected = round.getString("finalAnswer");
+            boolean correct = expected != null && expected.trim().equalsIgnoreCase(answer == null ? "" : answer.trim());
+            Log.d(TAG, "Guess association final gameId=" + gameId + ", round=" + roundNumber
+                    + ", uid=" + uid + ", correct=" + correct);
+            if (!correct) {
+                String next = associationOtherPlayer(round, uid);
+                transaction.update(roundRef,
+                        "currentTurnUid", next,
+                        "mustGuessAfterOpen", false,
+                        "canContinueGuessingUid", null,
+                        "updatedAt", FieldValue.serverTimestamp());
+                transaction.update(gameRef, "currentPlayerUid", next, "updatedAt", FieldValue.serverTimestamp());
+                return false;
+            }
+            int points = calculateAssociationFinalPoints(round);
+            Map<String, Object> updates = new HashMap<>();
+            updates.put("finalSolvedByUid", uid);
+            updates.put("roundAwardedPoints", intValue(round.get("roundAwardedPoints")) + points);
+            updates.put("currentTurnUid", uid);
+            updates.put("mustGuessAfterOpen", false);
+            updates.put("canContinueGuessingUid", null);
+            updates.put("phase", PHASE_FINISHED);
+            updates.put("finished", true);
+            updates.put("updatedAt", FieldValue.serverTimestamp());
+            transaction.update(roundRef, updates);
+            if (points > 0) {
+                applyScore(transaction, gameRef, game, uid, points);
+            }
+            if (roundNumber == 2) {
+                transaction.update(gameRef, "status", "finished", "updatedAt", FieldValue.serverTimestamp());
+            }
+            Log.d(TAG, "Association final score uid=" + uid + ", points=" + points);
+            return true;
+        });
+    }
+
+    public Task<Void> finishAssociationsRound(String gameId, int roundNumber) {
+        DocumentReference gameRef = db.collection("games").document(gameId);
+        DocumentReference roundRef = gameRef.collection("rounds").document(associationsRoundId(roundNumber));
+        return db.runTransaction(transaction -> {
+            DocumentSnapshot round = transaction.get(roundRef);
+            if (Boolean.TRUE.equals(round.getBoolean("finished")) || PHASE_FINISHED.equals(round.getString("phase"))) {
+                return null;
+            }
+            Log.d(TAG, "Finish associations round by timeout gameId=" + gameId + ", round=" + roundNumber);
+            transaction.update(roundRef, "phase", PHASE_FINISHED, "finished", true,
+                    "mustGuessAfterOpen", false, "canContinueGuessingUid", null,
+                    "updatedAt", FieldValue.serverTimestamp());
+            if (roundNumber == 2) {
+                transaction.update(gameRef, "status", "finished", "updatedAt", FieldValue.serverTimestamp());
+            }
+            return null;
+        });
+    }
+
+    public String associationsRoundId(int roundNumber) {
+        return "associations_round_" + roundNumber;
+    }
+
+    private boolean canAssociationPlayerAct(DocumentSnapshot round, String uid) {
+        return round != null && round.exists()
+                && !Boolean.TRUE.equals(round.getBoolean("finished"))
+                && PHASE_PLAYING.equals(round.getString("phase"))
+                && uid != null && uid.equals(round.getString("currentTurnUid"));
+    }
+
+    private String associationOtherPlayer(DocumentSnapshot round, String uid) {
+        String active = round.getString("activePlayerUid");
+        String opponent = round.getString("opponentUid");
+        return uid != null && uid.equals(active) ? opponent : active;
+    }
+
+    private String associationFieldKey(int columnIndex, int fieldIndex) {
+        return columnIndex + "_" + fieldIndex;
+    }
+
+    private String associationColumnAnswer(DocumentSnapshot round, int columnIndex) {
+        List<Object> columns = (List<Object>) round.get("columns");
+        if (columns == null || columnIndex < 0 || columnIndex >= columns.size()
+                || !(columns.get(columnIndex) instanceof Map)) {
+            return null;
+        }
+        Object answer = ((Map<String, Object>) columns.get(columnIndex)).get("columnAnswer");
+        return answer == null ? null : String.valueOf(answer);
+    }
+
+    private int calculateAssociationColumnPoints(DocumentSnapshot round, int columnIndex) {
+        int opened = associationOpenedCount(round, columnIndex);
+        return 2 + Math.max(0, 4 - opened);
+    }
+
+    private int calculateAssociationFinalPoints(DocumentSnapshot round) {
+        int points = 7;
+        Map<String, Object> solved = (Map<String, Object>) round.get("solvedColumns");
+        for (int col = 0; col < 4; col++) {
+            if (solved != null && solved.containsKey(String.valueOf(col))) {
+                continue;
+            }
+            int opened = associationOpenedCount(round, col);
+            points += opened == 0 ? 6 : 2 + Math.max(0, 4 - opened);
+        }
+        int available = Math.max(0, 30 - intValue(round.get("roundAwardedPoints")));
+        return Math.min(points, available);
+    }
+
+    private int associationOpenedCount(DocumentSnapshot round, int columnIndex) {
+        Map<String, Object> opened = (Map<String, Object>) round.get("openedFields");
+        int count = 0;
+        for (int i = 0; i < 4; i++) {
+            if (opened != null && Boolean.TRUE.equals(opened.get(associationFieldKey(columnIndex, i)))) {
+                count++;
+            }
+        }
+        return count;
+    }
+
     private int intFromMap(Map<String, Object> map, String key, int defaultValue) {
         if (map == null) {
             return defaultValue;
         }
         Object value = map.get(key);
         return value instanceof Number ? ((Number) value).intValue() : defaultValue;
+    }
+
+    private int intValue(Object value) {
+        return value instanceof Number ? ((Number) value).intValue() : 0;
     }
 
     private List<Integer> intList(Object raw) {

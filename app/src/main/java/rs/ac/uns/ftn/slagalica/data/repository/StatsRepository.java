@@ -23,6 +23,7 @@ public class StatsRepository {
     private static final String GAME_MY_NUMBER = "Moj broj";
     private static final String GAME_STEP = "Korak po korak";
     private static final String GAME_CONNECTIONS = "Spojnice";
+    private static final String GAME_ASSOCIATIONS = "Asocijacije";
 
     private final FirebaseFirestore db;
 
@@ -187,6 +188,35 @@ public class StatsRepository {
         });
     }
 
+    public Task<Void> recordAssociationsGame(String gameId) {
+        if (db == null || gameId == null || gameId.isEmpty()) {
+            return Tasks.forResult(null);
+        }
+        DocumentReference gameRef = db.collection("games").document(gameId);
+        DocumentReference r1Ref = gameRef.collection("rounds").document("associations_round_1");
+        DocumentReference r2Ref = gameRef.collection("rounds").document("associations_round_2");
+        return db.runTransaction(transaction -> {
+            DocumentSnapshot game = transaction.get(gameRef);
+            DocumentSnapshot r1 = transaction.get(r1Ref);
+            DocumentSnapshot r2 = transaction.get(r2Ref);
+            if (!isFinishedGame(game) || Boolean.TRUE.equals(game.getBoolean("statsApplied_asocijacije"))) {
+                return null;
+            }
+            String p1 = game.getString("player1Uid");
+            String p2 = game.getString("player2Uid");
+            StatsDocs p1Docs = readStats(transaction, p1, "asocijacije");
+            StatsDocs p2Docs = readStats(transaction, p2, "asocijacije");
+            AssociationsResult p1Result = associationsResult(p1, r1, r2);
+            AssociationsResult p2Result = associationsResult(p2, r1, r2);
+            int p1Score = intValue(game.get("player1Score"));
+            int p2Score = intValue(game.get("player2Score"));
+            writeAssociations(transaction, p1Docs, p1Result, p1Score, p1Score > p2Score, p1Score < p2Score);
+            writeAssociations(transaction, p2Docs, p2Result, p2Score, p2Score > p1Score, p2Score < p1Score);
+            transaction.set(gameRef, mapOf("statsApplied_asocijacije", true), SetOptions.merge());
+            return null;
+        });
+    }
+
     private void setIfMissing(Transaction transaction, DocumentReference ref, DocumentSnapshot snapshot, Map<String, Object> defaults) {
         if (!snapshot.exists()) {
             transaction.set(ref, defaults, SetOptions.merge());
@@ -306,6 +336,21 @@ public class StatsRepository {
         writeSummary(transaction, docs, GAME_CONNECTIONS, score, won, lost);
     }
 
+    private void writeAssociations(Transaction transaction, StatsDocs docs, AssociationsResult result, int score, boolean won, boolean lost) {
+        long solved = longValue(docs.specific.get("solved")) + result.solved;
+        long unsolved = longValue(docs.specific.get("unsolved")) + result.unsolved;
+        long games = longValue(docs.specific.get("gamesPlayed")) + 1;
+        long scoreTotal = longValue(docs.specific.get("totalScore")) + score;
+        transaction.set(docs.specificRef, mapOf(
+                "solved", solved,
+                "unsolved", unsolved,
+                "gamesPlayed", games,
+                "totalScore", scoreTotal,
+                "averageScore", scoreTotal * 1.0 / games
+        ), SetOptions.merge());
+        writeSummary(transaction, docs, GAME_ASSOCIATIONS, score, won, lost);
+    }
+
     private KnowItResult knowItResult(DocumentSnapshot round, String uid) {
         int correct = 0;
         int wrong = 0;
@@ -383,6 +428,21 @@ public class StatsRepository {
             }
         }
         return new ConnectionsResult(attempted, successful, Math.max(0, attempted - successful));
+    }
+
+    private AssociationsResult associationsResult(String uid, DocumentSnapshot... rounds) {
+        int solved = 0;
+        int unsolved = 0;
+        for (DocumentSnapshot round : rounds) {
+            if (round == null || !round.exists()) continue;
+            String finalSolvedByUid = round.getString("finalSolvedByUid");
+            if (uid != null && uid.equals(finalSolvedByUid)) {
+                solved++;
+            } else {
+                unsolved++;
+            }
+        }
+        return new AssociationsResult(solved, unsolved);
     }
 
     private boolean isFinishedGame(DocumentSnapshot game) {
@@ -546,6 +606,16 @@ public class StatsRepository {
             this.attemptedPairs = attemptedPairs;
             this.successfulPairs = successfulPairs;
             this.failedPairs = failedPairs;
+        }
+    }
+
+    private static class AssociationsResult {
+        final int solved;
+        final int unsolved;
+
+        AssociationsResult(int solved, int unsolved) {
+            this.solved = solved;
+            this.unsolved = unsolved;
         }
     }
 }
