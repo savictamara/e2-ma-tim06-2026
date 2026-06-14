@@ -87,6 +87,7 @@ public class SkockoActivity extends AppCompatActivity {
     private int player2Score = 0;
     private boolean statsRecordRequested = false;
     private boolean controlsEnabled = false;
+    private boolean gameReady = false;
 
     private TextView tvRound;
     private TextView tvCurrentPlayer;
@@ -187,6 +188,8 @@ public class SkockoActivity extends AppCompatActivity {
                     + ", status=" + status + ", player1Uid=" + player1Uid + ", player2Uid=" + player2Uid
                     + ", currentMiniGame=" + snapshot.getString("currentMiniGame")
                     + ", score=" + player1Score + ":" + player2Score);
+            Log.d(TAG, "Activity game snapshot: status=" + status
+                    + ", player1Uid=" + player1Uid + ", player2Uid=" + player2Uid);
             updateScoreViews();
             headerHelper.updatePlayers(player1Uid, player1Score, player2Uid, player2Score);
             if ("waiting".equals(status) || player2Uid.isEmpty()) {
@@ -209,11 +212,23 @@ public class SkockoActivity extends AppCompatActivity {
                 setControls(false);
                 return;
             }
+            gameReady = GameRepository.isGameReady(snapshot);
+            Log.d(TAG, "Activity: game ready " + gameReady);
+            if (!gameReady) {
+                setStatusText("Čeka se drugi igrač");
+                setControls(false);
+                return;
+            }
             ensureAndListenRound(roundNumber);
         });
     }
 
     private void ensureAndListenRound(int targetRound) {
+        if (!gameReady) {
+            Log.d(TAG, "Activity: game ready false");
+            return;
+        }
+        Log.d(TAG, "Activity: round creation started");
         gameRepository.ensureSkockoRound(gameId, targetRound, SYMBOLS)
                 .addOnFailureListener(e -> {
                     Log.e(TAG, "Ensure skocko round failed", e);

@@ -47,6 +47,7 @@ public class KorakPoKorakActivity extends AppCompatActivity {
     private int player1Score = 0;
     private int player2Score = 0;
     private boolean statsRecordRequested = false;
+    private boolean gameReady = false;
     private TextView tvTimer;
     private TextView tvRound;
     private TextView tvPoints;
@@ -153,6 +154,9 @@ public class KorakPoKorakActivity extends AppCompatActivity {
                     + ", player1=" + snapshot.getString("player1Uid")
                     + ", player2=" + snapshot.getString("player2Uid")
                     + ", miniGame=" + snapshot.getString("currentMiniGame"));
+            Log.d(TAG, "Activity game snapshot: status=" + snapshot.getString("status")
+                    + ", player1Uid=" + snapshot.getString("player1Uid")
+                    + ", player2Uid=" + snapshot.getString("player2Uid"));
             Long p1 = snapshot.getLong("player1Score");
             Long p2 = snapshot.getLong("player2Score");
             player1Score = p1 == null ? 0 : p1.intValue();
@@ -173,6 +177,14 @@ public class KorakPoKorakActivity extends AppCompatActivity {
                 setStatusText("Korak po korak je završen");
                 return;
             }
+            gameReady = GameRepository.isGameReady(snapshot);
+            Log.d(TAG, "Activity: game ready " + gameReady);
+            if (!gameReady) {
+                tvResult.setText(R.string.waiting_opponent);
+                setControls(false);
+                setStatusText("Čeka se drugi igrač");
+                return;
+            }
             if (getString(R.string.waiting_opponent).contentEquals(tvResult.getText())) {
                 tvResult.setText("");
             }
@@ -180,6 +192,7 @@ public class KorakPoKorakActivity extends AppCompatActivity {
                     + ", player1Uid=" + snapshot.getString("player1Uid")
                     + ", player2Uid=" + snapshot.getString("player2Uid")
                     + ", currentMiniGame=" + snapshot.getString("currentMiniGame"));
+            Log.d(TAG, "Activity: round creation started");
             gameRepository.ensureStepRound(gameId, roundNumber)
                     .addOnFailureListener(e -> {
                         Log.e(TAG, "Ensure step round failed", e);
@@ -291,6 +304,11 @@ public class KorakPoKorakActivity extends AppCompatActivity {
                 roundListener = null;
             }
             etSolution.setText("");
+            if (!gameReady) {
+                Log.d(TAG, "Activity: game ready false");
+                return;
+            }
+            Log.d(TAG, "Activity: round creation started");
             gameRepository.ensureStepRound(gameId, roundNumber)
                     .addOnFailureListener(e -> {
                         Log.e(TAG, "Ensure second step round failed", e);

@@ -60,6 +60,9 @@ public class MojBrojActivity extends AppCompatActivity {
     private CountDownTimer autoStopTimer;
     private boolean submitted = false;
     private boolean statsRecordRequested = false;
+    private boolean gameReady = false;
+    private String gameStatus = "";
+    private String currentPlayer2Uid = "";
     private TextView tvTarget;
     private TextView tvRound;
     private TextView tvTimer;
@@ -215,6 +218,9 @@ public class MojBrojActivity extends AppCompatActivity {
                     + ", player1=" + snapshot.getString("player1Uid")
                     + ", player2=" + snapshot.getString("player2Uid")
                     + ", miniGame=" + snapshot.getString("currentMiniGame"));
+            Log.d(TAG, "Activity game snapshot: status=" + snapshot.getString("status")
+                    + ", player1Uid=" + snapshot.getString("player1Uid")
+                    + ", player2Uid=" + snapshot.getString("player2Uid"));
             Long p1 = snapshot.getLong("player1Score");
             Long p2 = snapshot.getLong("player2Score");
             player1Score = p1 == null ? 0 : p1.intValue();
@@ -225,6 +231,8 @@ public class MojBrojActivity extends AppCompatActivity {
                     snapshot.getString("player2Uid"), player2Score);
             String status = snapshot.getString("status");
             String player2Uid = value(snapshot.getString("player2Uid"));
+            gameStatus = value(status);
+            currentPlayer2Uid = player2Uid;
             if (!GameRepository.MINI_MY_NUMBER.equals(snapshot.getString("currentMiniGame"))) {
                 setStatusText("Moj broj nije aktivna igra");
                 setPlayControls(false);
@@ -237,6 +245,14 @@ public class MojBrojActivity extends AppCompatActivity {
             if ("waiting".equals(status) || player2Uid.isEmpty()) {
                 setStatusText("Čeka se drugi igrač");
                 tvResult.setText(R.string.waiting_opponent);
+                setPlayControls(false);
+                return;
+            }
+            clearWaitingResultText();
+            gameReady = GameRepository.isGameReady(snapshot);
+            Log.d(TAG, "Activity: game ready " + gameReady);
+            if (!gameReady) {
+                updateStatusForPhase(status, player2Uid);
                 setPlayControls(false);
                 return;
             }
@@ -255,8 +271,9 @@ public class MojBrojActivity extends AppCompatActivity {
             if (phase.isEmpty()) {
                 setStatusText("");
             } else {
-                updateStatusForPhase();
+                updateStatusForPhase(status, player2Uid);
             }
+            Log.d(TAG, "Activity: round creation started");
             gameRepository.ensureMyNumberRound(gameId, roundNumber)
                     .addOnFailureListener(e -> {
                         Log.e(TAG, "Ensure my number round failed", e);
@@ -308,7 +325,7 @@ public class MojBrojActivity extends AppCompatActivity {
                 + ", numbers=" + availableNumbers
                 + ", submissions=" + submissions
                 + ", results=" + results);
-        updateStatusForPhase();
+        updateStatusForPhase(gameStatus, currentPlayer2Uid);
         btnStopTarget.setEnabled(uid.equals(activePlayerUid) && GameRepository.PHASE_WAITING_TARGET_STOP.equals(phase));
         btnStopNumbers.setEnabled(uid.equals(activePlayerUid) && GameRepository.PHASE_WAITING_NUMBERS_STOP.equals(phase));
         setPlayControls(GameRepository.PHASE_PLAYING.equals(phase) && !submitted);
@@ -470,6 +487,11 @@ public class MojBrojActivity extends AppCompatActivity {
                 roundListener.remove();
                 roundListener = null;
             }
+            if (!gameReady) {
+                Log.d(TAG, "Activity: game ready false");
+                return;
+            }
+            Log.d(TAG, "Activity: round creation started");
             gameRepository.ensureMyNumberRound(gameId, roundNumber);
             listenRound();
         } else {
@@ -517,6 +539,24 @@ public class MojBrojActivity extends AppCompatActivity {
                 + ", submitted=" + submitted);
     }
 
+    private void updateStatusForPhase(String status, String player2Uid) {
+        String statusText;
+        if ("waiting".equals(status) || value(player2Uid).isEmpty()) {
+            statusText = "Čeka se drugi igrač";
+        } else if (GameRepository.PHASE_WAITING_TARGET_STOP.equals(phase)) {
+            statusText = uid.equals(activePlayerUid) ? "Zaustavite traženi broj" : "Protivnik bira traženi broj";
+        } else if (GameRepository.PHASE_WAITING_NUMBERS_STOP.equals(phase)) {
+            statusText = uid.equals(activePlayerUid) ? "Zaustavite ponuđene brojeve" : "Protivnik bira brojeve";
+        } else if (GameRepository.PHASE_PLAYING.equals(phase)) {
+            statusText = "Unesite izraz";
+        } else if (GameRepository.PHASE_FINISHED.equals(phase)) {
+            statusText = currentRoundIndex == 1 ? "Priprema druge runde" : "Moj broj je završen";
+        } else {
+            statusText = "";
+        }
+        setStatusText(statusText);
+    }
+
     private void updateStatusForPhase() {
         String status;
         if (GameRepository.PHASE_WAITING_TARGET_STOP.equals(phase)) {
@@ -533,6 +573,12 @@ public class MojBrojActivity extends AppCompatActivity {
         setStatusText(status);
     }
 
+    private void clearWaitingResultText() {
+        if (tvResult != null && getString(R.string.waiting_opponent).contentEquals(tvResult.getText())) {
+            tvResult.setText("");
+        }
+    }
+
     private void setStatusText(String status) {
         if (tvStatus != null) {
             tvStatus.setText(status);
@@ -540,6 +586,10 @@ public class MojBrojActivity extends AppCompatActivity {
         headerHelper.updateStatus(status);
         Log.d(TAG, "Status text=" + status + ", gameId=" + gameId + ", round=" + roundNumber
                 + ", phase=" + phase + ", activePlayerUid=" + activePlayerUid);
+        Log.d(TAG, "Moj broj status display: game.status=" + gameStatus
+                + ", player2Uid=" + currentPlayer2Uid
+                + ", phase=" + phase
+                + ", statusText=" + status);
     }
 
     @Override

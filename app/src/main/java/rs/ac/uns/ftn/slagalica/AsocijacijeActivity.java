@@ -60,6 +60,7 @@ public class AsocijacijeActivity extends AppCompatActivity {
     private int player2Score = 0;
     private boolean statsRecordRequested = false;
     private boolean mustGuessAfterOpen = false;
+    private boolean gameReady = false;
     private String canContinueGuessingUid = "";
 
     private TextView tvRound;
@@ -176,7 +177,23 @@ public class AsocijacijeActivity extends AppCompatActivity {
             Log.d(TAG, "Game snapshot currentUserUid=" + uid
                     + ", gameId=" + gameId + ", status=" + status
                     + ", p1=" + player1Uid + ", p2=" + player2Uid + ", round=" + roundNumber);
+            Log.d(TAG, "Activity game snapshot: status=" + status
+                    + ", player1Uid=" + player1Uid + ", player2Uid=" + player2Uid);
+            if (!GameRepository.MINI_ASSOCIATIONS.equals(snapshot.getString("currentMiniGame"))) {
+                setStatus("Asocijacije nisu aktivna igra");
+                setControls(false);
+                Log.d(TAG, "Ignoring game snapshot for different mini game, gameId=" + gameId
+                        + ", currentMiniGame=" + snapshot.getString("currentMiniGame"));
+                return;
+            }
             if ("waiting".equals(status) || player2Uid.isEmpty()) {
+                setStatus("Čeka se drugi igrač");
+                setControls(false);
+                return;
+            }
+            gameReady = GameRepository.isGameReady(snapshot);
+            Log.d(TAG, "Activity: game ready " + gameReady);
+            if (!gameReady) {
                 setStatus("Čeka se drugi igrač");
                 setControls(false);
                 return;
@@ -184,6 +201,7 @@ public class AsocijacijeActivity extends AppCompatActivity {
             Log.d(TAG, "Game became active, currentUserUid=" + uid + ", gameId=" + gameId
                     + ", player1Uid=" + player1Uid + ", player2Uid=" + player2Uid
                     + ", currentMiniGame=" + snapshot.getString("currentMiniGame"));
+            Log.d(TAG, "Activity: round creation started");
             gameRepository.ensureAssociationsRound(gameId, roundNumber)
                     .addOnFailureListener(e -> Log.e(TAG, "Ensure associations round failed", e));
             listenRound();
@@ -349,6 +367,11 @@ public class AsocijacijeActivity extends AppCompatActivity {
             roundListener.remove();
             roundListener = null;
         }
+        if (!gameReady) {
+            Log.d(TAG, "Activity: game ready false");
+            return;
+        }
+        Log.d(TAG, "Activity: round creation started");
         gameRepository.ensureAssociationsRound(gameId, roundNumber)
                 .addOnFailureListener(e -> Log.e(TAG, "Ensure associations round 2 failed", e));
         listenRound();

@@ -68,8 +68,9 @@ public class GameRepository {
         if (isBlank(uid) || isBlank(miniGame)) {
             return Tasks.forException(new IllegalArgumentException("Nedostaje uid ili tip igre"));
         }
+        Log.d(TAG, "joinOrCreateGame called uid=" + uid + ", miniGameType=" + miniGame);
         return joinOrCreateGameInternal(uid, miniGame, 0)
-                .addOnSuccessListener(gameId -> Log.d(TAG, "joinOrCreateGame final returned gameId="
+                .addOnSuccessListener(gameId -> Log.d(TAG, "returned gameId="
                         + gameId + ", uid=" + uid + ", miniGameType=" + miniGame))
                 .addOnFailureListener(e -> Log.e(TAG, "joinOrCreateGame failed, uid=" + uid
                         + ", miniGameType=" + miniGame, e));
@@ -109,7 +110,7 @@ public class GameRepository {
                     if (candidate != null) {
                         DocumentReference candidateRef = candidate.getReference();
                         QueryDocumentSnapshot finalOwnWaiting = ownWaiting;
-                        Log.d(TAG, "Found waiting gameId=" + candidate.getId()
+                        Log.d(TAG, "found waiting gameId=" + candidate.getId()
                                 + ", found player1Uid=" + candidate.getString("player1Uid")
                                 + ", uid=" + uid + ", miniGameType=" + miniGame);
                         return joinWaitingGame(candidateRef, uid, miniGame)
@@ -121,7 +122,7 @@ public class GameRepository {
                                     if (!isBlank(joinedGameId)) {
                                         return Tasks.forResult(joinedGameId);
                                     }
-                                    if (attempt < 1) {
+                                    if (attempt < 2) {
                                         Log.d(TAG, "Waiting game changed before join, retrying search, uid="
                                                 + uid + ", miniGameType=" + miniGame);
                                         return joinOrCreateGameInternal(uid, miniGame, attempt + 1);
@@ -162,7 +163,7 @@ public class GameRepository {
                     && isBlank(player2)) {
                 transaction.update(gameRef, "player2Uid", uid, "status", "active",
                         "currentPlayerUid", player1, "updatedAt", FieldValue.serverTimestamp());
-                Log.d(TAG, "Joined gameId=" + gameRef.getId() + ", uid=" + uid
+                Log.d(TAG, "joined gameId=" + gameRef.getId() + ", uid=" + uid
                         + ", miniGameType=" + miniGame + ", status before=waiting, status after=active");
                 return gameRef.getId();
                             }
@@ -188,9 +189,20 @@ public class GameRepository {
         game.put("createdAt", FieldValue.serverTimestamp());
         game.put("updatedAt", FieldValue.serverTimestamp());
         transaction.set(ref, game);
-        Log.d(TAG, "Created new gameId=" + ref.getId() + ", uid=" + uid
+        Log.d(TAG, "created waiting gameId=" + ref.getId() + ", uid=" + uid
                 + ", miniGameType=" + miniGame + ", status=waiting");
         return ref.getId();
+    }
+
+    public static boolean isGameReady(DocumentSnapshot game) {
+        if (game == null || !game.exists()) {
+            return false;
+        }
+        String player1 = game.getString("player1Uid");
+        String player2 = game.getString("player2Uid");
+        return "active".equals(game.getString("status"))
+                && player1 != null && !player1.trim().isEmpty()
+                && player2 != null && !player2.trim().isEmpty();
     }
 
     private boolean isJoinableWaiting(DocumentSnapshot doc, String uid, String miniGame) {

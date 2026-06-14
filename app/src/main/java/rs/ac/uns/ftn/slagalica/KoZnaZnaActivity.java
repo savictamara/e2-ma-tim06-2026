@@ -51,6 +51,7 @@ public class KoZnaZnaActivity extends AppCompatActivity {
     private int player2Score = 0;
     private boolean answeredCurrentQuestion = false;
     private boolean statsRecordRequested = false;
+    private boolean gameReady = false;
 
     private TextView tvTimer;
     private TextView tvQuestionIndex;
@@ -141,6 +142,8 @@ public class KoZnaZnaActivity extends AppCompatActivity {
                     + ", gameId=" + snapshot.getId() + ", status=" + status
                     + ", player1Uid=" + player1Uid + ", player2Uid=" + player2Uid
                     + ", currentMiniGame=" + snapshot.getString("currentMiniGame"));
+            Log.d(TAG, "Activity game snapshot: status=" + status
+                    + ", player1Uid=" + player1Uid + ", player2Uid=" + player2Uid);
             if (!GameRepository.MINI_KNOW_IT.equals(snapshot.getString("currentMiniGame"))) {
                 setStatus("Ko zna zna nije aktivna igra");
                 setAnswerButtonsEnabled(false);
@@ -149,6 +152,13 @@ public class KoZnaZnaActivity extends AppCompatActivity {
                 return;
             }
             if ("waiting".equals(status) || player2Uid.isEmpty()) {
+                setStatus("Čeka se drugi igrač");
+                setAnswerButtonsEnabled(false);
+                return;
+            }
+            gameReady = GameRepository.isGameReady(snapshot);
+            Log.d(TAG, "Activity: game ready " + gameReady);
+            if (!gameReady) {
                 setStatus("Čeka se drugi igrač");
                 setAnswerButtonsEnabled(false);
                 return;
@@ -162,6 +172,7 @@ public class KoZnaZnaActivity extends AppCompatActivity {
                 userRepository.updateUserState(uid, true, false, "");
                 return;
             }
+            Log.d(TAG, "Activity: round creation started");
             gameRepository.ensureKnowItRound(gameId)
                     .addOnFailureListener(e -> {
                         Log.e(TAG, "Ensure know it round failed", e);

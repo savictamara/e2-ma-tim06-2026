@@ -54,6 +54,7 @@ public class SpojniceActivity extends AppCompatActivity {
     private int player1Score = 0;
     private int player2Score = 0;
     private boolean statsRecordRequested = false;
+    private boolean gameReady = false;
     private Map<String, Object> matchedPairs;
     private Map<String, Object> attemptsByPlayer;
     private List<Integer> remainingLeftIndexes = new ArrayList<>();
@@ -158,6 +159,8 @@ public class SpojniceActivity extends AppCompatActivity {
                     + ", gameId=" + snapshot.getId() + ", status=" + status
                     + ", player1Uid=" + player1Uid + ", player2Uid=" + player2Uid
                     + ", currentMiniGame=" + snapshot.getString("currentMiniGame"));
+            Log.d(TAG, "Activity game snapshot: status=" + status
+                    + ", player1Uid=" + player1Uid + ", player2Uid=" + player2Uid);
             if (!GameRepository.MINI_CONNECTIONS.equals(snapshot.getString("currentMiniGame"))) {
                 setStatus("Spojnice nisu aktivna igra");
                 setPairButtonsEnabled(false);
@@ -166,6 +169,13 @@ public class SpojniceActivity extends AppCompatActivity {
                 return;
             }
             if ("waiting".equals(status) || player2Uid.isEmpty()) {
+                setStatus("Čeka se drugi igrač");
+                setPairButtonsEnabled(false);
+                return;
+            }
+            gameReady = GameRepository.isGameReady(snapshot);
+            Log.d(TAG, "Activity: game ready " + gameReady);
+            if (!gameReady) {
                 setStatus("Čeka se drugi igrač");
                 setPairButtonsEnabled(false);
                 return;
@@ -179,6 +189,7 @@ public class SpojniceActivity extends AppCompatActivity {
                 userRepository.updateUserState(uid, true, false, "");
                 return;
             }
+            Log.d(TAG, "Activity: round creation started");
             gameRepository.ensureConnectionsRound(gameId, roundNumber)
                     .addOnFailureListener(e -> {
                         Log.e(TAG, "Ensure connections round failed", e);
@@ -349,6 +360,11 @@ public class SpojniceActivity extends AppCompatActivity {
             roundListener.remove();
             roundListener = null;
         }
+        if (!gameReady) {
+            Log.d(TAG, "Activity: game ready false");
+            return;
+        }
+        Log.d(TAG, "Activity: round creation started");
         gameRepository.ensureConnectionsRound(gameId, roundNumber)
                 .addOnFailureListener(e -> {
                     Log.e(TAG, "Ensure second connections round failed", e);
