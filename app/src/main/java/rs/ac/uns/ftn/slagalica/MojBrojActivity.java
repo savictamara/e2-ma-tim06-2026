@@ -61,6 +61,7 @@ public class MojBrojActivity extends AppCompatActivity {
     private boolean submitted = false;
     private boolean statsRecordRequested = false;
     private TextView tvTarget;
+    private TextView tvRound;
     private TextView tvTimer;
     private TextView tvNumbers;
     private TextView tvResult;
@@ -88,6 +89,7 @@ public class MojBrojActivity extends AppCompatActivity {
         statsRepository = new StatsRepository(this);
 
         tvTarget = findViewById(R.id.tvTarget);
+        tvRound = findViewById(R.id.tvMojBrojRound);
         tvTimer = findViewById(R.id.tvMojBrojTimer);
         tvNumbers = findViewById(R.id.tvNumbers);
         tvResult = findViewById(R.id.tvMojBrojResult);
@@ -291,6 +293,7 @@ public class MojBrojActivity extends AppCompatActivity {
         activePlayerUid = value(round.getString("activePlayerUid"));
         Long roundIndex = round.getLong("roundIndex");
         currentRoundIndex = roundIndex == null ? roundNumber : roundIndex.intValue();
+        tvRound.setText("Runda: " + currentRoundIndex + "/2");
         Long target = round.getLong("targetNumber");
         targetNumber = target == null ? 0 : target.intValue();
         tvTarget.setText(getString(R.string.target_number, targetNumber));

@@ -48,6 +48,7 @@ public class KorakPoKorakActivity extends AppCompatActivity {
     private int player2Score = 0;
     private boolean statsRecordRequested = false;
     private TextView tvTimer;
+    private TextView tvRound;
     private TextView tvPoints;
     private TextView tvPlayer1Score;
     private TextView tvPlayer2Score;
@@ -56,6 +57,7 @@ public class KorakPoKorakActivity extends AppCompatActivity {
     private EditText etSolution;
     private android.widget.Button btnCheckSolution;
     private GameHeaderHelper headerHelper;
+    private String expectedAnswer = "";
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -78,6 +80,7 @@ public class KorakPoKorakActivity extends AppCompatActivity {
         stepViews[6] = findViewById(R.id.step7);
 
         tvTimer = findViewById(R.id.tvTimer);
+        tvRound = findViewById(R.id.tvKorakRound);
         tvPoints = findViewById(R.id.tvPoints);
         tvPlayer1Score = findViewById(R.id.tvPlayer1Score);
         tvPlayer2Score = findViewById(R.id.tvPlayer2Score);
@@ -120,6 +123,11 @@ public class KorakPoKorakActivity extends AppCompatActivity {
                     || ("OPPONENT_CHANCE".equals(phase) && uid.equals(opponentUid));
             if (!allowed) {
                 show(getString(R.string.not_your_turn));
+                return;
+            }
+            if (!expectedAnswer.isEmpty() && !expectedAnswer.equalsIgnoreCase(solution)) {
+                tvResult.setText("Netačno");
+                setStatusText("Netačno");
                 return;
             }
             gameRepository.submitStepAnswer(gameId, roundNumber, uid, solution)
@@ -209,6 +217,10 @@ public class KorakPoKorakActivity extends AppCompatActivity {
         activePlayerUid = value(round.getString("activePlayerUid"));
         opponentUid = value(round.getString("opponentUid"));
         phase = value(round.getString("phase"));
+        expectedAnswer = value(round.getString("answer")).trim();
+        Long roundIndex = round.getLong("roundIndex");
+        int displayRound = roundIndex == null ? roundNumber : roundIndex.intValue();
+        tvRound.setText("Runda: " + displayRound + "/2");
         Long opened = round.getLong("openedStepIndex");
         openedSteps = opened == null ? 0 : opened.intValue();
         List<String> steps = (List<String>) round.get("steps");

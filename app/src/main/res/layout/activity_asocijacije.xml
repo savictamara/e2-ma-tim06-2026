@@ -157,13 +157,19 @@
                     android:id="@+id/btnOpenField"
                     style="@style/Widget.MaterialComponents.Button"
                     android:layout_width="0dp"
-                    android:layout_height="40dp"
+                    android:layout_height="wrap_content"
+                    android:minHeight="46dp"
                     android:layout_weight="1"
                     android:background="@drawable/bg_button_secondary"
-                    android:padding="0dp"
+                    android:gravity="center"
+                    android:maxLines="2"
+                    android:paddingStart="4dp"
+                    android:paddingEnd="4dp"
+                    android:paddingTop="2dp"
+                    android:paddingBottom="2dp"
                     android:text="@string/asocijacije_open_field"
                     android:textColor="@color/text_main"
-                    android:textSize="12sp" />
+                    android:textSize="11sp" />
 
                 <Button
                     android:id="@+id/btnGuessFinal"
