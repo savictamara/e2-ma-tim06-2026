@@ -96,9 +96,11 @@ public class AsocijacijeActivity extends AppCompatActivity {
         }
         uid = user == null ? GuestSession.uid(this) : user.getUid();
         Log.d(TAG, "Current association uid=" + uid);
+        Log.d(TAG, "onCreate join called uid=" + uid + ", miniGameType=" + GameRepository.MINI_ASSOCIATIONS);
         gameRepository.joinOrCreateGame(uid, GameRepository.MINI_ASSOCIATIONS)
                 .addOnSuccessListener(id -> {
                     gameId = id;
+                    Log.d(TAG, "received gameId=" + gameId);
                     Log.d(TAG, "Associations gameId=" + gameId + ", uid=" + uid);
                     userRepository.updateUserState(uid, true, true, gameId);
                     listenGame();
@@ -192,16 +194,19 @@ public class AsocijacijeActivity extends AppCompatActivity {
                 return;
             }
             gameReady = GameRepository.isGameReady(snapshot);
-            Log.d(TAG, "Activity: game ready " + gameReady);
+            Log.d(TAG, "isGameReady " + gameReady);
             if (!gameReady) {
-                setStatus("Čeka se drugi igrač");
+                setStatus("");
                 setControls(false);
                 return;
             }
             Log.d(TAG, "Game became active, currentUserUid=" + uid + ", gameId=" + gameId
                     + ", player1Uid=" + player1Uid + ", player2Uid=" + player2Uid
                     + ", currentMiniGame=" + snapshot.getString("currentMiniGame"));
-            Log.d(TAG, "Activity: round creation started");
+            if (phase.isEmpty()) {
+                setStatus("");
+            }
+            Log.d(TAG, "round creation attempted");
             gameRepository.ensureAssociationsRound(gameId, roundNumber)
                     .addOnFailureListener(e -> Log.e(TAG, "Ensure associations round failed", e));
             listenRound();
@@ -224,6 +229,7 @@ public class AsocijacijeActivity extends AppCompatActivity {
             }
             bindRound(snapshot);
         });
+        Log.d(TAG, "round listener attached gameId=" + gameId + ", roundId=" + roundId);
     }
 
     private void bindRound(DocumentSnapshot round) {
@@ -371,7 +377,7 @@ public class AsocijacijeActivity extends AppCompatActivity {
             Log.d(TAG, "Activity: game ready false");
             return;
         }
-        Log.d(TAG, "Activity: round creation started");
+        Log.d(TAG, "round creation attempted");
         gameRepository.ensureAssociationsRound(gameId, roundNumber)
                 .addOnFailureListener(e -> Log.e(TAG, "Ensure associations round 2 failed", e));
         listenRound();
@@ -429,6 +435,14 @@ public class AsocijacijeActivity extends AppCompatActivity {
     }
 
     private void updateTurnStatus() {
+        if (!GameRepository.isNonEmpty(currentTurnUid)) {
+            Log.e(TAG, "Missing currentTurnUid in Asocijacije, currentUid=" + uid
+                    + ", player1Uid=" + player1Uid + ", player2Uid=" + player2Uid
+                    + ", phase=" + phase + ", round=" + roundNumber);
+            setStatus("Priprema igre");
+            gameRepository.repairRoundPlayers(gameId, gameRepository.associationsRoundId(roundNumber), roundNumber, true);
+            return;
+        }
         if (uid.equals(currentTurnUid) && mustGuessAfterOpen) {
             setStatus("Pogodite kolonu, konačno rešenje ili završite potez");
             return;
@@ -478,6 +492,16 @@ public class AsocijacijeActivity extends AppCompatActivity {
         headerHelper.updateStatus(status);
         Log.d(TAG, "Status text=" + status + ", gameId=" + gameId + ", round=" + roundNumber
                 + ", phase=" + phase + ", currentTurnUid=" + currentTurnUid + ", uid=" + uid);
+        boolean isCurrentUsersTurn = uid != null && uid.equals(currentTurnUid);
+        Log.d(TAG, "Turn status currentUid=" + uid
+                + ", player1Uid=" + player1Uid
+                + ", player2Uid=" + player2Uid
+                + ", activePlayerUid="
+                + ", opponentUid="
+                + ", currentTurnUid=" + currentTurnUid
+                + ", phase=" + phase
+                + ", calculatedStatusText=" + status
+                + ", isCurrentUsersTurn=" + isCurrentUsersTurn);
     }
 
     private void show(String message) {

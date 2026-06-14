@@ -141,9 +141,11 @@ public class SkockoActivity extends AppCompatActivity {
         }
         uid = user == null ? GuestSession.uid(this) : user.getUid();
         Log.d(TAG, "currentUserUid=" + uid);
+        Log.d(TAG, "onCreate join called uid=" + uid + ", miniGameType=" + GameRepository.MINI_SKOCKO);
         gameRepository.joinOrCreateGame(uid, GameRepository.MINI_SKOCKO)
                 .addOnSuccessListener(id -> {
                     gameId = id;
+                    Log.d(TAG, "received gameId=" + gameId);
                     Log.d(TAG, "Skocko gameId=" + gameId + ", currentUserUid=" + uid);
                     userRepository.updateUserState(uid, true, true, gameId);
                     listenGame();
@@ -213,11 +215,14 @@ public class SkockoActivity extends AppCompatActivity {
                 return;
             }
             gameReady = GameRepository.isGameReady(snapshot);
-            Log.d(TAG, "Activity: game ready " + gameReady);
+            Log.d(TAG, "isGameReady " + gameReady);
             if (!gameReady) {
-                setStatusText("Čeka se drugi igrač");
+                setStatusText("");
                 setControls(false);
                 return;
+            }
+            if (phase.isEmpty()) {
+                setStatusText("");
             }
             ensureAndListenRound(roundNumber);
         });
@@ -228,7 +233,7 @@ public class SkockoActivity extends AppCompatActivity {
             Log.d(TAG, "Activity: game ready false");
             return;
         }
-        Log.d(TAG, "Activity: round creation started");
+        Log.d(TAG, "round creation attempted");
         gameRepository.ensureSkockoRound(gameId, targetRound, SYMBOLS)
                 .addOnFailureListener(e -> {
                     Log.e(TAG, "Ensure skocko round failed", e);
@@ -263,6 +268,7 @@ public class SkockoActivity extends AppCompatActivity {
                     + ", currentAttemptIndex=" + snapshot.getLong("currentAttemptIndex"));
             bindRound(snapshot);
         });
+        Log.d(TAG, "round listener attached gameId=" + gameId + ", roundId=" + roundId);
     }
 
     private void bindRound(DocumentSnapshot round) {
@@ -493,8 +499,24 @@ public class SkockoActivity extends AppCompatActivity {
 
     private void updateStatusForPhase() {
         if (PHASE_ACTIVE_PLAYER.equals(phase)) {
+            if (!GameRepository.isNonEmpty(activePlayerUid)) {
+                Log.e(TAG, "Missing activePlayerUid in Skocko, currentUid=" + uid
+                        + ", player1Uid=" + player1Uid + ", player2Uid=" + player2Uid
+                        + ", phase=" + phase);
+                setStatusText("Priprema igre");
+                gameRepository.repairRoundPlayers(gameId, gameRepository.skockoRoundId(roundNumber), roundNumber, false);
+                return;
+            }
             setStatusText(uid.equals(activePlayerUid) ? "Vaš potez" : "Protivnik igra");
         } else if (PHASE_OPPONENT_CHANCE.equals(phase)) {
+            if (!GameRepository.isNonEmpty(opponentUid)) {
+                Log.e(TAG, "Missing opponentUid in Skocko, currentUid=" + uid
+                        + ", player1Uid=" + player1Uid + ", player2Uid=" + player2Uid
+                        + ", phase=" + phase + ", activePlayerUid=" + activePlayerUid);
+                setStatusText("Priprema igre");
+                gameRepository.repairRoundPlayers(gameId, gameRepository.skockoRoundId(roundNumber), roundNumber, false);
+                return;
+            }
             setStatusText(uid.equals(opponentUid) ? "Vaša šansa za 10 poena" : "Protivnik pokušava za 10 poena");
         } else if (PHASE_FINISHED.equals(phase)) {
             setStatusText(roundNumber == 1 ? "Priprema druge runde" : "Skočko je završen");
@@ -502,6 +524,10 @@ public class SkockoActivity extends AppCompatActivity {
     }
 
     private String currentPlayerText() {
+        if ((PHASE_ACTIVE_PLAYER.equals(phase) && !GameRepository.isNonEmpty(activePlayerUid))
+                || (PHASE_OPPONENT_CHANCE.equals(phase) && !GameRepository.isNonEmpty(opponentUid))) {
+            return "Priprema igre";
+        }
         if (PHASE_OPPONENT_CHANCE.equals(phase)) {
             return uid.equals(opponentUid) ? "Na potezu: vi" : "Na potezu: protivnik";
         }
@@ -565,6 +591,17 @@ public class SkockoActivity extends AppCompatActivity {
                 + ", roundId=" + (gameId.isEmpty() ? "" : gameRepository.skockoRoundId(roundNumber))
                 + ", phase=" + phase + ", activePlayerUid=" + activePlayerUid
                 + ", opponentUid=" + opponentUid);
+        boolean isCurrentUsersTurn = (PHASE_ACTIVE_PLAYER.equals(phase) && uid != null && uid.equals(activePlayerUid))
+                || (PHASE_OPPONENT_CHANCE.equals(phase) && uid != null && uid.equals(opponentUid));
+        Log.d(TAG, "Turn status currentUid=" + uid
+                + ", player1Uid=" + player1Uid
+                + ", player2Uid=" + player2Uid
+                + ", activePlayerUid=" + activePlayerUid
+                + ", opponentUid=" + opponentUid
+                + ", currentTurnUid="
+                + ", phase=" + phase
+                + ", calculatedStatusText=" + status
+                + ", isCurrentUsersTurn=" + isCurrentUsersTurn);
     }
 
     private void show(String message) {

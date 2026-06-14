@@ -68,7 +68,7 @@ public class GameRepository {
         if (isBlank(uid) || isBlank(miniGame)) {
             return Tasks.forException(new IllegalArgumentException("Nedostaje uid ili tip igre"));
         }
-        Log.d(TAG, "joinOrCreateGame called uid=" + uid + ", miniGameType=" + miniGame);
+        Log.d(TAG, "joinOrCreate called uid=" + uid + ", miniGameType=" + miniGame);
         return joinOrCreateGameInternal(uid, miniGame, 0)
                 .addOnSuccessListener(gameId -> Log.d(TAG, "returned gameId="
                         + gameId + ", uid=" + uid + ", miniGameType=" + miniGame))
@@ -88,11 +88,15 @@ public class GameRepository {
                         Log.e(TAG, "Waiting game query failed", task.getException());
                         throw task.getException();
                     }
+                    Log.d(TAG, "found waiting candidates count=" + task.getResult().size()
+                            + ", uid=" + uid + ", miniGameType=" + miniGame);
                     QueryDocumentSnapshot candidate = null;
                     QueryDocumentSnapshot ownWaiting = null;
                     for (QueryDocumentSnapshot doc : task.getResult()) {
                         String player1 = doc.getString("player1Uid");
                         String player2 = doc.getString("player2Uid");
+                        Log.d(TAG, "candidate gameId=" + doc.getId()
+                                + ", player1Uid=" + player1 + ", player2Uid=" + player2);
                         Log.d(TAG, "Waiting candidate scan gameId=" + doc.getId()
                                 + ", uid=" + uid + ", miniGameType=" + miniGame
                                 + ", player1Uid=" + player1 + ", player2Uid=" + player2
@@ -123,8 +127,8 @@ public class GameRepository {
                                         return Tasks.forResult(joinedGameId);
                                     }
                                     if (attempt < 2) {
-                                        Log.d(TAG, "Waiting game changed before join, retrying search, uid="
-                                                + uid + ", miniGameType=" + miniGame);
+                                        Log.d(TAG, "transaction join retry uid=" + uid
+                                                + ", miniGameType=" + miniGame + ", attempt=" + (attempt + 1));
                                         return joinOrCreateGameInternal(uid, miniGame, attempt + 1);
                                     }
                                     if (finalOwnWaiting != null) {
@@ -163,7 +167,7 @@ public class GameRepository {
                     && isBlank(player2)) {
                 transaction.update(gameRef, "player2Uid", uid, "status", "active",
                         "currentPlayerUid", player1, "updatedAt", FieldValue.serverTimestamp());
-                Log.d(TAG, "joined gameId=" + gameRef.getId() + ", uid=" + uid
+                Log.d(TAG, "transaction join success gameId=" + gameRef.getId() + ", uid=" + uid
                         + ", miniGameType=" + miniGame + ", status before=waiting, status after=active");
                 return gameRef.getId();
                             }
@@ -189,7 +193,7 @@ public class GameRepository {
         game.put("createdAt", FieldValue.serverTimestamp());
         game.put("updatedAt", FieldValue.serverTimestamp());
         transaction.set(ref, game);
-        Log.d(TAG, "created waiting gameId=" + ref.getId() + ", uid=" + uid
+        Log.d(TAG, "created new waiting gameId=" + ref.getId() + ", uid=" + uid
                 + ", miniGameType=" + miniGame + ", status=waiting");
         return ref.getId();
     }
@@ -201,8 +205,89 @@ public class GameRepository {
         String player1 = game.getString("player1Uid");
         String player2 = game.getString("player2Uid");
         return "active".equals(game.getString("status"))
-                && player1 != null && !player1.trim().isEmpty()
-                && player2 != null && !player2.trim().isEmpty();
+                && isNonEmpty(player1)
+                && isNonEmpty(player2)
+                && !player1.equals(player2);
+    }
+
+    public static boolean isGameReady(Map<String, Object> game) {
+        if (game == null) {
+            return false;
+        }
+        Object status = game.get("status");
+        Object player1 = game.get("player1Uid");
+        Object player2 = game.get("player2Uid");
+        String p1 = player1 == null ? "" : String.valueOf(player1);
+        String p2 = player2 == null ? "" : String.valueOf(player2);
+        return "active".equals(status)
+                && isNonEmpty(p1)
+                && isNonEmpty(p2)
+                && !p1.equals(p2);
+    }
+
+    public static boolean isNonEmpty(String value) {
+        return value != null && !value.trim().isEmpty();
+    }
+
+    public static String getOtherPlayerUid(String currentUid, String player1Uid, String player2Uid) {
+        if (currentUid == null) {
+            return "";
+        }
+        if (currentUid.equals(player1Uid)) {
+            return player2Uid == null ? "" : player2Uid;
+        }
+        if (currentUid.equals(player2Uid)) {
+            return player1Uid == null ? "" : player1Uid;
+        }
+        return "";
+    }
+
+    public static boolean isPlayer1(String currentUid, String player1Uid) {
+        return isNonEmpty(currentUid) && currentUid.equals(player1Uid);
+    }
+
+    public static boolean isPlayer2(String currentUid, String player2Uid) {
+        return isNonEmpty(currentUid) && currentUid.equals(player2Uid);
+    }
+
+    public Task<Void> repairRoundPlayers(String gameId, String roundId, int roundNumber, boolean repairCurrentTurn) {
+        if (db == null) {
+            return Tasks.forException(new IllegalStateException("Firebase nije inicijalizovan"));
+        }
+        DocumentReference gameRef = db.collection("games").document(gameId);
+        DocumentReference roundRef = gameRef.collection("rounds").document(roundId);
+        return db.runTransaction(transaction -> {
+            DocumentSnapshot game = transaction.get(gameRef);
+            DocumentSnapshot round = transaction.get(roundRef);
+            if (!round.exists() || !isGameReady(game)) {
+                return null;
+            }
+            String p1 = game.getString("player1Uid");
+            String p2 = game.getString("player2Uid");
+            String active = roundNumber == 1 ? p1 : p2;
+            String opponent = roundNumber == 1 ? p2 : p1;
+            Map<String, Object> updates = new HashMap<>();
+            String existingActive = round.getString("activePlayerUid");
+            String existingOpponent = round.getString("opponentUid");
+            if (!active.equals(existingActive) || !opponent.equals(existingOpponent)) {
+                updates.put("activePlayerUid", active);
+                updates.put("opponentUid", opponent);
+            }
+            String currentTurn = round.getString("currentTurnUid");
+            if (repairCurrentTurn && !isNonEmpty(currentTurn)) {
+                updates.put("currentTurnUid", active);
+            }
+            if (!updates.isEmpty()) {
+                updates.put("updatedAt", FieldValue.serverTimestamp());
+                Log.e(TAG, "Repairing round players gameId=" + gameId + ", roundId=" + roundId
+                        + ", activePlayerUid=" + existingActive + "->" + active
+                        + ", opponentUid=" + existingOpponent + "->" + opponent
+                        + ", currentTurnUid=" + currentTurn
+                        + ", repairCurrentTurn=" + repairCurrentTurn);
+                transaction.update(roundRef, updates);
+            }
+            return null;
+        });
     }
 
     private boolean isJoinableWaiting(DocumentSnapshot doc, String uid, String miniGame) {
@@ -326,7 +411,7 @@ public class GameRepository {
                     + ", roundId=" + roundId + ", questionId=" + questionId);
             String p1 = game.getString("player1Uid");
             String p2 = game.getString("player2Uid");
-            if (p1 == null || p2 == null || p1.equals(p2)) {
+            if (!isGameReady(game)) {
                 throw new IllegalStateException("Korak po korak ne moze da pocne bez dva razlicita igraca");
             }
             String active = roundNumber == 1 ? p1 : p2;
@@ -464,7 +549,7 @@ public class GameRepository {
             Log.d(TAG, "Creating my number round, gameId=" + gameId + ", roundNumber=" + roundNumber);
             String p1 = game.getString("player1Uid");
             String p2 = game.getString("player2Uid");
-            if (p1 == null || p2 == null || p1.equals(p2)) {
+            if (!isGameReady(game)) {
                 throw new IllegalStateException("Moj broj ne moze da pocne bez dva razlicita igraca");
             }
             String active = roundNumber == 1 ? p1 : p2;
@@ -767,7 +852,7 @@ public class GameRepository {
             }
             String p1 = game.getString("player1Uid");
             String p2 = game.getString("player2Uid");
-            if (p1 == null || p2 == null || p1.equals(p2)) {
+            if (!isGameReady(game)) {
                 throw new IllegalStateException("Ko zna zna ne moze da pocne bez dva razlicita igraca");
             }
             Log.d(TAG, "Creating know it round, gameId=" + gameId + ", p1=" + p1 + ", p2=" + p2);
@@ -993,7 +1078,7 @@ public class GameRepository {
             }
             String p1 = game.getString("player1Uid");
             String p2 = game.getString("player2Uid");
-            if (!"active".equals(game.getString("status")) || p1 == null || p2 == null || p1.equals(p2)) {
+            if (!isGameReady(game)) {
                 throw new IllegalStateException("Skočko ne može da počne bez dva različita igrača");
             }
             String active = roundNumber == 1 ? p1 : p2;
@@ -1326,7 +1411,7 @@ public class GameRepository {
             }
             String p1 = game.getString("player1Uid");
             String p2 = game.getString("player2Uid");
-            if (p1 == null || p2 == null || p1.equals(p2)) {
+            if (!isGameReady(game)) {
                 throw new IllegalStateException("Spojnice ne mogu da pocnu bez dva razlicita igraca");
             }
             String active = roundNumber == 1 ? p1 : p2;
@@ -1351,6 +1436,7 @@ public class GameRepository {
             round.put("usedLeftIndexes", new ArrayList<Integer>());
             round.put("remainingLeftIndexes", Arrays.asList(0, 1, 2, 3, 4));
             round.put("currentLeftIndex", null);
+            round.put("currentSelection", null);
             round.put("finished", false);
             round.put("phaseStartedAt", FieldValue.serverTimestamp());
             round.put("createdAt", FieldValue.serverTimestamp());
@@ -1406,10 +1492,14 @@ public class GameRepository {
                     + ", selectedRightIndex=" + rightIndex + ", correct=" + correct);
             updatedAttemptsByPlayer.put(uid, playerAttempts);
             if (!correct) {
-                transaction.update(roundRef,
-                        "attemptsByPlayer", updatedAttemptsByPlayer,
-                        "usedLeftIndexes", usedLeftIndexes,
-                        "updatedAt", FieldValue.serverTimestamp());
+                Map<String, Object> updates = connectionProgressUpdates(round, roundNumber, phase, uid,
+                        playerAttempts, intList(round.get("remainingLeftIndexes")));
+                updates.put("attemptsByPlayer", updatedAttemptsByPlayer);
+                updates.put("usedLeftIndexes", usedLeftIndexes);
+                updates.put("currentSelection", null);
+                updates.put("updatedAt", FieldValue.serverTimestamp());
+                transaction.update(roundRef, updates);
+                updateConnectionsGameForPhase(transaction, gameRef, game, round, roundNumber, updates);
                 return false;
             }
             Map<String, Object> match = new HashMap<>();
@@ -1418,23 +1508,75 @@ public class GameRepository {
             match.put("correct", true);
             List<Integer> remaining = intList(round.get("remainingLeftIndexes"));
             remaining.remove(Integer.valueOf(leftIndex));
-            transaction.update(roundRef,
-                    "attemptsByPlayer", updatedAttemptsByPlayer,
-                    "usedLeftIndexes", usedLeftIndexes,
-                    "matchedPairs." + leftIndex, match,
-                    "remainingLeftIndexes", remaining,
-                    "updatedAt", FieldValue.serverTimestamp());
+            Map<String, Object> updates = connectionProgressUpdates(round, roundNumber, phase, uid,
+                    playerAttempts, remaining);
+            updates.put("attemptsByPlayer", updatedAttemptsByPlayer);
+            updates.put("usedLeftIndexes", usedLeftIndexes);
+            updates.put("matchedPairs." + leftIndex, match);
+            updates.put("remainingLeftIndexes", remaining);
+            updates.put("currentSelection", null);
+            updates.put("updatedAt", FieldValue.serverTimestamp());
+            transaction.update(roundRef, updates);
             applyScore(transaction, gameRef, game, uid, 2);
-            if (remaining.isEmpty()) {
-                transaction.update(roundRef, "phase", "FINISHED", "finished", true,
-                        "updatedAt", FieldValue.serverTimestamp());
-                if (roundNumber == 2) {
-                    transaction.update(gameRef, "status", "finished", "updatedAt", FieldValue.serverTimestamp());
-                }
-            }
+            updateConnectionsGameForPhase(transaction, gameRef, game, round, roundNumber, updates);
             Log.d(TAG, "Connections score update uid=" + uid + ", points=2, remainingLeftIndexes=" + remaining);
             return true;
         });
+    }
+
+    public Task<Void> updateConnectionSelection(String gameId, int roundNumber, String uid,
+                                                int leftIndex, Integer rightIndex) {
+        if (db == null) {
+            return Tasks.forException(new IllegalStateException("Firebase nije inicijalizovan"));
+        }
+        DocumentReference roundRef = db.collection("games").document(gameId)
+                .collection("rounds").document(connectionsRoundId(roundNumber));
+        Map<String, Object> selection = new HashMap<>();
+        selection.put("uid", uid);
+        selection.put("leftIndex", leftIndex);
+        selection.put("rightIndex", rightIndex);
+        selection.put("updatedAt", FieldValue.serverTimestamp());
+        return roundRef.update("currentSelection", selection, "updatedAt", FieldValue.serverTimestamp());
+    }
+
+    private Map<String, Object> connectionProgressUpdates(DocumentSnapshot round, int roundNumber,
+                                                          String phase, String uid,
+                                                          List<Integer> playerAttempts,
+                                                          List<Integer> remaining) {
+        Map<String, Object> updates = new HashMap<>();
+        if (remaining.isEmpty()) {
+            updates.put("phase", "FINISHED");
+            updates.put("finished", true);
+            return updates;
+        }
+        boolean activePlayerDone = "ACTIVE_PLAYER".equals(phase)
+                && (playerAttempts.size() >= 5 || playerAttempts.containsAll(remaining));
+        boolean opponentDone = "OPPONENT_CHANCE".equals(phase) && playerAttempts.containsAll(remaining);
+        if (activePlayerDone) {
+            updates.put("phase", "OPPONENT_CHANCE");
+            updates.put("phaseStartedAt", FieldValue.serverTimestamp());
+        } else if (opponentDone) {
+            updates.put("phase", "FINISHED");
+            updates.put("finished", true);
+        }
+        Log.d(TAG, "Connections progress check round=" + roundNumber
+                + ", phase=" + phase + ", uid=" + uid
+                + ", playerAttempts=" + playerAttempts
+                + ", remainingLeftIndexes=" + remaining
+                + ", updates=" + updates);
+        return updates;
+    }
+
+    private void updateConnectionsGameForPhase(Transaction transaction, DocumentReference gameRef,
+                                               DocumentSnapshot game, DocumentSnapshot round,
+                                               int roundNumber, Map<String, Object> roundUpdates) {
+        Object nextPhase = roundUpdates.get("phase");
+        if ("OPPONENT_CHANCE".equals(nextPhase)) {
+            transaction.update(gameRef, "currentPlayerUid", round.getString("opponentUid"),
+                    "updatedAt", FieldValue.serverTimestamp());
+        } else if ("FINISHED".equals(nextPhase) && roundNumber == 2) {
+            transaction.update(gameRef, "status", "finished", "updatedAt", FieldValue.serverTimestamp());
+        }
     }
 
     public Task<Void> advanceConnectionsPhase(String gameId, int roundNumber, String expectedPhase) {
@@ -1452,11 +1594,13 @@ public class GameRepository {
             if ("ACTIVE_PLAYER".equals(phase) && !remaining.isEmpty()) {
                 updates.put("phase", "OPPONENT_CHANCE");
                 updates.put("phaseStartedAt", FieldValue.serverTimestamp());
+                updates.put("currentSelection", null);
                 transaction.update(gameRef, "currentPlayerUid", round.getString("opponentUid"),
                         "updatedAt", FieldValue.serverTimestamp());
             } else {
                 updates.put("phase", "FINISHED");
                 updates.put("finished", true);
+                updates.put("currentSelection", null);
                 if (roundNumber == 2) {
                     transaction.update(gameRef, "status", "finished", "updatedAt", FieldValue.serverTimestamp());
                 }
@@ -1634,7 +1778,7 @@ public class GameRepository {
             }
             String p1 = game.getString("player1Uid");
             String p2 = game.getString("player2Uid");
-            if (p1 == null || p2 == null) {
+            if (!isGameReady(game)) {
                 throw new IllegalStateException("Asocijacije ne mogu da pocnu bez dva igraca");
             }
             String active = roundNumber == 1 ? p1 : p2;

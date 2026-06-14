@@ -45,6 +45,7 @@ public class SpojniceActivity extends AppCompatActivity {
     private String gameId;
     private String player1Uid;
     private String player2Uid;
+    private String gameStatus = "";
     private String phase = "";
     private String activePlayerUid = "";
     private String opponentUid = "";
@@ -57,7 +58,11 @@ public class SpojniceActivity extends AppCompatActivity {
     private boolean gameReady = false;
     private Map<String, Object> matchedPairs;
     private Map<String, Object> attemptsByPlayer;
+    private List<Integer> usedLeftIndexes = new ArrayList<>();
     private List<Integer> remainingLeftIndexes = new ArrayList<>();
+    private String currentSelectionUid = "";
+    private int currentSelectionLeftIndex = -1;
+    private int currentSelectionRightIndex = -1;
 
     private TextView tvRound;
     private TextView tvCriterion;
@@ -121,9 +126,11 @@ public class SpojniceActivity extends AppCompatActivity {
         }
         uid = user == null ? GuestSession.uid(this) : user.getUid();
         Log.d(TAG, "Current uid=" + uid);
+        Log.d(TAG, "onCreate join called uid=" + uid + ", miniGameType=" + GameRepository.MINI_CONNECTIONS);
         gameRepository.joinOrCreateGame(uid, GameRepository.MINI_CONNECTIONS)
                 .addOnSuccessListener(id -> {
                     gameId = id;
+                    Log.d(TAG, "received gameId=" + gameId);
                     Log.d(TAG, "Connections gameId=" + gameId);
                     userRepository.updateUserState(uid, true, true, gameId);
                     listenGame();
@@ -145,6 +152,7 @@ public class SpojniceActivity extends AppCompatActivity {
                 return;
             }
             String status = snapshot.getString("status");
+            gameStatus = value(status);
             player1Uid = value(snapshot.getString("player1Uid"));
             player2Uid = value(snapshot.getString("player2Uid"));
             Long p1 = snapshot.getLong("player1Score");
@@ -174,22 +182,25 @@ public class SpojniceActivity extends AppCompatActivity {
                 return;
             }
             gameReady = GameRepository.isGameReady(snapshot);
-            Log.d(TAG, "Activity: game ready " + gameReady);
+            Log.d(TAG, "isGameReady " + gameReady);
             if (!gameReady) {
-                setStatus("Čeka se drugi igrač");
+                updateStatus();
                 setPairButtonsEnabled(false);
                 return;
             }
             Log.d(TAG, "Game became active, currentUserUid=" + uid + ", gameId=" + gameId
                     + ", player1Uid=" + player1Uid + ", player2Uid=" + player2Uid
                     + ", currentMiniGame=" + snapshot.getString("currentMiniGame"));
+            if (phase.isEmpty()) {
+                setStatus("");
+            }
             if ("finished".equals(status) && "FINISHED".equals(phase)) {
                 setStatus("Spojnice su završene");
                 setPairButtonsEnabled(false);
                 userRepository.updateUserState(uid, true, false, "");
                 return;
             }
-            Log.d(TAG, "Activity: round creation started");
+            Log.d(TAG, "round creation attempted");
             gameRepository.ensureConnectionsRound(gameId, roundNumber)
                     .addOnFailureListener(e -> {
                         Log.e(TAG, "Ensure connections round failed", e);
@@ -219,6 +230,7 @@ public class SpojniceActivity extends AppCompatActivity {
                     + ", remainingLeftIndexes=" + snapshot.get("remainingLeftIndexes"));
             bindRound(snapshot);
         });
+        Log.d(TAG, "round listener attached gameId=" + gameId + ", roundId=" + gameRepository.connectionsRoundId(roundNumber));
     }
 
     private void bindRound(DocumentSnapshot round) {
@@ -229,7 +241,9 @@ public class SpojniceActivity extends AppCompatActivity {
         roundNumber = roundIndex == null ? roundNumber : roundIndex.intValue();
         matchedPairs = (Map<String, Object>) round.get("matchedPairs");
         attemptsByPlayer = (Map<String, Object>) round.get("attemptsByPlayer");
+        usedLeftIndexes = intList(round.get("usedLeftIndexes"));
         remainingLeftIndexes = intList(round.get("remainingLeftIndexes"));
+        bindCurrentSelection((Map<String, Object>) round.get("currentSelection"));
         tvRound.setText(getString(R.string.spojnice_round, roundNumber, 2));
         tvCriterion.setText("Kriterijum: " + connectionCriterion(round));
 
@@ -281,6 +295,8 @@ public class SpojniceActivity extends AppCompatActivity {
         selectedLeftIndex = leftIndex;
         Log.d(TAG, "selectedLeftIndex=" + selectedLeftIndex + ", gameId=" + gameId + ", round=" + roundNumber);
         refreshButtons();
+        gameRepository.updateConnectionSelection(gameId, roundNumber, uid, selectedLeftIndex, null)
+                .addOnFailureListener(e -> Log.e(TAG, "Update left connection selection failed", e));
     }
 
     private void onRightSelected(int rightIndex) {
@@ -296,6 +312,11 @@ public class SpojniceActivity extends AppCompatActivity {
         refreshButtons();
         Log.d(TAG, "Submit pair selectedLeftIndex=" + leftIndex + ", selectedRightIndex=" + rightIndex
                 + ", phase=" + phase + ", uid=" + uid);
+        gameRepository.updateConnectionSelection(gameId, roundNumber, uid, leftIndex, rightIndex)
+                .addOnCompleteListener(selectionTask -> submitSelectedPair(leftIndex, rightIndex));
+    }
+
+    private void submitSelectedPair(int leftIndex, int rightIndex) {
         gameRepository.submitConnectionPair(gameId, roundNumber, uid, leftIndex, rightIndex)
                 .addOnSuccessListener(correct -> {
                     selectedLeftIndex = -1;
@@ -364,7 +385,7 @@ public class SpojniceActivity extends AppCompatActivity {
             Log.d(TAG, "Activity: game ready false");
             return;
         }
-        Log.d(TAG, "Activity: round creation started");
+        Log.d(TAG, "round creation attempted");
         gameRepository.ensureConnectionsRound(gameId, roundNumber)
                 .addOnFailureListener(e -> {
                     Log.e(TAG, "Ensure second connections round failed", e);
@@ -396,7 +417,7 @@ public class SpojniceActivity extends AppCompatActivity {
         for (int i = 0; i < leftButtons.length; i++) {
             if (isLeftMatched(i)) {
                 leftButtons[i].setBackgroundResource(R.drawable.bg_answer_correct);
-            } else if (i == selectedLeftIndex) {
+            } else if (i == selectedLeftIndex || i == currentSelectionLeftIndex) {
                 leftButtons[i].setBackgroundResource(R.drawable.bg_answer_selected);
             } else {
                 leftButtons[i].setBackgroundResource(R.drawable.bg_step);
@@ -405,7 +426,7 @@ public class SpojniceActivity extends AppCompatActivity {
         for (int i = 0; i < rightButtons.length; i++) {
             if (isRightMatched(i)) {
                 rightButtons[i].setBackgroundResource(R.drawable.bg_answer_correct);
-            } else if (i == selectedRightIndex) {
+            } else if (i == selectedRightIndex || i == currentSelectionRightIndex) {
                 rightButtons[i].setBackgroundResource(R.drawable.bg_answer_selected);
             } else {
                 rightButtons[i].setBackgroundResource(R.drawable.bg_step);
@@ -457,7 +478,45 @@ public class SpojniceActivity extends AppCompatActivity {
     }
 
     private void updateStatus() {
+        if ("FINISHED".equals(phase)) {
+            setStatus(roundNumber == 1 ? "Priprema druge runde" : "Spojnice su završene");
+            return;
+        }
+        if ("waiting".equals(gameStatus) || player2Uid == null || player2Uid.trim().isEmpty()) {
+            setStatus("Čeka se drugi igrač");
+            return;
+        }
         if ("ACTIVE_PLAYER".equals(phase)) {
+            if (!GameRepository.isNonEmpty(activePlayerUid)) {
+                Log.e(TAG, "Missing activePlayerUid in Spojnice, currentUid=" + uid
+                        + ", player1Uid=" + player1Uid + ", player2Uid=" + player2Uid
+                        + ", phase=" + phase);
+                setStatus("Priprema igre");
+                gameRepository.repairRoundPlayers(gameId, gameRepository.connectionsRoundId(roundNumber), roundNumber, false);
+                return;
+            }
+            setStatus(uid.equals(activePlayerUid) ? "Vaš potez" : "Protivnik povezuje");
+            return;
+        }
+        if ("OPPONENT_CHANCE".equals(phase)) {
+            if (!GameRepository.isNonEmpty(opponentUid)) {
+                Log.e(TAG, "Missing opponentUid in Spojnice, currentUid=" + uid
+                        + ", player1Uid=" + player1Uid + ", player2Uid=" + player2Uid
+                        + ", phase=" + phase + ", activePlayerUid=" + activePlayerUid);
+                setStatus("Priprema igre");
+                gameRepository.repairRoundPlayers(gameId, gameRepository.connectionsRoundId(roundNumber), roundNumber, false);
+                return;
+            }
+            setStatus(uid.equals(opponentUid) ? "Vaša šansa za preostale parove" : "Protivnik pokušava preostale parove");
+            return;
+        }
+        if ("FINISHED".equals(phase)) {
+            setStatus(roundNumber == 1 ? "Priprema druge runde" : "Spojnice su završene");
+            return;
+        }
+        if (!currentSelectionUid.isEmpty() && !uid.equals(currentSelectionUid)) {
+            setStatus("Protivnik bira par");
+        } else if ("ACTIVE_PLAYER".equals(phase)) {
             setStatus(uid.equals(activePlayerUid) ? "Vaš potez" : "Protivnik povezuje");
         } else if ("OPPONENT_CHANCE".equals(phase)) {
             setStatus(uid.equals(opponentUid) ? "Vaša šansa za preostale parove" : "Protivnik pokušava preostale parove");
@@ -499,13 +558,56 @@ public class SpojniceActivity extends AppCompatActivity {
         return values;
     }
 
+    private void bindCurrentSelection(Map<String, Object> selection) {
+        currentSelectionUid = "";
+        currentSelectionLeftIndex = -1;
+        currentSelectionRightIndex = -1;
+        if (selection == null) {
+            return;
+        }
+        Object selectionUid = selection.get("uid");
+        Object left = selection.get("leftIndex");
+        Object right = selection.get("rightIndex");
+        currentSelectionUid = selectionUid == null ? "" : String.valueOf(selectionUid);
+        if (left instanceof Number) {
+            currentSelectionLeftIndex = ((Number) left).intValue();
+        }
+        if (right instanceof Number) {
+            currentSelectionRightIndex = ((Number) right).intValue();
+        }
+        Log.d(TAG, "Current selection uid=" + currentSelectionUid
+                + ", leftIndex=" + currentSelectionLeftIndex
+                + ", rightIndex=" + currentSelectionRightIndex
+                + ", currentUserUid=" + uid);
+    }
+
     private void setStatus(String status) {
         tvStatus.setText(status);
         headerHelper.updateStatus(status);
         Log.d(TAG, "Status text=" + status + ", gameId=" + gameId + ", roundId="
                 + gameRepository.connectionsRoundId(roundNumber) + ", phase=" + phase
                 + ", activePlayerUid=" + activePlayerUid + ", opponentUid=" + opponentUid
-                + ", remainingLeftIndexes=" + remainingLeftIndexes);
+                + ", remainingLeftIndexes=" + remainingLeftIndexes
+                + ", usedLeftIndexes=" + usedLeftIndexes
+                + ", currentSelectionUid=" + currentSelectionUid
+                + ", currentSelectionLeftIndex=" + currentSelectionLeftIndex
+                + ", currentSelectionRightIndex=" + currentSelectionRightIndex);
+        Log.d(TAG, "Spojnice status display: game.status=" + gameStatus
+                + ", player2Uid=" + player2Uid
+                + ", phase=" + phase
+                + ", roundIndex=" + roundNumber
+                + ", statusText=" + status);
+        boolean isCurrentUsersTurn = ("ACTIVE_PLAYER".equals(phase) && uid != null && uid.equals(activePlayerUid))
+                || ("OPPONENT_CHANCE".equals(phase) && uid != null && uid.equals(opponentUid));
+        Log.d(TAG, "Turn status currentUid=" + uid
+                + ", player1Uid=" + player1Uid
+                + ", player2Uid=" + player2Uid
+                + ", activePlayerUid=" + activePlayerUid
+                + ", opponentUid=" + opponentUid
+                + ", currentTurnUid="
+                + ", phase=" + phase
+                + ", calculatedStatusText=" + status
+                + ", isCurrentUsersTurn=" + isCurrentUsersTurn);
     }
 
     @Override

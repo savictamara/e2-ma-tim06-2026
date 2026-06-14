@@ -11,6 +11,7 @@ import android.widget.Toast;
 import androidx.appcompat.app.AppCompatActivity;
 
 import com.google.firebase.Timestamp;
+import com.google.firebase.auth.FirebaseAuth;
 import com.google.firebase.auth.FirebaseUser;
 import com.google.firebase.firestore.DocumentSnapshot;
 import com.google.firebase.firestore.ListenerRegistration;
@@ -39,6 +40,9 @@ public class KorakPoKorakActivity extends AppCompatActivity {
     private CountDownTimer timer;
     private String uid;
     private String gameId;
+    private String gameStatus = "";
+    private String player1Uid = "";
+    private String player2Uid = "";
     private int roundNumber = 1;
     private int openedSteps = 0;
     private String phase = "";
@@ -92,19 +96,21 @@ public class KorakPoKorakActivity extends AppCompatActivity {
         headerHelper = new GameHeaderHelper(this, findViewById(android.R.id.content));
         headerHelper.updateGameTitle("Korak po korak");
 
-        FirebaseUser user = authRepository.currentUser();
+        FirebaseUser currentUser = FirebaseAuth.getInstance().getCurrentUser();
         if (!firebaseReady || !gameRepository.isReady() || !userRepository.isReady()) {
             show(getString(R.string.firebase_not_ready));
             setControls(false);
             return;
         }
-        uid = user == null ? GuestSession.uid(this) : user.getUid();
-        Log.d(TAG, "Current uid=" + uid);
+        uid = currentUser == null ? GuestSession.uid(this) : currentUser.getUid();
+        Log.d(TAG, "currentUserUid=" + uid);
         gameRepository.seedStepQuestionsIfNeeded()
                 .addOnFailureListener(e -> Log.e(TAG, "Seed step questions failed", e));
+        Log.d(TAG, "onCreate join called uid=" + uid + ", miniGameType=" + GameRepository.MINI_STEP_BY_STEP);
         gameRepository.joinOrCreateGame(uid, GameRepository.MINI_STEP_BY_STEP)
                 .addOnSuccessListener(id -> {
                     gameId = id;
+                    Log.d(TAG, "received gameId=" + gameId);
                     Log.d(TAG, "Step gameId=" + gameId);
                     userRepository.updateUserState(uid, true, true, gameId);
                     listenGame();
@@ -149,26 +155,28 @@ public class KorakPoKorakActivity extends AppCompatActivity {
             if (snapshot == null || !snapshot.exists()) {
                 return;
             }
+            gameStatus = value(snapshot.getString("status"));
+            player1Uid = value(snapshot.getString("player1Uid"));
+            player2Uid = value(snapshot.getString("player2Uid"));
             Log.d(TAG, "Game snapshot currentUserUid=" + uid
-                    + ", gameId=" + snapshot.getId() + ", status=" + snapshot.getString("status")
-                    + ", player1=" + snapshot.getString("player1Uid")
-                    + ", player2=" + snapshot.getString("player2Uid")
+                    + ", gameId=" + snapshot.getId() + ", status=" + gameStatus
+                    + ", player1=" + player1Uid
+                    + ", player2=" + player2Uid
                     + ", miniGame=" + snapshot.getString("currentMiniGame"));
-            Log.d(TAG, "Activity game snapshot: status=" + snapshot.getString("status")
-                    + ", player1Uid=" + snapshot.getString("player1Uid")
-                    + ", player2Uid=" + snapshot.getString("player2Uid"));
+            Log.d(TAG, "Activity game snapshot: status=" + gameStatus
+                    + ", player1Uid=" + player1Uid
+                    + ", player2Uid=" + player2Uid);
             Long p1 = snapshot.getLong("player1Score");
             Long p2 = snapshot.getLong("player2Score");
             player1Score = p1 == null ? 0 : p1.intValue();
             player2Score = p2 == null ? 0 : p2.intValue();
             tvPlayer1Score.setText(getString(R.string.player_points, player1Score));
             tvPlayer2Score.setText(getString(R.string.player_points, player2Score));
-            headerHelper.updatePlayers(snapshot.getString("player1Uid"), player1Score,
-                    snapshot.getString("player2Uid"), player2Score);
-            if ("waiting".equals(snapshot.getString("status")) || value(snapshot.getString("player2Uid")).isEmpty()) {
+            headerHelper.updatePlayers(player1Uid, player1Score, player2Uid, player2Score);
+            if ("waiting".equals(gameStatus) || player2Uid.isEmpty()) {
                 tvResult.setText(R.string.waiting_opponent);
                 setControls(false);
-                setStatusText("Čeka se protivnik");
+                setStatusText("Čeka se drugi igrač");
                 return;
             }
             if (!GameRepository.MINI_STEP_BY_STEP.equals(snapshot.getString("currentMiniGame"))) {
@@ -178,21 +186,26 @@ public class KorakPoKorakActivity extends AppCompatActivity {
                 return;
             }
             gameReady = GameRepository.isGameReady(snapshot);
-            Log.d(TAG, "Activity: game ready " + gameReady);
+            Log.d(TAG, "isGameReady " + gameReady);
             if (!gameReady) {
-                tvResult.setText(R.string.waiting_opponent);
+                if (getString(R.string.waiting_opponent).contentEquals(tvResult.getText())) {
+                    tvResult.setText("");
+                }
                 setControls(false);
-                setStatusText("Čeka se drugi igrač");
+                setStatusText("Priprema igre");
                 return;
             }
             if (getString(R.string.waiting_opponent).contentEquals(tvResult.getText())) {
                 tvResult.setText("");
             }
+            if (phase.isEmpty()) {
+                setStatusText("Priprema igre");
+            }
             Log.d(TAG, "Game became active, currentUserUid=" + uid + ", gameId=" + gameId
-                    + ", player1Uid=" + snapshot.getString("player1Uid")
-                    + ", player2Uid=" + snapshot.getString("player2Uid")
+                    + ", player1Uid=" + player1Uid
+                    + ", player2Uid=" + player2Uid
                     + ", currentMiniGame=" + snapshot.getString("currentMiniGame"));
-            Log.d(TAG, "Activity: round creation started");
+            Log.d(TAG, "round creation attempted");
             gameRepository.ensureStepRound(gameId, roundNumber)
                     .addOnFailureListener(e -> {
                         Log.e(TAG, "Ensure step round failed", e);
@@ -224,6 +237,7 @@ public class KorakPoKorakActivity extends AppCompatActivity {
                     + ", phaseStartedAt=" + snapshot.getTimestamp("phaseStartedAt"));
             bindRound(snapshot);
         });
+        Log.d(TAG, "round listener attached gameId=" + gameId + ", roundId=" + gameRepository.stepRoundId(roundNumber));
     }
 
     private void bindRound(DocumentSnapshot round) {
@@ -233,14 +247,23 @@ public class KorakPoKorakActivity extends AppCompatActivity {
         expectedAnswer = value(round.getString("answer")).trim();
         Long roundIndex = round.getLong("roundIndex");
         int displayRound = roundIndex == null ? roundNumber : roundIndex.intValue();
+        roundNumber = displayRound;
         tvRound.setText("Runda: " + displayRound + "/2");
         Long opened = round.getLong("openedStepIndex");
         openedSteps = opened == null ? 0 : opened.intValue();
         List<String> steps = (List<String>) round.get("steps");
         Log.d(TAG, "Round state id=" + round.getId()
+                + ", currentUserUid=" + uid
+                + ", gameId=" + gameId
+                + ", game.status=" + gameStatus
+                + ", player1Uid=" + player1Uid
+                + ", player2Uid=" + player2Uid
+                + ", roundIndex=" + displayRound
                 + ", phase=" + phase
                 + ", activePlayerUid=" + activePlayerUid
                 + ", opponentUid=" + opponentUid
+                + ", currentUserEqualsActive=" + (uid != null && uid.equals(activePlayerUid))
+                + ", currentUserEqualsOpponent=" + (uid != null && uid.equals(opponentUid))
                 + ", openedStepIndex=" + openedSteps);
         for (int i = 0; i < stepViews.length; i++) {
             if (steps != null && i <= openedSteps && i < steps.size()) {
@@ -308,7 +331,7 @@ public class KorakPoKorakActivity extends AppCompatActivity {
                 Log.d(TAG, "Activity: game ready false");
                 return;
             }
-            Log.d(TAG, "Activity: round creation started");
+            Log.d(TAG, "round creation attempted");
             gameRepository.ensureStepRound(gameId, roundNumber)
                     .addOnFailureListener(e -> {
                         Log.e(TAG, "Ensure second step round failed", e);
@@ -354,12 +377,44 @@ public class KorakPoKorakActivity extends AppCompatActivity {
         btnCheckSolution.setEnabled(canSubmit);
         etSolution.setEnabled(canSubmit);
         if ("ACTIVE_PLAYER".equals(phase)) {
+            if (!GameRepository.isNonEmpty(activePlayerUid)) {
+                btnCheckSolution.setEnabled(false);
+                etSolution.setEnabled(false);
+                Log.e(TAG, "Missing activePlayerUid while game active, currentUid=" + uid
+                        + ", player1Uid=" + player1Uid
+                        + ", player2Uid=" + player2Uid
+                        + ", activePlayerUid=" + activePlayerUid
+                        + ", opponentUid=" + opponentUid
+                        + ", roundIndex=" + roundNumber
+                        + ", phase=" + phase);
+                setStatusText("Priprema igre");
+                if (gameReady) {
+                    gameRepository.repairRoundPlayers(gameId, gameRepository.stepRoundId(roundNumber), roundNumber, false);
+                }
+                return;
+            }
             if (uid != null && uid.equals(activePlayerUid)) {
                 setStatusText("Vaš potez");
             } else {
                 setStatusText("Protivnik igra");
             }
         } else if ("OPPONENT_CHANCE".equals(phase)) {
+            if (!GameRepository.isNonEmpty(opponentUid)) {
+                btnCheckSolution.setEnabled(false);
+                etSolution.setEnabled(false);
+                Log.e(TAG, "Missing opponentUid while game active, currentUid=" + uid
+                        + ", player1Uid=" + player1Uid
+                        + ", player2Uid=" + player2Uid
+                        + ", phase=" + phase
+                        + ", activePlayerUid=" + activePlayerUid
+                        + ", opponentUid=" + opponentUid
+                        + ", roundIndex=" + roundNumber);
+                setStatusText("Priprema igre");
+                if (gameReady) {
+                    gameRepository.repairRoundPlayers(gameId, gameRepository.stepRoundId(roundNumber), roundNumber, false);
+                }
+                return;
+            }
             if (uid != null && uid.equals(opponentUid)) {
                 setStatusText("Vaša šansa za 5 poena");
             } else {
@@ -367,7 +422,7 @@ public class KorakPoKorakActivity extends AppCompatActivity {
             }
         } else if ("FINISHED".equals(phase)) {
             if (roundNumber == 1) {
-                setStatusText("Priprema sledeće runde");
+                setStatusText("Priprema druge runde");
             } else {
                 setStatusText("Korak po korak je završen");
             }
@@ -382,6 +437,25 @@ public class KorakPoKorakActivity extends AppCompatActivity {
         Log.d(TAG, "Status text=" + statusText + ", uid=" + uid
                 + ", phase=" + phase + ", activePlayerUid=" + activePlayerUid
                 + ", opponentUid=" + opponentUid + ", openedStepIndex=" + openedSteps);
+        boolean isCurrentUsersTurn = ("ACTIVE_PLAYER".equals(phase) && uid != null && uid.equals(activePlayerUid))
+                || ("OPPONENT_CHANCE".equals(phase) && uid != null && uid.equals(opponentUid));
+        boolean currentUserEqualsActive = uid != null && uid.equals(activePlayerUid);
+        boolean currentUserEqualsOpponent = uid != null && uid.equals(opponentUid);
+        Log.d(TAG, "Turn status currentUserUid=" + uid
+                + ", gameId=" + gameId
+                + ", game.status=" + gameStatus
+                + ", player1Uid=" + player1Uid
+                + ", player2Uid=" + player2Uid
+                + ", roundId=" + (gameRepository == null ? "" : gameRepository.stepRoundId(roundNumber))
+                + ", roundIndex=" + roundNumber
+                + ", activePlayerUid=" + activePlayerUid
+                + ", opponentUid=" + opponentUid
+                + ", currentTurnUid="
+                + ", phase=" + phase
+                + ", currentUserEqualsActive=" + currentUserEqualsActive
+                + ", currentUserEqualsOpponent=" + currentUserEqualsOpponent
+                + ", calculatedStatusText=" + statusText
+                + ", isCurrentUsersTurn=" + isCurrentUsersTurn);
     }
 
     private String value(String value) {

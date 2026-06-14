@@ -121,9 +121,11 @@ public class MojBrojActivity extends AppCompatActivity {
         }
         uid = user == null ? GuestSession.uid(this) : user.getUid();
         Log.d(TAG, "Current uid=" + uid);
+        Log.d(TAG, "onCreate join called uid=" + uid + ", miniGameType=" + GameRepository.MINI_MY_NUMBER);
         gameRepository.joinOrCreateGame(uid, GameRepository.MINI_MY_NUMBER)
                 .addOnSuccessListener(id -> {
                     gameId = id;
+                    Log.d(TAG, "received gameId=" + gameId);
                     Log.d(TAG, "My number gameId=" + gameId);
                     userRepository.updateUserState(uid, true, true, gameId);
                     listenGame();
@@ -250,7 +252,7 @@ public class MojBrojActivity extends AppCompatActivity {
             }
             clearWaitingResultText();
             gameReady = GameRepository.isGameReady(snapshot);
-            Log.d(TAG, "Activity: game ready " + gameReady);
+            Log.d(TAG, "isGameReady " + gameReady);
             if (!gameReady) {
                 updateStatusForPhase(status, player2Uid);
                 setPlayControls(false);
@@ -273,7 +275,7 @@ public class MojBrojActivity extends AppCompatActivity {
             } else {
                 updateStatusForPhase(status, player2Uid);
             }
-            Log.d(TAG, "Activity: round creation started");
+            Log.d(TAG, "round creation attempted");
             gameRepository.ensureMyNumberRound(gameId, roundNumber)
                     .addOnFailureListener(e -> {
                         Log.e(TAG, "Ensure my number round failed", e);
@@ -303,6 +305,7 @@ public class MojBrojActivity extends AppCompatActivity {
                     + ", numbers=" + snapshot.get("numbers"));
             bindRound(snapshot);
         });
+        Log.d(TAG, "round listener attached gameId=" + gameId + ", roundId=" + gameRepository.myNumberRoundId(roundNumber));
     }
 
     private void bindRound(DocumentSnapshot round) {
@@ -491,7 +494,7 @@ public class MojBrojActivity extends AppCompatActivity {
                 Log.d(TAG, "Activity: game ready false");
                 return;
             }
-            Log.d(TAG, "Activity: round creation started");
+            Log.d(TAG, "round creation attempted");
             gameRepository.ensureMyNumberRound(gameId, roundNumber);
             listenRound();
         } else {
@@ -544,8 +547,22 @@ public class MojBrojActivity extends AppCompatActivity {
         if ("waiting".equals(status) || value(player2Uid).isEmpty()) {
             statusText = "Čeka se drugi igrač";
         } else if (GameRepository.PHASE_WAITING_TARGET_STOP.equals(phase)) {
+            if (!GameRepository.isNonEmpty(activePlayerUid)) {
+                Log.e(TAG, "Missing activePlayerUid in Moj broj, currentUid=" + uid
+                        + ", phase=" + phase + ", game.status=" + status + ", player2Uid=" + player2Uid);
+                setStatusText("Priprema igre");
+                gameRepository.repairRoundPlayers(gameId, gameRepository.myNumberRoundId(roundNumber), roundNumber, false);
+                return;
+            }
             statusText = uid.equals(activePlayerUid) ? "Zaustavite traženi broj" : "Protivnik bira traženi broj";
         } else if (GameRepository.PHASE_WAITING_NUMBERS_STOP.equals(phase)) {
+            if (!GameRepository.isNonEmpty(activePlayerUid)) {
+                Log.e(TAG, "Missing activePlayerUid in Moj broj, currentUid=" + uid
+                        + ", phase=" + phase + ", game.status=" + status + ", player2Uid=" + player2Uid);
+                setStatusText("Priprema igre");
+                gameRepository.repairRoundPlayers(gameId, gameRepository.myNumberRoundId(roundNumber), roundNumber, false);
+                return;
+            }
             statusText = uid.equals(activePlayerUid) ? "Zaustavite ponuđene brojeve" : "Protivnik bira brojeve";
         } else if (GameRepository.PHASE_PLAYING.equals(phase)) {
             statusText = "Unesite izraz";
@@ -590,6 +607,17 @@ public class MojBrojActivity extends AppCompatActivity {
                 + ", player2Uid=" + currentPlayer2Uid
                 + ", phase=" + phase
                 + ", statusText=" + status);
+        boolean isCurrentUsersTurn = (GameRepository.PHASE_WAITING_TARGET_STOP.equals(phase)
+                || GameRepository.PHASE_WAITING_NUMBERS_STOP.equals(phase))
+                && uid != null && uid.equals(activePlayerUid);
+        Log.d(TAG, "Turn status currentUid=" + uid
+                + ", player1Uid=n/a, player2Uid=" + currentPlayer2Uid
+                + ", activePlayerUid=" + activePlayerUid
+                + ", opponentUid="
+                + ", currentTurnUid="
+                + ", phase=" + phase
+                + ", calculatedStatusText=" + status
+                + ", isCurrentUsersTurn=" + isCurrentUsersTurn);
     }
 
     @Override

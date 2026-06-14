@@ -104,9 +104,11 @@ public class KoZnaZnaActivity extends AppCompatActivity {
         }
         uid = user == null ? GuestSession.uid(this) : user.getUid();
         Log.d(TAG, "Current uid=" + uid);
+        Log.d(TAG, "onCreate join called uid=" + uid + ", miniGameType=" + GameRepository.MINI_KNOW_IT);
         gameRepository.joinOrCreateGame(uid, GameRepository.MINI_KNOW_IT)
                 .addOnSuccessListener(id -> {
                     gameId = id;
+                    Log.d(TAG, "received gameId=" + gameId);
                     Log.d(TAG, "Know it gameId=" + gameId);
                     userRepository.updateUserState(uid, true, true, gameId);
                     listenGame();
@@ -157,22 +159,25 @@ public class KoZnaZnaActivity extends AppCompatActivity {
                 return;
             }
             gameReady = GameRepository.isGameReady(snapshot);
-            Log.d(TAG, "Activity: game ready " + gameReady);
+            Log.d(TAG, "isGameReady " + gameReady);
             if (!gameReady) {
-                setStatus("Čeka se drugi igrač");
+                setStatus("");
                 setAnswerButtonsEnabled(false);
                 return;
             }
             Log.d(TAG, "Game became active, currentUserUid=" + uid + ", gameId=" + gameId
                     + ", player1Uid=" + player1Uid + ", player2Uid=" + player2Uid
                     + ", currentMiniGame=" + snapshot.getString("currentMiniGame"));
+            if (phase.isEmpty()) {
+                setStatus("");
+            }
             if ("finished".equals(status) && GameRepository.PHASE_FINISHED.equals(phase)) {
                 setStatus("Ko zna zna je završeno");
                 setAnswerButtonsEnabled(false);
                 userRepository.updateUserState(uid, true, false, "");
                 return;
             }
-            Log.d(TAG, "Activity: round creation started");
+            Log.d(TAG, "round creation attempted");
             gameRepository.ensureKnowItRound(gameId)
                     .addOnFailureListener(e -> {
                         Log.e(TAG, "Ensure know it round failed", e);
@@ -201,6 +206,7 @@ public class KoZnaZnaActivity extends AppCompatActivity {
                     + ", questionStartedAt=" + snapshot.getTimestamp("questionStartedAt"));
             bindRound(snapshot);
         });
+        Log.d(TAG, "round listener attached gameId=" + gameId + ", roundId=" + gameRepository.knowItRoundId());
     }
 
     private void bindRound(DocumentSnapshot round) {
@@ -394,6 +400,16 @@ public class KoZnaZnaActivity extends AppCompatActivity {
                 + ", hasCurrentUserAnswered=" + hasCurrentUserAnswered
                 + ", hasOtherPlayerAnswered=" + hasOtherPlayerAnswered
                 + ", phase=" + phase);
+        boolean isCurrentUsersTurn = GameRepository.PHASE_PLAYING.equals(phase) && !hasCurrentUserAnswered;
+        Log.d(TAG, "Turn status currentUid=" + uid
+                + ", player1Uid=" + player1Uid
+                + ", player2Uid=" + player2Uid
+                + ", activePlayerUid="
+                + ", opponentUid="
+                + ", currentTurnUid="
+                + ", phase=" + phase
+                + ", calculatedStatusText=" + status
+                + ", isCurrentUsersTurn=" + isCurrentUsersTurn);
     }
 
     @Override
