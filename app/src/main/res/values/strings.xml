@@ -13,8 +13,13 @@
     <string name="go_asocijacije">Asocijacije</string>
     <string name="go_skocko">Skocko</string>
     <string name="go_notifikacije">Notifikacije</string>
+    <string name="go_chat">Cet</string>
     <string name="main_account_section">Nalog</string>
     <string name="main_games_section">Igre</string>
+    <string name="main_match_section">Partija</string>
+    <string name="go_full_match">Igraj partiju</string>
+    <string name="final_result_title">Kraj partije</string>
+    <string name="final_result_main_menu">Glavni meni</string>
 
     <string name="email_or_username">Email ili korisnicko ime</string>
     <string name="email">Email</string>
@@ -53,6 +58,12 @@
     <string name="mock_reset_success">Lozinka je uspesno promenjena.</string>
     <string name="firebase_not_ready">Firebase nije inicijalizovan. Proverite google-services.json i Firebase podesavanja.</string>
     <string name="email_not_verified">Vaš nalog još nije potvrđen. Molimo proverite email i kliknite na link za potvrdu naloga.</string>
+    <string name="chat_title">Cet</string>
+    <string name="chat_message_hint">Unesi poruku</string>
+    <string name="chat_send">Posalji</string>
+    <string name="chat_missing_region">Region nije podesen za ovog korisnika.</string>
+    <string name="chat_empty_message">Poruka ne moze biti prazna.</string>
+    <string name="chat_region_status">Regionalni cet: %1$s</string>
     <string name="invalid_email">Email adresa nije validna.</string>
     <string name="waiting_opponent">Ceka se drugi igrac...</string>
     <string name="not_your_turn">Nije vas potez.</string>

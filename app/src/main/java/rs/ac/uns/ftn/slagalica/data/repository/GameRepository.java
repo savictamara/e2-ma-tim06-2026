@@ -11,6 +11,7 @@ import com.google.firebase.firestore.DocumentSnapshot;
 import com.google.firebase.firestore.EventListener;
 import com.google.firebase.firestore.FieldValue;
 import com.google.firebase.firestore.FirebaseFirestore;
+import com.google.firebase.firestore.FirebaseFirestoreException;
 import com.google.firebase.firestore.ListenerRegistration;
 import com.google.firebase.firestore.QueryDocumentSnapshot;
 import com.google.firebase.firestore.SetOptions;
@@ -18,9 +19,12 @@ import com.google.firebase.firestore.Transaction;
 
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.text.SimpleDateFormat;
+import java.util.Date;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.Random;
 
@@ -33,6 +37,14 @@ public class GameRepository {
     public static final String MINI_CONNECTIONS = "CONNECTIONS";
     public static final String MINI_ASSOCIATIONS = "ASSOCIATIONS";
     public static final String MINI_SKOCKO = "SKOCKO";
+    public static final String[] FULL_MATCH_ORDER = {
+            MINI_KNOW_IT,
+            MINI_CONNECTIONS,
+            MINI_ASSOCIATIONS,
+            MINI_SKOCKO,
+            MINI_STEP_BY_STEP,
+            MINI_MY_NUMBER
+    };
     public static final String PHASE_WAITING_TARGET_STOP = "WAITING_TARGET_STOP";
     public static final String PHASE_WAITING_NUMBERS_STOP = "WAITING_NUMBERS_STOP";
     public static final String PHASE_PLAYING = "PLAYING";
@@ -59,6 +71,21 @@ public class GameRepository {
 
     public Task<String> joinOrCreateGame(String uid) {
         return joinOrCreateGame(uid, MINI_STEP_BY_STEP);
+    }
+
+    public Task<String> joinOrCreateFullMatch(String uid) {
+        if (db == null) {
+            return Tasks.forException(new IllegalStateException("Firebase nije inicijalizovan"));
+        }
+        if (isBlank(uid)) {
+            return Tasks.forException(new IllegalArgumentException("Nedostaje uid igraca"));
+        }
+        return grantDailyTokensIfNeeded(uid).continueWithTask(grantTask -> {
+            if (!grantTask.isSuccessful()) {
+                throw grantTask.getException();
+            }
+            return joinOrCreateFullMatchInternal(uid, 0);
+        });
     }
 
     public Task<String> joinOrCreateGame(String uid, String miniGame) {
@@ -146,6 +173,98 @@ public class GameRepository {
                     }
                     return db.runTransaction(transaction -> createGameInTransaction(transaction, uid, miniGame));
                 });
+    }
+
+    private Task<String> joinOrCreateFullMatchInternal(String uid, int attempt) {
+        return db.collection("games")
+                .whereEqualTo("status", "waiting")
+                .whereEqualTo("fullMatch", true)
+                .whereEqualTo("friendly", false)
+                .limit(50)
+                .get()
+                .continueWithTask(task -> {
+                    if (!task.isSuccessful()) {
+                        throw task.getException();
+                    }
+                    QueryDocumentSnapshot candidate = null;
+                    QueryDocumentSnapshot ownWaiting = null;
+                    for (QueryDocumentSnapshot doc : task.getResult()) {
+                        if (isJoinableFullMatch(doc, uid)) {
+                            if (candidate == null || createdAtMillis(doc) < createdAtMillis(candidate)) {
+                                candidate = doc;
+                            }
+                        } else if (isOwnFullMatch(doc, uid)) {
+                            if (ownWaiting == null || createdAtMillis(doc) < createdAtMillis(ownWaiting)) {
+                                ownWaiting = doc;
+                            }
+                        }
+                    }
+                    if (candidate != null) {
+                        QueryDocumentSnapshot finalOwnWaiting = ownWaiting;
+                        return joinWaitingFullMatch(candidate.getReference(), uid).continueWithTask(joinTask -> {
+                            if (!joinTask.isSuccessful()) {
+                                throw joinTask.getException();
+                            }
+                            String joinedGameId = joinTask.getResult();
+                            if (!isBlank(joinedGameId)) {
+                                return Tasks.forResult(joinedGameId);
+                            }
+                            if (attempt < 2) {
+                                return joinOrCreateFullMatchInternal(uid, attempt + 1);
+                            }
+                            if (finalOwnWaiting != null) {
+                                return Tasks.forResult(finalOwnWaiting.getId());
+                            }
+                            return db.runTransaction(transaction -> createFullMatchInTransaction(transaction, uid));
+                        });
+                    }
+                    if (ownWaiting != null) {
+                        return Tasks.forResult(ownWaiting.getId());
+                    }
+                    return db.runTransaction(transaction -> createFullMatchInTransaction(transaction, uid));
+                });
+    }
+
+    private Task<String> joinWaitingFullMatch(DocumentReference gameRef, String uid) {
+        return db.runTransaction(transaction -> {
+            DocumentSnapshot game = transaction.get(gameRef);
+            String player1 = game.getString("player1Uid");
+            if (!game.exists()
+                    || !"waiting".equals(game.getString("status"))
+                    || !Boolean.TRUE.equals(game.getBoolean("fullMatch"))
+                    || isBlank(player1)
+                    || player1.equals(uid)
+                    || !isBlank(game.getString("player2Uid"))) {
+                return "";
+            }
+            spendMatchToken(transaction, uid);
+            transaction.update(gameRef,
+                    "player2Uid", uid,
+                    "status", "active",
+                    "currentPlayerUid", player1,
+                    "updatedAt", FieldValue.serverTimestamp());
+            return gameRef.getId();
+        });
+    }
+
+    private String createFullMatchInTransaction(Transaction transaction, String uid) throws FirebaseFirestoreException {
+        spendMatchToken(transaction, uid);
+        DocumentReference ref = db.collection("games").document();
+        Map<String, Object> game = new HashMap<>();
+        game.put("player1Uid", uid);
+        game.put("player2Uid", null);
+        game.put("currentPlayerUid", uid);
+        game.put("status", "waiting");
+        game.put("currentMiniGame", FULL_MATCH_ORDER[0]);
+        game.put("fullMatch", true);
+        game.put("friendly", false);
+        game.put("matchIndex", 0);
+        game.put("player1Score", 0);
+        game.put("player2Score", 0);
+        game.put("createdAt", FieldValue.serverTimestamp());
+        game.put("updatedAt", FieldValue.serverTimestamp());
+        transaction.set(ref, game);
+        return ref.getId();
     }
 
     private Task<String> joinWaitingGame(DocumentReference gameRef, String uid, String miniGame) {
@@ -309,9 +428,231 @@ public class GameRepository {
                 && isBlank(doc.getString("player2Uid"));
     }
 
+    private boolean isJoinableFullMatch(DocumentSnapshot doc, String uid) {
+        String player1 = doc.getString("player1Uid");
+        return doc.exists()
+                && "waiting".equals(doc.getString("status"))
+                && Boolean.TRUE.equals(doc.getBoolean("fullMatch"))
+                && !Boolean.TRUE.equals(doc.getBoolean("friendly"))
+                && !isBlank(player1)
+                && !player1.equals(uid)
+                && isBlank(doc.getString("player2Uid"));
+    }
+
+    private boolean isOwnFullMatch(DocumentSnapshot doc, String uid) {
+        String player1 = doc.getString("player1Uid");
+        return doc.exists()
+                && "waiting".equals(doc.getString("status"))
+                && Boolean.TRUE.equals(doc.getBoolean("fullMatch"))
+                && uid.equals(player1)
+                && isBlank(doc.getString("player2Uid"));
+    }
+
+    public Task<Void> completeMiniGame(String gameId, String completedMiniGame) {
+        if (db == null || isBlank(gameId) || isBlank(completedMiniGame)) {
+            return Tasks.forException(new IllegalStateException("Firebase nije inicijalizovan"));
+        }
+        DocumentReference gameRef = db.collection("games").document(gameId);
+        return db.runTransaction(transaction -> {
+            DocumentSnapshot game = transaction.get(gameRef);
+            if (!game.exists() || !Boolean.TRUE.equals(game.getBoolean("fullMatch"))) {
+                return null;
+            }
+            if (!completedMiniGame.equals(game.getString("currentMiniGame"))) {
+                return null;
+            }
+            if (Boolean.TRUE.equals(game.getBoolean("matchRewardsApplied"))) {
+                return null;
+            }
+            int index = intValue(game.get("matchIndex"));
+            if (index < 0 || index >= FULL_MATCH_ORDER.length
+                    || !completedMiniGame.equals(FULL_MATCH_ORDER[index])) {
+                index = indexOfMiniGame(completedMiniGame);
+            }
+            if (index < 0) {
+                return null;
+            }
+            if (index + 1 < FULL_MATCH_ORDER.length) {
+                transaction.update(gameRef,
+                        "matchIndex", index + 1,
+                        "currentMiniGame", FULL_MATCH_ORDER[index + 1],
+                        "status", "active",
+                        "currentPlayerUid", game.getString("player1Uid"),
+                        "updatedAt", FieldValue.serverTimestamp());
+            } else {
+                applyFinalMatchRewards(transaction, gameRef, game, false);
+            }
+            return null;
+        });
+    }
+
+    public Task<Void> abandonGame(String gameId, String uid) {
+        if (db == null || isBlank(gameId) || isBlank(uid)) {
+            return Tasks.forResult(null);
+        }
+        DocumentReference gameRef = db.collection("games").document(gameId);
+        return db.runTransaction(transaction -> {
+            DocumentSnapshot game = transaction.get(gameRef);
+            if (!game.exists() || !"active".equals(game.getString("status"))) {
+                return null;
+            }
+            String player1 = game.getString("player1Uid");
+            String player2 = game.getString("player2Uid");
+            if (!uid.equals(player1) && !uid.equals(player2)) {
+                return null;
+            }
+            String winner = uid.equals(player1) ? player2 : player1;
+            int player1Score = intValue(game.get("player1Score"));
+            int player2Score = intValue(game.get("player2Score"));
+            int winnerScore = uid.equals(player1) ? player2Score : player1Score;
+            RewardResult winnerReward = applyPlayerReward(transaction, winner, winnerScore, true, false);
+            transaction.update(gameRef,
+                    "status", "finished",
+                    "abandonedByUid", uid,
+                    "winnerUid", winner,
+                    "player1StarsDelta", uid.equals(player1) ? 0 : winnerReward.starsDelta,
+                    "player2StarsDelta", uid.equals(player2) ? 0 : winnerReward.starsDelta,
+                    "player1TokensAwarded", uid.equals(player1) ? 0 : winnerReward.tokensAwarded,
+                    "player2TokensAwarded", uid.equals(player2) ? 0 : winnerReward.tokensAwarded,
+                    "matchRewardsApplied", true,
+                    "updatedAt", FieldValue.serverTimestamp());
+            updateUserStateInTransaction(transaction, uid, false, "");
+            updateUserStateInTransaction(transaction, winner, false, "");
+            return null;
+        });
+    }
+
+    private Task<Void> grantDailyTokensIfNeeded(String uid) {
+        DocumentReference userRef = db.collection("users").document(uid);
+        return db.runTransaction(transaction -> {
+            DocumentSnapshot user = transaction.get(userRef);
+            if (!user.exists()) {
+                return null;
+            }
+            String today = todayKey();
+            if (today.equals(user.getString("lastDailyTokenGrant"))) {
+                return null;
+            }
+            long tokens = longValueZero(user.get("tokens")) + 5;
+            transaction.set(userRef, mapOf("tokens", tokens, "lastDailyTokenGrant", today), SetOptions.merge());
+            return null;
+        });
+    }
+
+    private void spendMatchToken(Transaction transaction, String uid) throws FirebaseFirestoreException {
+        DocumentReference userRef = db.collection("users").document(uid);
+        DocumentSnapshot user = transaction.get(userRef);
+        if (!user.exists()) {
+            return;
+        }
+        long tokens = longValueZero(user.get("tokens"));
+        if (tokens <= 0) {
+            throw new IllegalStateException("Nemate dovoljno tokena za zapocinjanje partije.");
+        }
+        transaction.set(userRef, mapOf("tokens", tokens - 1), SetOptions.merge());
+    }
+
+    private void applyFinalMatchRewards(Transaction transaction, DocumentReference gameRef,
+                                        DocumentSnapshot game, boolean friendly) throws FirebaseFirestoreException {
+        String player1 = game.getString("player1Uid");
+        String player2 = game.getString("player2Uid");
+        int player1Score = intValue(game.get("player1Score"));
+        int player2Score = intValue(game.get("player2Score"));
+        String winner = player1Score >= player2Score ? player1 : player2;
+        String loser = player1Score >= player2Score ? player2 : player1;
+        Map<String, Object> updates = new HashMap<>();
+        updates.put("status", "finished");
+        updates.put("winnerUid", winner);
+        updates.put("matchRewardsApplied", true);
+        updates.put("updatedAt", FieldValue.serverTimestamp());
+        RewardResult player1Reward = RewardResult.none();
+        RewardResult player2Reward = RewardResult.none();
+        if (!friendly) {
+            player1Reward = applyPlayerReward(transaction, player1, player1Score, player1.equals(winner), player1.equals(loser));
+            player2Reward = applyPlayerReward(transaction, player2, player2Score, player2.equals(winner), player2.equals(loser));
+        }
+        updates.put("player1StarsDelta", player1Reward.starsDelta);
+        updates.put("player2StarsDelta", player2Reward.starsDelta);
+        updates.put("player1TokensAwarded", player1Reward.tokensAwarded);
+        updates.put("player2TokensAwarded", player2Reward.tokensAwarded);
+        transaction.update(gameRef, updates);
+        updateUserStateInTransaction(transaction, player1, false, "");
+        updateUserStateInTransaction(transaction, player2, false, "");
+    }
+
+    private RewardResult applyPlayerReward(Transaction transaction, String uid, int score,
+                                           boolean winner, boolean loser) throws FirebaseFirestoreException {
+        if (isBlank(uid)) {
+            return RewardResult.none();
+        }
+        DocumentReference userRef = db.collection("users").document(uid);
+        DocumentSnapshot user = transaction.get(userRef);
+        if (!user.exists()) {
+            return RewardResult.none();
+        }
+        long stars = longValueZero(user.get("stars"));
+        long tokens = longValueZero(user.get("tokens"));
+        long progress = longValueZero(user.get("starTokenProgress"));
+        long scoreStars = Math.max(0, score) / 40;
+        long delta = winner ? 10 + scoreStars : loser ? -10 + scoreStars : scoreStars;
+        long newStars = Math.max(0, stars + delta);
+        long actualDelta = newStars - stars;
+        long earned = Math.max(0, delta);
+        long newProgress = progress + earned;
+        long tokenBonus = newProgress / 50;
+        newProgress = newProgress % 50;
+        transaction.set(userRef, mapOf(
+                "stars", newStars,
+                "tokens", tokens + tokenBonus,
+                "starTokenProgress", newProgress
+        ), SetOptions.merge());
+        return new RewardResult(actualDelta, tokenBonus);
+    }
+
+    private static class RewardResult {
+        final long starsDelta;
+        final long tokensAwarded;
+
+        RewardResult(long starsDelta, long tokensAwarded) {
+            this.starsDelta = starsDelta;
+            this.tokensAwarded = tokensAwarded;
+        }
+
+        static RewardResult none() {
+            return new RewardResult(0, 0);
+        }
+    }
+
+    private void updateUserStateInTransaction(Transaction transaction, String uid,
+                                              boolean inGame, String currentGameId) {
+        if (isBlank(uid)) {
+            return;
+        }
+        DocumentReference userRef = db.collection("users").document(uid);
+        transaction.set(userRef, mapOf("online", true, "inGame", inGame,
+                "currentGameId", currentGameId == null ? "" : currentGameId), SetOptions.merge());
+    }
+
+    private int indexOfMiniGame(String miniGame) {
+        for (int i = 0; i < FULL_MATCH_ORDER.length; i++) {
+            if (FULL_MATCH_ORDER[i].equals(miniGame)) {
+                return i;
+            }
+        }
+        return -1;
+    }
+
+    private String todayKey() {
+        return new SimpleDateFormat("yyyyMMdd", Locale.US).format(new Date());
+    }
+
     private long createdAtMillis(DocumentSnapshot doc) {
         Timestamp createdAt = doc.getTimestamp("createdAt");
         return createdAt == null ? Long.MAX_VALUE : createdAt.toDate().getTime();
+    }
+
+    private long longValueZero(Object value) {
+        return value instanceof Number ? ((Number) value).longValue() : 0;
     }
 
     private boolean isBlank(String value) {

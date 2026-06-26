@@ -25,6 +25,7 @@ import rs.ac.uns.ftn.slagalica.data.repository.GameRepository;
 import rs.ac.uns.ftn.slagalica.data.repository.StatsRepository;
 import rs.ac.uns.ftn.slagalica.data.repository.UserRepository;
 import rs.ac.uns.ftn.slagalica.util.FirebaseInitializer;
+import rs.ac.uns.ftn.slagalica.util.GameFlow;
 import rs.ac.uns.ftn.slagalica.util.GameHeaderHelper;
 import rs.ac.uns.ftn.slagalica.util.GuestSession;
 
@@ -61,6 +62,8 @@ public class AsocijacijeActivity extends AppCompatActivity {
     private boolean statsRecordRequested = false;
     private boolean mustGuessAfterOpen = false;
     private boolean gameReady = false;
+    private boolean fullMatch = false;
+    private boolean completingMiniGame = false;
     private String canContinueGuessingUid = "";
 
     private TextView tvRound;
@@ -96,6 +99,13 @@ public class AsocijacijeActivity extends AppCompatActivity {
         }
         uid = user == null ? GuestSession.uid(this) : user.getUid();
         Log.d(TAG, "Current association uid=" + uid);
+        fullMatch = GameFlow.isFullMatch(getIntent());
+        if (GameFlow.hasExistingGame(getIntent())) {
+            gameId = GameFlow.existingGameId(getIntent());
+            userRepository.updateUserState(uid, true, true, gameId);
+            listenGame();
+            return;
+        }
         Log.d(TAG, "onCreate join called uid=" + uid + ", miniGameType=" + GameRepository.MINI_ASSOCIATIONS);
         gameRepository.joinOrCreateGame(uid, GameRepository.MINI_ASSOCIATIONS)
                 .addOnSuccessListener(id -> {
@@ -182,6 +192,9 @@ public class AsocijacijeActivity extends AppCompatActivity {
             Log.d(TAG, "Activity game snapshot: status=" + status
                     + ", player1Uid=" + player1Uid + ", player2Uid=" + player2Uid);
             if (!GameRepository.MINI_ASSOCIATIONS.equals(snapshot.getString("currentMiniGame"))) {
+                if (fullMatch && GameFlow.openMiniGame(this, gameId, snapshot.getString("currentMiniGame"))) {
+                    return;
+                }
                 setStatus("Asocijacije nisu aktivna igra");
                 setControls(false);
                 Log.d(TAG, "Ignoring game snapshot for different mini game, gameId=" + gameId
@@ -260,6 +273,9 @@ public class AsocijacijeActivity extends AppCompatActivity {
             } else {
                 setStatus("Asocijacije su završene");
                 recordStatsOnce();
+                if (fullMatch) {
+                    completeMiniGameOnce();
+                }
             }
             return;
         }
@@ -422,6 +438,15 @@ public class AsocijacijeActivity extends AppCompatActivity {
                 .addOnFailureListener(e -> Log.e(TAG, "Record associations stats failed", e));
     }
 
+    private void completeMiniGameOnce() {
+        if (completingMiniGame || gameRepository == null || gameId == null || gameId.isEmpty()) {
+            return;
+        }
+        completingMiniGame = true;
+        gameRepository.completeMiniGame(gameId, GameRepository.MINI_ASSOCIATIONS)
+                .addOnFailureListener(e -> Log.e(TAG, "Complete associations in match failed", e));
+    }
+
     private void setControls(boolean enabled) {
         for (EditText input : columnInputs) {
             input.setEnabled(enabled);
@@ -525,5 +550,14 @@ public class AsocijacijeActivity extends AppCompatActivity {
             roundListener.remove();
         }
         super.onDestroy();
+    }
+
+    @Override
+    public void onBackPressed() {
+        if (fullMatch && gameRepository != null && gameId != null && !gameId.isEmpty()) {
+            gameRepository.abandonGame(gameId, uid)
+                    .addOnFailureListener(e -> Log.e(TAG, "Abandon match failed", e));
+        }
+        super.onBackPressed();
     }
 }

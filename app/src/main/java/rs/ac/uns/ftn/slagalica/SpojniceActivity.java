@@ -25,6 +25,7 @@ import rs.ac.uns.ftn.slagalica.data.repository.GameRepository;
 import rs.ac.uns.ftn.slagalica.data.repository.StatsRepository;
 import rs.ac.uns.ftn.slagalica.data.repository.UserRepository;
 import rs.ac.uns.ftn.slagalica.util.FirebaseInitializer;
+import rs.ac.uns.ftn.slagalica.util.GameFlow;
 import rs.ac.uns.ftn.slagalica.util.GameHeaderHelper;
 import rs.ac.uns.ftn.slagalica.util.GuestSession;
 
@@ -56,6 +57,8 @@ public class SpojniceActivity extends AppCompatActivity {
     private int player2Score = 0;
     private boolean statsRecordRequested = false;
     private boolean gameReady = false;
+    private boolean fullMatch = false;
+    private boolean completingMiniGame = false;
     private Map<String, Object> matchedPairs;
     private Map<String, Object> attemptsByPlayer;
     private List<Integer> usedLeftIndexes = new ArrayList<>();
@@ -126,6 +129,13 @@ public class SpojniceActivity extends AppCompatActivity {
         }
         uid = user == null ? GuestSession.uid(this) : user.getUid();
         Log.d(TAG, "Current uid=" + uid);
+        fullMatch = GameFlow.isFullMatch(getIntent());
+        if (GameFlow.hasExistingGame(getIntent())) {
+            gameId = GameFlow.existingGameId(getIntent());
+            userRepository.updateUserState(uid, true, true, gameId);
+            listenGame();
+            return;
+        }
         Log.d(TAG, "onCreate join called uid=" + uid + ", miniGameType=" + GameRepository.MINI_CONNECTIONS);
         gameRepository.joinOrCreateGame(uid, GameRepository.MINI_CONNECTIONS)
                 .addOnSuccessListener(id -> {
@@ -170,6 +180,9 @@ public class SpojniceActivity extends AppCompatActivity {
             Log.d(TAG, "Activity game snapshot: status=" + status
                     + ", player1Uid=" + player1Uid + ", player2Uid=" + player2Uid);
             if (!GameRepository.MINI_CONNECTIONS.equals(snapshot.getString("currentMiniGame"))) {
+                if (fullMatch && GameFlow.openMiniGame(this, gameId, snapshot.getString("currentMiniGame"))) {
+                    return;
+                }
                 setStatus("Spojnice nisu aktivna igra");
                 setPairButtonsEnabled(false);
                 Log.d(TAG, "Ignoring game snapshot for different mini game, gameId=" + gameId
@@ -197,7 +210,11 @@ public class SpojniceActivity extends AppCompatActivity {
             if ("finished".equals(status) && "FINISHED".equals(phase)) {
                 setStatus("Spojnice su završene");
                 setPairButtonsEnabled(false);
-                userRepository.updateUserState(uid, true, false, "");
+                if (fullMatch) {
+                    completeMiniGameOnce();
+                } else {
+                    userRepository.updateUserState(uid, true, false, "");
+                }
                 return;
             }
             Log.d(TAG, "round creation attempted");
@@ -267,6 +284,9 @@ public class SpojniceActivity extends AppCompatActivity {
             } else {
                 setStatus("Spojnice su završene");
                 recordStatsOnce();
+                if (fullMatch) {
+                    completeMiniGameOnce();
+                }
                 tvTimer.setText(getString(R.string.timer_text, 0));
             }
             return;
@@ -282,6 +302,15 @@ public class SpojniceActivity extends AppCompatActivity {
         statsRecordRequested = true;
         statsRepository.recordConnectionsGame(gameId)
                 .addOnFailureListener(e -> Log.e(TAG, "Record connections stats failed", e));
+    }
+
+    private void completeMiniGameOnce() {
+        if (completingMiniGame || gameRepository == null || gameId == null || gameId.isEmpty()) {
+            return;
+        }
+        completingMiniGame = true;
+        gameRepository.completeMiniGame(gameId, GameRepository.MINI_CONNECTIONS)
+                .addOnFailureListener(e -> Log.e(TAG, "Complete connections in match failed", e));
     }
 
     private void onLeftSelected(int leftIndex) {
@@ -622,6 +651,15 @@ public class SpojniceActivity extends AppCompatActivity {
             roundListener.remove();
         }
         super.onDestroy();
+    }
+
+    @Override
+    public void onBackPressed() {
+        if (fullMatch && gameRepository != null && gameId != null && !gameId.isEmpty()) {
+            gameRepository.abandonGame(gameId, uid)
+                    .addOnFailureListener(e -> Log.e(TAG, "Abandon match failed", e));
+        }
+        super.onBackPressed();
     }
 
     private String value(String value) {

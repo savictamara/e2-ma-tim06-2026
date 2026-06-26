@@ -30,6 +30,7 @@ import rs.ac.uns.ftn.slagalica.data.repository.GameRepository;
 import rs.ac.uns.ftn.slagalica.data.repository.StatsRepository;
 import rs.ac.uns.ftn.slagalica.data.repository.UserRepository;
 import rs.ac.uns.ftn.slagalica.util.FirebaseInitializer;
+import rs.ac.uns.ftn.slagalica.util.GameFlow;
 import rs.ac.uns.ftn.slagalica.util.GameHeaderHelper;
 import rs.ac.uns.ftn.slagalica.util.GuestSession;
 
@@ -88,6 +89,8 @@ public class SkockoActivity extends AppCompatActivity {
     private boolean statsRecordRequested = false;
     private boolean controlsEnabled = false;
     private boolean gameReady = false;
+    private boolean fullMatch = false;
+    private boolean completingMiniGame = false;
 
     private TextView tvRound;
     private TextView tvCurrentPlayer;
@@ -141,6 +144,14 @@ public class SkockoActivity extends AppCompatActivity {
         }
         uid = user == null ? GuestSession.uid(this) : user.getUid();
         Log.d(TAG, "currentUserUid=" + uid);
+        fullMatch = GameFlow.isFullMatch(getIntent());
+        if (GameFlow.hasExistingGame(getIntent())) {
+            gameId = GameFlow.existingGameId(getIntent());
+            userRepository.updateUserState(uid, true, true, gameId);
+            listenGame();
+            btnCheck.setOnClickListener(v -> submitGuess());
+            return;
+        }
         Log.d(TAG, "onCreate join called uid=" + uid + ", miniGameType=" + GameRepository.MINI_SKOCKO);
         gameRepository.joinOrCreateGame(uid, GameRepository.MINI_SKOCKO)
                 .addOnSuccessListener(id -> {
@@ -208,9 +219,15 @@ public class SkockoActivity extends AppCompatActivity {
                 setControls(false);
                 tvTimer.setText(getString(R.string.timer_text, 0));
                 recordStatsOnce();
+                if (fullMatch) {
+                    completeMiniGameOnce();
+                }
                 return;
             }
             if (!GameRepository.MINI_SKOCKO.equals(snapshot.getString("currentMiniGame"))) {
+                if (fullMatch && GameFlow.openMiniGame(this, gameId, snapshot.getString("currentMiniGame"))) {
+                    return;
+                }
                 setControls(false);
                 return;
             }
@@ -296,6 +313,9 @@ public class SkockoActivity extends AppCompatActivity {
             } else {
                 setStatusText("Skočko je završen");
                 recordStatsOnce();
+                if (fullMatch) {
+                    completeMiniGameOnce();
+                }
             }
             return;
         }
@@ -548,6 +568,15 @@ public class SkockoActivity extends AppCompatActivity {
                 .addOnFailureListener(e -> Log.e(TAG, "Record skocko stats failed", e));
     }
 
+    private void completeMiniGameOnce() {
+        if (completingMiniGame || gameRepository == null || gameId == null || gameId.isEmpty()) {
+            return;
+        }
+        completingMiniGame = true;
+        gameRepository.completeMiniGame(gameId, GameRepository.MINI_SKOCKO)
+                .addOnFailureListener(e -> Log.e(TAG, "Complete skocko in match failed", e));
+    }
+
     private List<Object> attemptsFor(DocumentSnapshot round, String playerUid) {
         Map<String, Object> attemptsByPlayer = (Map<String, Object>) round.get("attemptsByPlayer");
         Object raw = attemptsByPlayer == null ? null : attemptsByPlayer.get(playerUid);
@@ -625,5 +654,14 @@ public class SkockoActivity extends AppCompatActivity {
             roundListener.remove();
         }
         super.onDestroy();
+    }
+
+    @Override
+    public void onBackPressed() {
+        if (fullMatch && gameRepository != null && gameId != null && !gameId.isEmpty()) {
+            gameRepository.abandonGame(gameId, uid)
+                    .addOnFailureListener(e -> Log.e(TAG, "Abandon match failed", e));
+        }
+        super.onBackPressed();
     }
 }

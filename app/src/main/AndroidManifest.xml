@@ -12,6 +12,12 @@
         android:supportsRtl="true"
         android:theme="@style/Theme.SlagalicaStudent1KT1">
         <activity
+            android:name=".ChatActivity"
+            android:exported="false" />
+        <activity
+            android:name=".FinalResultActivity"
+            android:exported="false" />
+        <activity
             android:name=".NotificationDetailActivity"
             android:exported="false" />
         <activity

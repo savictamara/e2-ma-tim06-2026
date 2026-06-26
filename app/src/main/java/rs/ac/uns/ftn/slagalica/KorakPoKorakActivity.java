@@ -24,6 +24,7 @@ import rs.ac.uns.ftn.slagalica.data.repository.StatsRepository;
 import rs.ac.uns.ftn.slagalica.data.repository.UserRepository;
 import rs.ac.uns.ftn.slagalica.domain.service.StepByStepService;
 import rs.ac.uns.ftn.slagalica.util.FirebaseInitializer;
+import rs.ac.uns.ftn.slagalica.util.GameFlow;
 import rs.ac.uns.ftn.slagalica.util.GameHeaderHelper;
 import rs.ac.uns.ftn.slagalica.util.GuestSession;
 
@@ -52,6 +53,8 @@ public class KorakPoKorakActivity extends AppCompatActivity {
     private int player2Score = 0;
     private boolean statsRecordRequested = false;
     private boolean gameReady = false;
+    private boolean fullMatch = false;
+    private boolean completingMiniGame = false;
     private TextView tvTimer;
     private TextView tvRound;
     private TextView tvPoints;
@@ -104,8 +107,16 @@ public class KorakPoKorakActivity extends AppCompatActivity {
         }
         uid = currentUser == null ? GuestSession.uid(this) : currentUser.getUid();
         Log.d(TAG, "currentUserUid=" + uid);
+        fullMatch = GameFlow.isFullMatch(getIntent());
         gameRepository.seedStepQuestionsIfNeeded()
                 .addOnFailureListener(e -> Log.e(TAG, "Seed step questions failed", e));
+        if (GameFlow.hasExistingGame(getIntent())) {
+            gameId = GameFlow.existingGameId(getIntent());
+            userRepository.updateUserState(uid, true, true, gameId);
+            bindCheckSolutionAction();
+            listenGame();
+            return;
+        }
         Log.d(TAG, "onCreate join called uid=" + uid + ", miniGameType=" + GameRepository.MINI_STEP_BY_STEP);
         gameRepository.joinOrCreateGame(uid, GameRepository.MINI_STEP_BY_STEP)
                 .addOnSuccessListener(id -> {
@@ -120,6 +131,10 @@ public class KorakPoKorakActivity extends AppCompatActivity {
                     show(e.getMessage());
                 });
 
+        bindCheckSolutionAction();
+    }
+
+    private void bindCheckSolutionAction() {
         btnCheckSolution.setOnClickListener(v -> {
             String solution = etSolution.getText().toString().trim();
             if (solution.isEmpty()) {
@@ -180,6 +195,9 @@ public class KorakPoKorakActivity extends AppCompatActivity {
                 return;
             }
             if (!GameRepository.MINI_STEP_BY_STEP.equals(snapshot.getString("currentMiniGame"))) {
+                if (fullMatch && GameFlow.openMiniGame(this, gameId, snapshot.getString("currentMiniGame"))) {
+                    return;
+                }
                 tvResult.setText(getString(R.string.result_text, "Korak po korak je zavrsen. Predjite na Moj broj."));
                 setControls(false);
                 setStatusText("Korak po korak je završen");
@@ -340,6 +358,9 @@ public class KorakPoKorakActivity extends AppCompatActivity {
             listenRound();
         } else {
             recordStatsOnce();
+            if (fullMatch) {
+                completeMiniGameOnce();
+            }
             gameRepository.getGame(gameId)
                     .addOnSuccessListener(game -> {
                         Long p1 = game.getLong("player1Score");
@@ -370,6 +391,15 @@ public class KorakPoKorakActivity extends AppCompatActivity {
         statsRecordRequested = true;
         statsRepository.recordStepGame(gameId)
                 .addOnFailureListener(e -> Log.e(TAG, "Record step stats failed", e));
+    }
+
+    private void completeMiniGameOnce() {
+        if (completingMiniGame || gameRepository == null || gameId == null || gameId.isEmpty()) {
+            return;
+        }
+        completingMiniGame = true;
+        gameRepository.completeMiniGame(gameId, GameRepository.MINI_STEP_BY_STEP)
+                .addOnFailureListener(e -> Log.e(TAG, "Complete step in match failed", e));
     }
 
     private void setControls(boolean enabled) {
@@ -478,5 +508,14 @@ public class KorakPoKorakActivity extends AppCompatActivity {
             roundListener.remove();
         }
         super.onDestroy();
+    }
+
+    @Override
+    public void onBackPressed() {
+        if (fullMatch && gameRepository != null && gameId != null && !gameId.isEmpty()) {
+            gameRepository.abandonGame(gameId, uid)
+                    .addOnFailureListener(e -> Log.e(TAG, "Abandon match failed", e));
+        }
+        super.onBackPressed();
     }
 }

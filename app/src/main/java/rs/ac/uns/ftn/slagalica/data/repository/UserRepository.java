@@ -52,6 +52,13 @@ public class UserRepository {
         return db.collection("users").document(uid).addSnapshotListener(listener);
     }
 
+    public Task<DocumentSnapshot> getUser(String uid) {
+        if (db == null || uid == null || uid.isEmpty()) {
+            return Tasks.forException(new IllegalStateException("Firebase nije inicijalizovan"));
+        }
+        return db.collection("users").document(uid).get();
+    }
+
     public ListenerRegistration listenUserStats(String uid, String statDocument, EventListener<DocumentSnapshot> listener) {
         if (db == null || uid == null || uid.isEmpty()) {
             return null;

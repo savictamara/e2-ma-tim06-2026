@@ -25,6 +25,7 @@ import rs.ac.uns.ftn.slagalica.data.repository.GameRepository;
 import rs.ac.uns.ftn.slagalica.data.repository.StatsRepository;
 import rs.ac.uns.ftn.slagalica.data.repository.UserRepository;
 import rs.ac.uns.ftn.slagalica.util.FirebaseInitializer;
+import rs.ac.uns.ftn.slagalica.util.GameFlow;
 import rs.ac.uns.ftn.slagalica.util.GameHeaderHelper;
 import rs.ac.uns.ftn.slagalica.util.GuestSession;
 
@@ -52,6 +53,8 @@ public class KoZnaZnaActivity extends AppCompatActivity {
     private boolean answeredCurrentQuestion = false;
     private boolean statsRecordRequested = false;
     private boolean gameReady = false;
+    private boolean fullMatch = false;
+    private boolean completingMiniGame = false;
 
     private TextView tvTimer;
     private TextView tvQuestionIndex;
@@ -104,6 +107,13 @@ public class KoZnaZnaActivity extends AppCompatActivity {
         }
         uid = user == null ? GuestSession.uid(this) : user.getUid();
         Log.d(TAG, "Current uid=" + uid);
+        fullMatch = GameFlow.isFullMatch(getIntent());
+        if (GameFlow.hasExistingGame(getIntent())) {
+            gameId = GameFlow.existingGameId(getIntent());
+            userRepository.updateUserState(uid, true, true, gameId);
+            listenGame();
+            return;
+        }
         Log.d(TAG, "onCreate join called uid=" + uid + ", miniGameType=" + GameRepository.MINI_KNOW_IT);
         gameRepository.joinOrCreateGame(uid, GameRepository.MINI_KNOW_IT)
                 .addOnSuccessListener(id -> {
@@ -147,6 +157,9 @@ public class KoZnaZnaActivity extends AppCompatActivity {
             Log.d(TAG, "Activity game snapshot: status=" + status
                     + ", player1Uid=" + player1Uid + ", player2Uid=" + player2Uid);
             if (!GameRepository.MINI_KNOW_IT.equals(snapshot.getString("currentMiniGame"))) {
+                if (fullMatch && GameFlow.openMiniGame(this, gameId, snapshot.getString("currentMiniGame"))) {
+                    return;
+                }
                 setStatus("Ko zna zna nije aktivna igra");
                 setAnswerButtonsEnabled(false);
                 Log.d(TAG, "Ignoring game snapshot for different mini game, gameId=" + gameId
@@ -174,7 +187,11 @@ public class KoZnaZnaActivity extends AppCompatActivity {
             if ("finished".equals(status) && GameRepository.PHASE_FINISHED.equals(phase)) {
                 setStatus("Ko zna zna je završeno");
                 setAnswerButtonsEnabled(false);
-                userRepository.updateUserState(uid, true, false, "");
+                if (fullMatch) {
+                    completeMiniGameOnce();
+                } else {
+                    userRepository.updateUserState(uid, true, false, "");
+                }
                 return;
             }
             Log.d(TAG, "round creation attempted");
@@ -340,6 +357,9 @@ public class KoZnaZnaActivity extends AppCompatActivity {
             answerButton.setBackgroundResource(R.drawable.bg_step);
         }
         recordStatsOnce();
+        if (fullMatch) {
+            completeMiniGameOnce();
+        }
     }
 
     private void recordStatsOnce() {
@@ -349,6 +369,15 @@ public class KoZnaZnaActivity extends AppCompatActivity {
         statsRecordRequested = true;
         statsRepository.recordKnowItGame(gameId)
                 .addOnFailureListener(e -> Log.e(TAG, "Record know it stats failed", e));
+    }
+
+    private void completeMiniGameOnce() {
+        if (completingMiniGame || gameRepository == null || gameId == null || gameId.isEmpty()) {
+            return;
+        }
+        completingMiniGame = true;
+        gameRepository.completeMiniGame(gameId, GameRepository.MINI_KNOW_IT)
+                .addOnFailureListener(e -> Log.e(TAG, "Complete know it in match failed", e));
     }
 
     private List<Map<String, Object>> readQuestions(DocumentSnapshot round) {
@@ -424,6 +453,15 @@ public class KoZnaZnaActivity extends AppCompatActivity {
             roundListener.remove();
         }
         super.onDestroy();
+    }
+
+    @Override
+    public void onBackPressed() {
+        if (fullMatch && gameRepository != null && gameId != null && !gameId.isEmpty()) {
+            gameRepository.abandonGame(gameId, uid)
+                    .addOnFailureListener(e -> Log.e(TAG, "Abandon match failed", e));
+        }
+        super.onBackPressed();
     }
 
     private String value(String value) {

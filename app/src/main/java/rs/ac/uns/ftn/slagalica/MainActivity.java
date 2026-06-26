@@ -16,9 +16,11 @@ import com.google.firebase.firestore.DocumentChange;
 import com.google.firebase.firestore.ListenerRegistration;
 
 import rs.ac.uns.ftn.slagalica.data.repository.FirebaseAuthRepository;
+import rs.ac.uns.ftn.slagalica.data.repository.GameRepository;
 import rs.ac.uns.ftn.slagalica.data.repository.NotificationRepository;
 import rs.ac.uns.ftn.slagalica.domain.model.AppNotification;
 import rs.ac.uns.ftn.slagalica.util.FirebaseInitializer;
+import rs.ac.uns.ftn.slagalica.util.GameFlow;
 import rs.ac.uns.ftn.slagalica.util.GuestSession;
 import rs.ac.uns.ftn.slagalica.util.NotificationHelper;
 
@@ -26,6 +28,7 @@ public class MainActivity extends AppCompatActivity {
     private static final String TAG = "MainActivity";
     private static final int REQUEST_POST_NOTIFICATIONS = 77;
     private FirebaseAuthRepository authRepository;
+    private GameRepository gameRepository;
     private NotificationRepository notificationRepository;
     private ListenerRegistration notificationListener;
     private Button btnLogin;
@@ -40,6 +43,7 @@ public class MainActivity extends AppCompatActivity {
         Log.d(TAG, "Firebase ensure from MainActivity=" + FirebaseInitializer.ensure(this));
         setContentView(R.layout.activity_main);
         authRepository = new FirebaseAuthRepository(this);
+        gameRepository = new GameRepository(this);
         notificationRepository = new NotificationRepository(this);
         NotificationHelper.createNotificationChannels(this);
         requestNotificationPermissionIfNeeded();
@@ -55,6 +59,8 @@ public class MainActivity extends AppCompatActivity {
         Button btnAsocijacije = findViewById(R.id.btnAsocijacije);
         Button btnSkocko = findViewById(R.id.btnSkocko);
         btnNotifikacije = findViewById(R.id.btnNotifikacije);
+        Button btnFullMatch = findViewById(R.id.btnFullMatch);
+        Button btnChat = findViewById(R.id.btnChat);
 
         btnLogin.setOnClickListener(v -> startActivity(new Intent(this, LoginActivity.class)));
         btnRegister.setOnClickListener(v -> startActivity(new Intent(this, RegisterActivity.class)));
@@ -67,6 +73,8 @@ public class MainActivity extends AppCompatActivity {
         btnAsocijacije.setOnClickListener(v -> startGame(AsocijacijeActivity.class));
         btnSkocko.setOnClickListener(v -> startGame(SkockoActivity.class));
         btnNotifikacije.setOnClickListener(v -> startActivity(new Intent(this, NotifikacijeActivity.class)));
+        btnFullMatch.setOnClickListener(v -> startFullMatch());
+        btnChat.setOnClickListener(v -> startActivity(new Intent(this, ChatActivity.class)));
         updateAccountUi();
         startNotificationListener();
     }
@@ -92,6 +100,28 @@ public class MainActivity extends AppCompatActivity {
 
     private void startGame(Class<?> activityClass) {
         startActivity(new Intent(this, activityClass));
+    }
+
+    private void startFullMatch() {
+        if (gameRepository == null || !gameRepository.isReady()) {
+            android.widget.Toast.makeText(this, R.string.firebase_not_ready, android.widget.Toast.LENGTH_SHORT).show();
+            return;
+        }
+        FirebaseUser user = authRepository.currentUser();
+        String uid = user == null ? GuestSession.uid(this) : user.getUid();
+        gameRepository.joinOrCreateFullMatch(uid)
+                .addOnSuccessListener(gameId -> {
+                    Intent intent = new Intent(this, KoZnaZnaActivity.class);
+                    intent.putExtra(GameFlow.EXTRA_GAME_ID, gameId);
+                    intent.putExtra(GameFlow.EXTRA_FULL_MATCH, true);
+                    startActivity(intent);
+                })
+                .addOnFailureListener(e -> {
+                    String message = e == null || e.getMessage() == null
+                            ? getString(R.string.firebase_not_ready)
+                            : e.getMessage();
+                    android.widget.Toast.makeText(this, message, android.widget.Toast.LENGTH_SHORT).show();
+                });
     }
 
     private void startNotificationListener() {

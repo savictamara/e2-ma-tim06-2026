@@ -29,6 +29,7 @@ import rs.ac.uns.ftn.slagalica.data.repository.UserRepository;
 import rs.ac.uns.ftn.slagalica.domain.service.MyNumberService;
 import rs.ac.uns.ftn.slagalica.util.ExpressionEvaluator;
 import rs.ac.uns.ftn.slagalica.util.FirebaseInitializer;
+import rs.ac.uns.ftn.slagalica.util.GameFlow;
 import rs.ac.uns.ftn.slagalica.util.GameHeaderHelper;
 import rs.ac.uns.ftn.slagalica.util.GuestSession;
 import rs.ac.uns.ftn.slagalica.util.ShakeDetector;
@@ -61,6 +62,9 @@ public class MojBrojActivity extends AppCompatActivity {
     private boolean submitted = false;
     private boolean statsRecordRequested = false;
     private boolean gameReady = false;
+    private boolean fullMatch = false;
+    private boolean completingMiniGame = false;
+    private boolean finalResultOpening = false;
     private String gameStatus = "";
     private String currentPlayer2Uid = "";
     private TextView tvTarget;
@@ -121,19 +125,26 @@ public class MojBrojActivity extends AppCompatActivity {
         }
         uid = user == null ? GuestSession.uid(this) : user.getUid();
         Log.d(TAG, "Current uid=" + uid);
-        Log.d(TAG, "onCreate join called uid=" + uid + ", miniGameType=" + GameRepository.MINI_MY_NUMBER);
-        gameRepository.joinOrCreateGame(uid, GameRepository.MINI_MY_NUMBER)
-                .addOnSuccessListener(id -> {
-                    gameId = id;
-                    Log.d(TAG, "received gameId=" + gameId);
-                    Log.d(TAG, "My number gameId=" + gameId);
-                    userRepository.updateUserState(uid, true, true, gameId);
-                    listenGame();
-                })
-                .addOnFailureListener(e -> {
-                    Log.e(TAG, "My number matchmaking failed", e);
-                    show(e.getMessage());
-                });
+        fullMatch = GameFlow.isFullMatch(getIntent());
+        if (GameFlow.hasExistingGame(getIntent())) {
+            gameId = GameFlow.existingGameId(getIntent());
+            userRepository.updateUserState(uid, true, true, gameId);
+            listenGame();
+        } else {
+            Log.d(TAG, "onCreate join called uid=" + uid + ", miniGameType=" + GameRepository.MINI_MY_NUMBER);
+            gameRepository.joinOrCreateGame(uid, GameRepository.MINI_MY_NUMBER)
+                    .addOnSuccessListener(id -> {
+                        gameId = id;
+                        Log.d(TAG, "received gameId=" + gameId);
+                        Log.d(TAG, "My number gameId=" + gameId);
+                        userRepository.updateUserState(uid, true, true, gameId);
+                        listenGame();
+                    })
+                    .addOnFailureListener(e -> {
+                        Log.e(TAG, "My number matchmaking failed", e);
+                        show(e.getMessage());
+                    });
+        }
 
         btnStopTarget.setOnClickListener(v -> {
             if (!uid.equals(activePlayerUid)) {
@@ -236,6 +247,9 @@ public class MojBrojActivity extends AppCompatActivity {
             gameStatus = value(status);
             currentPlayer2Uid = player2Uid;
             if (!GameRepository.MINI_MY_NUMBER.equals(snapshot.getString("currentMiniGame"))) {
+                if (fullMatch && GameFlow.openMiniGame(this, gameId, snapshot.getString("currentMiniGame"))) {
+                    return;
+                }
                 setStatusText("Moj broj nije aktivna igra");
                 setPlayControls(false);
                 btnStopTarget.setEnabled(false);
@@ -267,7 +281,11 @@ public class MojBrojActivity extends AppCompatActivity {
                 tvResult.setText(getString(R.string.result_text,
                         "Finalni rezultat: " + player1Score + " : " + player2Score));
                 setPlayControls(false);
-                userRepository.updateUserState(uid, true, false, "");
+                if (fullMatch) {
+                    completeMiniGameOnce();
+                } else {
+                    userRepository.updateUserState(uid, true, false, "");
+                }
                 return;
             }
             if (phase.isEmpty()) {
@@ -360,6 +378,9 @@ public class MojBrojActivity extends AppCompatActivity {
                     roundNumber == 1 ? "Runda je završena." : "Finalni rezultat: " + player1Score + " : " + player2Score));
             if (roundNumber == 2) {
                 recordStatsOnce();
+                if (fullMatch) {
+                    completeMiniGameOnce();
+                }
             }
             moveToNextNumberRound();
         }
@@ -372,6 +393,24 @@ public class MojBrojActivity extends AppCompatActivity {
         statsRecordRequested = true;
         statsRepository.recordMyNumberGame(gameId)
                 .addOnFailureListener(e -> Log.e(TAG, "Record my number stats failed", e));
+    }
+
+    private void completeMiniGameOnce() {
+        if (completingMiniGame || gameRepository == null || gameId == null || gameId.isEmpty()) {
+            return;
+        }
+        completingMiniGame = true;
+        gameRepository.completeMiniGame(gameId, GameRepository.MINI_MY_NUMBER)
+                .addOnSuccessListener(ignored -> openFinalResult())
+                .addOnFailureListener(e -> Log.e(TAG, "Complete my number in match failed", e));
+    }
+
+    private void openFinalResult() {
+        if (!fullMatch || finalResultOpening || gameId == null || gameId.isEmpty()) {
+            return;
+        }
+        finalResultOpening = true;
+        GameFlow.openFinalResult(this, gameId);
     }
 
     private void startTimer(DocumentSnapshot round) {
@@ -651,6 +690,15 @@ public class MojBrojActivity extends AppCompatActivity {
             roundListener.remove();
         }
         super.onDestroy();
+    }
+
+    @Override
+    public void onBackPressed() {
+        if (fullMatch && gameRepository != null && gameId != null && !gameId.isEmpty()) {
+            gameRepository.abandonGame(gameId, uid)
+                    .addOnFailureListener(e -> Log.e(TAG, "Abandon match failed", e));
+        }
+        super.onBackPressed();
     }
 
     private String value(String value) {
