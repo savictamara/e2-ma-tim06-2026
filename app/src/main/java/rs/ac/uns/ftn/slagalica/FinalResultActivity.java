@@ -11,6 +11,10 @@ import androidx.appcompat.app.AppCompatActivity;
 import com.google.android.gms.tasks.Tasks;
 import com.google.firebase.firestore.DocumentSnapshot;
 
+import java.util.HashMap;
+import java.util.Map;
+
+import rs.ac.uns.ftn.slagalica.data.repository.ChallengeRepository;
 import rs.ac.uns.ftn.slagalica.data.repository.GameRepository;
 import rs.ac.uns.ftn.slagalica.data.repository.UserRepository;
 import rs.ac.uns.ftn.slagalica.util.FirebaseInitializer;
@@ -18,6 +22,7 @@ import rs.ac.uns.ftn.slagalica.util.GameFlow;
 
 public class FinalResultActivity extends AppCompatActivity {
     private GameRepository gameRepository;
+    private ChallengeRepository challengeRepository;
     private UserRepository userRepository;
     private TextView tvPlayers;
     private TextView tvScores;
@@ -42,6 +47,7 @@ public class FinalResultActivity extends AppCompatActivity {
             return;
         }
         gameRepository = new GameRepository(this);
+        challengeRepository = new ChallengeRepository(this);
         userRepository = new UserRepository(this);
         String gameId = GameFlow.existingGameId(getIntent());
         if (gameId.isEmpty() || !gameRepository.isReady() || !userRepository.isReady()) {
@@ -68,6 +74,10 @@ public class FinalResultActivity extends AppCompatActivity {
     }
 
     private void bindResult(DocumentSnapshot game, String player1Name, String player2Name) {
+        if (Boolean.TRUE.equals(game.getBoolean("challengeRun"))) {
+            submitChallengeResult(game);
+            return;
+        }
         int player1Score = intValue(game.get("player1Score"));
         int player2Score = intValue(game.get("player2Score"));
         String player1Uid = value(game.getString("player1Uid"));
@@ -85,6 +95,37 @@ public class FinalResultActivity extends AppCompatActivity {
         tvRewards.setText("Zvezde i tokeni\n"
                 + player1Name + ": " + signed(p1Stars) + " zvezda, +" + p1Tokens + " tokena\n"
                 + player2Name + ": " + signed(p2Stars) + " zvezda, +" + p2Tokens + " tokena");
+    }
+
+    private void submitChallengeResult(DocumentSnapshot game) {
+        String challengeId = value(game.getString("challengeId"));
+        String challengePlayerUid = value(game.getString("challengePlayerUid"));
+        if (challengeId.isEmpty() || challengePlayerUid.isEmpty() || !challengeRepository.isReady()) {
+            show("Rezultat izazova nije moguce sacuvati.");
+            return;
+        }
+        Map<String, Integer> scores = new HashMap<>();
+        Map<String, Object> rawScores = mapValue(game.get("challengeScores"));
+        for (String miniGame : GameRepository.FULL_MATCH_ORDER) {
+            scores.put(miniGame, intValue(rawScores.get(miniGame)));
+        }
+        tvPlayers.setText("Izazov");
+        tvScores.setText("Ukupno poena: " + sum(scores));
+        tvWinner.setText("Cuvanje rezultata izazova...");
+        tvRewards.setText("");
+        challengeRepository.submitRun(challengeId, challengePlayerUid, scores)
+                .addOnSuccessListener(unused -> openChallengeResults(challengeId))
+                .addOnFailureListener(e -> {
+                    show(e == null || e.getMessage() == null ? "Rezultat izazova nije sacuvan" : e.getMessage());
+                    openChallengeResults(challengeId);
+                });
+    }
+
+    private void openChallengeResults(String challengeId) {
+        Intent intent = new Intent(this, ChallengeResultActivity.class);
+        intent.putExtra(ChallengeResultActivity.EXTRA_CHALLENGE_ID, challengeId);
+        startActivity(intent);
+        finish();
     }
 
     private String displayName(DocumentSnapshot user, String fallback) {
@@ -107,6 +148,21 @@ public class FinalResultActivity extends AppCompatActivity {
 
     private int intValue(Object value) {
         return value instanceof Number ? ((Number) value).intValue() : 0;
+    }
+
+    private int sum(Map<String, Integer> scores) {
+        int total = 0;
+        for (Integer score : scores.values()) {
+            total += score == null ? 0 : score;
+        }
+        return total;
+    }
+
+    private Map<String, Object> mapValue(Object value) {
+        if (value instanceof Map) {
+            return (Map<String, Object>) value;
+        }
+        return new HashMap<>();
     }
 
     private long longValue(Object value) {

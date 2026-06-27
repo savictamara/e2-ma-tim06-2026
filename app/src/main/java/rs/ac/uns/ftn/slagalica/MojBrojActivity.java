@@ -6,6 +6,7 @@ import android.hardware.SensorManager;
 import android.os.Bundle;
 import android.os.CountDownTimer;
 import android.util.Log;
+import android.view.View;
 import android.widget.Button;
 import android.widget.EditText;
 import android.widget.TextView;
@@ -63,6 +64,7 @@ public class MojBrojActivity extends AppCompatActivity {
     private boolean statsRecordRequested = false;
     private boolean gameReady = false;
     private boolean fullMatch = false;
+    private boolean challengeRun = false;
     private boolean completingMiniGame = false;
     private boolean finalResultOpening = false;
     private String gameStatus = "";
@@ -238,8 +240,12 @@ public class MojBrojActivity extends AppCompatActivity {
             Long p2 = snapshot.getLong("player2Score");
             player1Score = p1 == null ? 0 : p1.intValue();
             player2Score = p2 == null ? 0 : p2.intValue();
+            challengeRun = Boolean.TRUE.equals(snapshot.getBoolean("challengeRun"));
             tvPlayer1.setText(getString(R.string.player_points, player1Score));
+            tvPlayer2.setVisibility(challengeRun ? View.GONE : View.VISIBLE);
             tvPlayer2.setText(getString(R.string.player_points, player2Score));
+            headerHelper.setChallengeMode(challengeRun, intValue(snapshot.get("matchIndex")) + 1, GameRepository.FULL_MATCH_ORDER.length);
+            headerHelper.updateGameTitle("Moj broj");
             headerHelper.updatePlayers(snapshot.getString("player1Uid"), player1Score,
                     snapshot.getString("player2Uid"), player2Score);
             String status = snapshot.getString("status");
@@ -258,7 +264,7 @@ public class MojBrojActivity extends AppCompatActivity {
                         + ", currentMiniGame=" + snapshot.getString("currentMiniGame"));
                 return;
             }
-            if ("waiting".equals(status) || player2Uid.isEmpty()) {
+            if (!challengeRun && ("waiting".equals(status) || player2Uid.isEmpty())) {
                 setStatusText("Čeka se drugi igrač");
                 tvResult.setText(R.string.waiting_opponent);
                 setPlayControls(false);
@@ -376,11 +382,12 @@ public class MojBrojActivity extends AppCompatActivity {
             tvPoints.setText(getString(R.string.points_text, points == null ? 0 : points.intValue()));
             tvResult.setText(getString(R.string.result_text,
                     roundNumber == 1 ? "Runda je završena." : "Finalni rezultat: " + player1Score + " : " + player2Score));
-            if (roundNumber == 2) {
+            if (challengeRun || roundNumber == 2) {
                 recordStatsOnce();
                 if (fullMatch) {
                     completeMiniGameOnce();
                 }
+                return;
             }
             moveToNextNumberRound();
         }
@@ -516,6 +523,16 @@ public class MojBrojActivity extends AppCompatActivity {
     }
 
     private void moveToNextNumberRound() {
+        if (challengeRun) {
+            setStatusText("Moj broj je zavrÅ¡en");
+            setPlayControls(false);
+            btnStopTarget.setEnabled(false);
+            btnStopNumbers.setEnabled(false);
+            if (fullMatch) {
+                completeMiniGameOnce();
+            }
+            return;
+        }
         if (roundNumber == 1) {
             setStatusText("Priprema druge runde");
             roundNumber = 2;
@@ -636,6 +653,9 @@ public class MojBrojActivity extends AppCompatActivity {
     }
 
     private void setStatusText(String status) {
+        if (challengeRun) {
+            status = challengeStatus(status);
+        }
         if (tvStatus != null) {
             tvStatus.setText(status);
         }
@@ -657,6 +677,19 @@ public class MojBrojActivity extends AppCompatActivity {
                 + ", phase=" + phase
                 + ", calculatedStatusText=" + status
                 + ", isCurrentUsersTurn=" + isCurrentUsersTurn);
+    }
+
+    private String challengeStatus(String status) {
+        if (status == null || status.trim().isEmpty()) return "Samostalna partija";
+        if (status.contains("ÄŒeka") || status.contains("Čeka") || status.contains("Protivnik")
+                || status.contains("protivnik") || status.contains("drugi")) {
+            return "Samostalna partija";
+        }
+        return status.replace("Priprema druge runde", "Samostalna partija");
+    }
+
+    private int intValue(Object value) {
+        return value instanceof Number ? ((Number) value).intValue() : 0;
     }
 
     @Override

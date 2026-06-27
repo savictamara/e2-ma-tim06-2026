@@ -14,6 +14,8 @@ import rs.ac.uns.ftn.slagalica.NotificationDetailActivity;
 import rs.ac.uns.ftn.slagalica.R;
 import rs.ac.uns.ftn.slagalica.RewardActivity;
 import rs.ac.uns.ftn.slagalica.FriendsActivity;
+import rs.ac.uns.ftn.slagalica.RegionsActivity;
+import rs.ac.uns.ftn.slagalica.ChallengeResultActivity;
 import rs.ac.uns.ftn.slagalica.domain.model.AppNotification;
 
 public final class NotificationHelper {
@@ -63,9 +65,14 @@ public final class NotificationHelper {
             target = RewardActivity.class;
         } else if ("FRIEND_INVITE".equals(notification.type) || "FRIENDLY_MATCH_INVITE".equals(notification.type)) {
             target = FriendsActivity.class;
+        } else if ("CHALLENGE".equals(notification.type) || "CHALLENGE_START".equals(notification.type)) {
+            target = RegionsActivity.class;
+        } else if ("CHALLENGE_RESULT".equals(notification.type)) {
+            target = ChallengeResultActivity.class;
         }
         Intent intent = new Intent(context, target);
         intent.putExtra(NotificationDetailActivity.EXTRA_NOTIFICATION_ID, notification.id);
+        intent.putExtra("actionTargetId", notification.actionTargetId);
         intent.setFlags(Intent.FLAG_ACTIVITY_SINGLE_TOP | Intent.FLAG_ACTIVITY_CLEAR_TOP);
         PendingIntent pendingIntent = PendingIntent.getActivity(
                 context,

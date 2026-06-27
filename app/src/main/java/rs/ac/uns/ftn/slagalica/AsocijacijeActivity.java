@@ -3,6 +3,7 @@ package rs.ac.uns.ftn.slagalica;
 import android.os.Bundle;
 import android.os.CountDownTimer;
 import android.util.Log;
+import android.view.View;
 import android.widget.Button;
 import android.widget.EditText;
 import android.widget.TextView;
@@ -63,6 +64,7 @@ public class AsocijacijeActivity extends AppCompatActivity {
     private boolean mustGuessAfterOpen = false;
     private boolean gameReady = false;
     private boolean fullMatch = false;
+    private boolean challengeRun = false;
     private boolean completingMiniGame = false;
     private String canContinueGuessingUid = "";
 
@@ -184,7 +186,11 @@ public class AsocijacijeActivity extends AppCompatActivity {
             player2Uid = value(snapshot.getString("player2Uid"));
             player1Score = intValue(snapshot.get("player1Score"));
             player2Score = intValue(snapshot.get("player2Score"));
+            challengeRun = Boolean.TRUE.equals(snapshot.getBoolean("challengeRun"));
             updateScore();
+            tvScoreP2.setVisibility(challengeRun ? View.GONE : View.VISIBLE);
+            headerHelper.setChallengeMode(challengeRun, intValue(snapshot.get("matchIndex")) + 1, GameRepository.FULL_MATCH_ORDER.length);
+            headerHelper.updateGameTitle("Asocijacije");
             headerHelper.updatePlayers(player1Uid, player1Score, player2Uid, player2Score);
             Log.d(TAG, "Game snapshot currentUserUid=" + uid
                     + ", gameId=" + gameId + ", status=" + status
@@ -201,7 +207,7 @@ public class AsocijacijeActivity extends AppCompatActivity {
                         + ", currentMiniGame=" + snapshot.getString("currentMiniGame"));
                 return;
             }
-            if ("waiting".equals(status) || player2Uid.isEmpty()) {
+            if (!challengeRun && ("waiting".equals(status) || player2Uid.isEmpty())) {
                 setStatus("Čeka se drugi igrač");
                 setControls(false);
                 return;
@@ -267,7 +273,13 @@ public class AsocijacijeActivity extends AppCompatActivity {
             stopTimer();
             setControls(false);
             tvTimer.setText(getString(R.string.timer_text, 0));
-            if (roundNumber == 1) {
+            if (challengeRun) {
+                setStatus("Asocijacije su zavrÅ¡ene");
+                recordStatsOnce();
+                if (fullMatch) {
+                    completeMiniGameOnce();
+                }
+            } else if (roundNumber == 1) {
                 setStatus("Priprema druge runde");
                 moveToSecondRound();
             } else {
@@ -513,6 +525,9 @@ public class AsocijacijeActivity extends AppCompatActivity {
     }
 
     private void setStatus(String status) {
+        if (challengeRun) {
+            status = challengeStatus(status);
+        }
         tvStatus.setText(status);
         headerHelper.updateStatus(status);
         Log.d(TAG, "Status text=" + status + ", gameId=" + gameId + ", round=" + roundNumber
@@ -527,6 +542,15 @@ public class AsocijacijeActivity extends AppCompatActivity {
                 + ", phase=" + phase
                 + ", calculatedStatusText=" + status
                 + ", isCurrentUsersTurn=" + isCurrentUsersTurn);
+    }
+
+    private String challengeStatus(String status) {
+        if (status == null || status.trim().isEmpty()) return "Samostalna partija";
+        if (status.contains("ÄŒeka") || status.contains("Čeka") || status.contains("Protivnik")
+                || status.contains("protivnik") || status.contains("drugi")) {
+            return "Samostalna partija";
+        }
+        return status.replace("Priprema druge runde", "Samostalna partija");
     }
 
     private void show(String message) {

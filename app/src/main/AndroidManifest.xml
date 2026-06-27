@@ -17,6 +17,12 @@
             android:name=".RegionDetailActivity"
             android:exported="false" />
         <activity
+            android:name=".ChallengeResultActivity"
+            android:exported="false" />
+        <activity
+            android:name=".ChallengeRunActivity"
+            android:exported="false" />
+        <activity
             android:name=".QrScannerActivity"
             android:exported="false" />
         <activity

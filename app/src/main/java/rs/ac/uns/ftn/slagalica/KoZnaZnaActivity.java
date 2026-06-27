@@ -54,6 +54,7 @@ public class KoZnaZnaActivity extends AppCompatActivity {
     private boolean statsRecordRequested = false;
     private boolean gameReady = false;
     private boolean fullMatch = false;
+    private boolean challengeRun = false;
     private boolean completingMiniGame = false;
 
     private TextView tvTimer;
@@ -146,9 +147,14 @@ public class KoZnaZnaActivity extends AppCompatActivity {
             Long p2 = snapshot.getLong("player2Score");
             player1Score = p1 == null ? 0 : p1.intValue();
             player2Score = p2 == null ? 0 : p2.intValue();
+            challengeRun = Boolean.TRUE.equals(snapshot.getBoolean("challengeRun"));
             tvPlayer1Score.setText(getString(R.string.player_points, player1Score));
+            tvPlayer2Score.setVisibility(challengeRun ? View.GONE : View.VISIBLE);
             tvPlayer2Score.setText(getString(R.string.player_points, player2Score));
-            tvPoints.setText(getString(R.string.points_text, uid.equals(player1Uid) ? player1Score : player2Score));
+            tvPoints.setText(challengeRun ? "Ukupan rezultat: " + player1Score
+                    : getString(R.string.points_text, uid.equals(player1Uid) ? player1Score : player2Score));
+            headerHelper.setChallengeMode(challengeRun, intValue(snapshot.get("matchIndex")) + 1, GameRepository.FULL_MATCH_ORDER.length);
+            headerHelper.updateGameTitle("Ko zna zna");
             headerHelper.updatePlayers(player1Uid, player1Score, player2Uid, player2Score);
             Log.d(TAG, "Game snapshot currentUserUid=" + uid
                     + ", gameId=" + snapshot.getId() + ", status=" + status
@@ -166,7 +172,7 @@ public class KoZnaZnaActivity extends AppCompatActivity {
                         + ", currentMiniGame=" + snapshot.getString("currentMiniGame"));
                 return;
             }
-            if ("waiting".equals(status) || player2Uid.isEmpty()) {
+            if (!challengeRun && ("waiting".equals(status) || player2Uid.isEmpty())) {
                 setStatus("Čeka se drugi igrač");
                 setAnswerButtonsEnabled(false);
                 return;
@@ -350,7 +356,8 @@ public class KoZnaZnaActivity extends AppCompatActivity {
         }
         tvQuestionIndex.setText(getString(R.string.kznz_question_counter, QUESTION_COUNT, QUESTION_COUNT));
         tvTimer.setText(getString(R.string.timer_text, 0));
-        tvQuestion.setText("Finalni rezultat: " + player1Score + " : " + player2Score);
+        tvQuestion.setText(challengeRun ? "Ukupan rezultat: " + player1Score
+                : "Finalni rezultat: " + player1Score + " : " + player2Score);
         setStatus("Ko zna zna je završeno");
         setAnswerButtonsEnabled(false);
         for (Button answerButton : answerButtons) {
@@ -421,6 +428,10 @@ public class KoZnaZnaActivity extends AppCompatActivity {
     }
 
     private void setStatus(String status, boolean hasCurrentUserAnswered, boolean hasOtherPlayerAnswered) {
+        if (challengeRun) {
+            status = challengeStatus(status);
+            hasOtherPlayerAnswered = false;
+        }
         tvRoundResult.setText(status);
         headerHelper.updateStatus(status);
         Log.d(TAG, "Status text=" + status + ", gameId=" + gameId
@@ -439,6 +450,19 @@ public class KoZnaZnaActivity extends AppCompatActivity {
                 + ", phase=" + phase
                 + ", calculatedStatusText=" + status
                 + ", isCurrentUsersTurn=" + isCurrentUsersTurn);
+    }
+
+    private String challengeStatus(String status) {
+        if (status == null || status.trim().isEmpty()) return "Samostalna partija";
+        if (status.contains("ÄŒeka") || status.contains("Čeka") || status.contains("Protivnik")
+                || status.contains("protivnik") || status.contains("Oba igra")) {
+            return "Samostalna partija";
+        }
+        return status;
+    }
+
+    private int intValue(Object value) {
+        return value instanceof Number ? ((Number) value).intValue() : 0;
     }
 
     @Override

@@ -90,6 +90,7 @@ public class SkockoActivity extends AppCompatActivity {
     private boolean controlsEnabled = false;
     private boolean gameReady = false;
     private boolean fullMatch = false;
+    private boolean challengeRun = false;
     private boolean completingMiniGame = false;
 
     private TextView tvRound;
@@ -197,6 +198,7 @@ public class SkockoActivity extends AppCompatActivity {
             player2Uid = value(snapshot.getString("player2Uid"));
             player1Score = intValue(snapshot.get("player1Score"));
             player2Score = intValue(snapshot.get("player2Score"));
+            challengeRun = Boolean.TRUE.equals(snapshot.getBoolean("challengeRun"));
             Log.d(TAG, "Game snapshot currentUserUid=" + uid + ", gameId=" + snapshot.getId()
                     + ", status=" + status + ", player1Uid=" + player1Uid + ", player2Uid=" + player2Uid
                     + ", currentMiniGame=" + snapshot.getString("currentMiniGame")
@@ -204,8 +206,11 @@ public class SkockoActivity extends AppCompatActivity {
             Log.d(TAG, "Activity game snapshot: status=" + status
                     + ", player1Uid=" + player1Uid + ", player2Uid=" + player2Uid);
             updateScoreViews();
+            tvScoreP2.setVisibility(challengeRun ? View.GONE : View.VISIBLE);
+            headerHelper.setChallengeMode(challengeRun, intValue(snapshot.get("matchIndex")) + 1, GameRepository.FULL_MATCH_ORDER.length);
+            headerHelper.updateGameTitle("Skočko");
             headerHelper.updatePlayers(player1Uid, player1Score, player2Uid, player2Score);
-            if ("waiting".equals(status) || player2Uid.isEmpty()) {
+            if (!challengeRun && ("waiting".equals(status) || player2Uid.isEmpty())) {
                 setStatusText("Čeka se drugi igrač");
                 setControls(false);
                 tvRound.setText("Runda: -/2");
@@ -307,7 +312,13 @@ public class SkockoActivity extends AppCompatActivity {
             stopTimer();
             tvTimer.setText(getString(R.string.timer_text, 0));
             setControls(false);
-            if (roundNumber == 1) {
+            if (challengeRun) {
+                setStatusText("SkoÄko je zavrÅ¡en");
+                recordStatsOnce();
+                if (fullMatch) {
+                    completeMiniGameOnce();
+                }
+            } else if (roundNumber == 1) {
                 setStatusText("Priprema druge runde");
                 ensureAndListenRound(2);
             } else {
@@ -614,6 +625,9 @@ public class SkockoActivity extends AppCompatActivity {
     }
 
     private void setStatusText(String status) {
+        if (challengeRun) {
+            status = challengeStatus(status);
+        }
         tvStatus.setText(status);
         headerHelper.updateStatus(status);
         Log.d(TAG, "Status text=" + status + ", currentUserUid=" + uid + ", gameId=" + gameId
@@ -631,6 +645,15 @@ public class SkockoActivity extends AppCompatActivity {
                 + ", phase=" + phase
                 + ", calculatedStatusText=" + status
                 + ", isCurrentUsersTurn=" + isCurrentUsersTurn);
+    }
+
+    private String challengeStatus(String status) {
+        if (status == null || status.trim().isEmpty()) return "Samostalna partija";
+        if (status.contains("ÄŒeka") || status.contains("Čeka") || status.contains("Protivnik")
+                || status.contains("protivnik") || status.contains("drugi")) {
+            return "Samostalna partija";
+        }
+        return status.replace("Priprema druge runde", "Samostalna partija");
     }
 
     private void show(String message) {

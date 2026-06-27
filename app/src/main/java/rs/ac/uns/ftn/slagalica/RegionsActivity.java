@@ -3,7 +3,10 @@ package rs.ac.uns.ftn.slagalica;
 import android.content.Intent;
 import android.graphics.Color;
 import android.os.Bundle;
+import android.text.TextUtils;
 import android.view.View;
+import android.widget.Button;
+import android.widget.EditText;
 import android.widget.LinearLayout;
 import android.widget.TextView;
 import android.widget.Toast;
@@ -11,31 +14,49 @@ import android.widget.Toast;
 import androidx.appcompat.app.AppCompatActivity;
 
 import com.google.firebase.auth.FirebaseUser;
+import com.google.firebase.firestore.DocumentSnapshot;
+import com.google.firebase.firestore.QuerySnapshot;
 
+import rs.ac.uns.ftn.slagalica.data.repository.ChallengeRepository;
 import rs.ac.uns.ftn.slagalica.data.repository.FirebaseAuthRepository;
 import rs.ac.uns.ftn.slagalica.data.repository.RegionRepository;
+import rs.ac.uns.ftn.slagalica.domain.model.ChallengeItem;
 import rs.ac.uns.ftn.slagalica.domain.model.RegionDashboard;
 import rs.ac.uns.ftn.slagalica.domain.model.RegionStats;
 import rs.ac.uns.ftn.slagalica.util.GuestSession;
 
 public class RegionsActivity extends AppCompatActivity {
     private RegionRepository regionRepository;
+    private ChallengeRepository challengeRepository;
     private FirebaseAuthRepository authRepository;
     private RegionMapView mapView;
     private TextView tvStatus;
+    private TextView tvChallengeStatus;
     private LinearLayout rankingContainer;
+    private LinearLayout challengesContainer;
+    private EditText etChallengeStars;
+    private EditText etChallengeTokens;
+    private String uid = "";
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_regions);
         regionRepository = new RegionRepository(this);
+        challengeRepository = new ChallengeRepository(this);
         authRepository = new FirebaseAuthRepository(this);
         mapView = findViewById(R.id.regionMapView);
         tvStatus = findViewById(R.id.tvRegionStatus);
+        tvChallengeStatus = findViewById(R.id.tvChallengeStatus);
         rankingContainer = findViewById(R.id.regionRankingContainer);
+        challengesContainer = findViewById(R.id.challengesContainer);
+        etChallengeStars = findViewById(R.id.etChallengeStars);
+        etChallengeTokens = findViewById(R.id.etChallengeTokens);
+        Button btnCreateChallenge = findViewById(R.id.btnCreateChallenge);
         mapView.setOnRegionClickListener(this::openDetail);
+        btnCreateChallenge.setOnClickListener(v -> createChallenge());
         loadRegions();
+        loadChallenges();
     }
 
     private void loadRegions() {
@@ -44,7 +65,7 @@ public class RegionsActivity extends AppCompatActivity {
             return;
         }
         FirebaseUser user = authRepository.currentUser();
-        String uid = user == null ? GuestSession.uid(this) : user.getUid();
+        uid = user == null ? GuestSession.uid(this) : user.getUid();
         tvStatus.setText(R.string.regions_loading);
         regionRepository.loadDashboard(uid)
                 .addOnSuccessListener(this::showDashboard)
@@ -55,6 +76,169 @@ public class RegionsActivity extends AppCompatActivity {
                     tvStatus.setText(message);
                     Toast.makeText(this, message, Toast.LENGTH_SHORT).show();
                 });
+    }
+
+    private void loadChallenges() {
+        if (!challengeRepository.isReady()) {
+            tvChallengeStatus.setText(R.string.firebase_not_ready);
+            return;
+        }
+        if (TextUtils.isEmpty(uid)) {
+            FirebaseUser user = authRepository.currentUser();
+            uid = user == null ? GuestSession.uid(this) : user.getUid();
+        }
+        tvChallengeStatus.setText("Ucitavanje izazova...");
+        challengeRepository.listOpenChallenges()
+                .addOnSuccessListener(this::showChallenges)
+                .addOnFailureListener(e -> {
+                    String message = e == null || e.getMessage() == null ? "Greska pri ucitavanju izazova" : e.getMessage();
+                    tvChallengeStatus.setText(message);
+                    Toast.makeText(this, message, Toast.LENGTH_SHORT).show();
+                });
+    }
+
+    private void createChallenge() {
+        long stars = parseStake(etChallengeStars);
+        long tokens = parseStake(etChallengeTokens);
+        if (stars < 0 || stars > 10 || tokens < 0 || tokens > 2) {
+            Toast.makeText(this, "Zvezde moraju biti 0-10, tokeni 0-2", Toast.LENGTH_SHORT).show();
+            return;
+        }
+        tvChallengeStatus.setText("Kreiranje izazova...");
+        challengeRepository.createChallenge(uid, stars, tokens)
+                .addOnSuccessListener(id -> {
+                    etChallengeStars.setText("");
+                    etChallengeTokens.setText("");
+                    Toast.makeText(this, "Izazov je kreiran", Toast.LENGTH_SHORT).show();
+                    loadChallenges();
+                })
+                .addOnFailureListener(e -> {
+                    String message = e == null || e.getMessage() == null ? "Izazov nije kreiran" : e.getMessage();
+                    tvChallengeStatus.setText(message);
+                    Toast.makeText(this, message, Toast.LENGTH_SHORT).show();
+                });
+    }
+
+    private void showChallenges(QuerySnapshot snapshot) {
+        challengesContainer.removeAllViews();
+        if (snapshot == null || snapshot.isEmpty()) {
+            tvChallengeStatus.setText("Nema otvorenih izazova.");
+            return;
+        }
+        tvChallengeStatus.setText("Izazovi: " + snapshot.size());
+        for (DocumentSnapshot doc : snapshot.getDocuments()) {
+            challengesContainer.addView(challengeRow(challengeRepository.itemFrom(doc)));
+        }
+    }
+
+    private View challengeRow(ChallengeItem item) {
+        LinearLayout card = new LinearLayout(this);
+        card.setOrientation(LinearLayout.VERTICAL);
+        card.setPadding(dp(12), dp(10), dp(12), dp(10));
+        card.setBackgroundResource(R.drawable.bg_card);
+        LinearLayout.LayoutParams params = new LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT);
+        params.setMargins(0, dp(10), 0, 0);
+        card.setLayoutParams(params);
+
+        card.addView(text(item.creatorUsername + " - " + statusLabel(item.status), 15, true));
+        card.addView(text("Ulog: " + item.stakeStars + " zvezda, " + item.stakeTokens
+                + " tokena | Igraci: " + item.currentPlayers + "/" + item.maxPlayers, 13, false));
+
+        LinearLayout actions = new LinearLayout(this);
+        actions.setOrientation(LinearLayout.HORIZONTAL);
+        actions.setPadding(0, dp(8), 0, 0);
+        card.addView(actions);
+
+        if (ChallengeRepository.WAITING.equals(item.status)) {
+            Button join = smallButton("Pridruzi se");
+            join.setEnabled(!uid.equals(item.creatorUid) && item.currentPlayers < item.maxPlayers);
+            join.setOnClickListener(v -> joinChallenge(item.challengeId));
+            actions.addView(join);
+
+            Button start = smallButton("Pokreni");
+            start.setEnabled(uid.equals(item.creatorUid) && item.currentPlayers >= 2);
+            start.setOnClickListener(v -> startChallenge(item.challengeId));
+            actions.addView(start);
+        } else if (ChallengeRepository.ACTIVE.equals(item.status)) {
+            Button play = smallButton("Igraj");
+            play.setOnClickListener(v -> openChallengeRun(item.challengeId));
+            actions.addView(play);
+        } else if (ChallengeRepository.FINISHED.equals(item.status)) {
+            Button results = smallButton("Rezultati");
+            results.setOnClickListener(v -> openChallengeResults(item.challengeId));
+            actions.addView(results);
+        }
+        return card;
+    }
+
+    private void joinChallenge(String challengeId) {
+        tvChallengeStatus.setText("Pridruzivanje izazovu...");
+        challengeRepository.joinChallenge(challengeId, uid)
+                .addOnSuccessListener(unused -> {
+                    Toast.makeText(this, "Pridruzili ste se izazovu", Toast.LENGTH_SHORT).show();
+                    loadChallenges();
+                })
+                .addOnFailureListener(e -> showChallengeError(e, "Ne mozete se pridruziti izazovu"));
+    }
+
+    private void startChallenge(String challengeId) {
+        tvChallengeStatus.setText("Pokretanje izazova...");
+        challengeRepository.startChallenge(challengeId, uid, false)
+                .addOnSuccessListener(unused -> {
+                    Toast.makeText(this, "Izazov je pokrenut", Toast.LENGTH_SHORT).show();
+                    openChallengeRun(challengeId);
+                })
+                .addOnFailureListener(e -> showChallengeError(e, "Izazov nije pokrenut"));
+    }
+
+    private void openChallengeRun(String challengeId) {
+        Intent intent = new Intent(this, ChallengeRunActivity.class);
+        intent.putExtra(ChallengeRunActivity.EXTRA_CHALLENGE_ID, challengeId);
+        startActivity(intent);
+    }
+
+    private void openChallengeResults(String challengeId) {
+        Intent intent = new Intent(this, ChallengeResultActivity.class);
+        intent.putExtra(ChallengeResultActivity.EXTRA_CHALLENGE_ID, challengeId);
+        startActivity(intent);
+    }
+
+    private void showChallengeError(Exception e, String fallback) {
+        String message = e == null || e.getMessage() == null ? fallback : e.getMessage();
+        tvChallengeStatus.setText(message);
+        Toast.makeText(this, message, Toast.LENGTH_SHORT).show();
+        loadChallenges();
+    }
+
+    private long parseStake(EditText editText) {
+        String value = editText.getText() == null ? "" : editText.getText().toString().trim();
+        if (value.isEmpty()) return 0;
+        try {
+            return Long.parseLong(value);
+        } catch (NumberFormatException e) {
+            return -1;
+        }
+    }
+
+    private Button smallButton(String label) {
+        Button button = new Button(this);
+        button.setText(label);
+        button.setTextSize(12);
+        button.setTextColor(Color.WHITE);
+        button.setBackgroundResource(R.drawable.bg_button_primary);
+        LinearLayout.LayoutParams params = new LinearLayout.LayoutParams(0, dp(44), 1);
+        params.setMargins(0, 0, dp(8), 0);
+        button.setLayoutParams(params);
+        return button;
+    }
+
+    private String statusLabel(String status) {
+        if (ChallengeRepository.WAITING.equals(status)) return "ceka igrace";
+        if (ChallengeRepository.ACTIVE.equals(status)) return "aktivan";
+        if (ChallengeRepository.FINISHED.equals(status)) return "zavrsen";
+        if (ChallengeRepository.CANCELLED.equals(status)) return "otkazan";
+        return status == null ? "" : status;
     }
 
     private void showDashboard(RegionDashboard dashboard) {

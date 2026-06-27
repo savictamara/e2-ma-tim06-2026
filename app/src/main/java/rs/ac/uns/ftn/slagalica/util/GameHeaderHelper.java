@@ -25,6 +25,9 @@ public class GameHeaderHelper {
     private String lastPlayer2Input = "";
     private int player1Score = 0;
     private int player2Score = 0;
+    private boolean challengeMode = false;
+    private int challengeIndex = 0;
+    private int challengeTotal = 6;
 
     public GameHeaderHelper(Context context, View root) {
         tvTitle = root.findViewById(R.id.tvHeaderGameTitle);
@@ -46,7 +49,18 @@ public class GameHeaderHelper {
 
     public void updateGameTitle(String title) {
         if (tvTitle != null) {
-            tvTitle.setText(title == null ? "" : title.toUpperCase());
+            String clean = title == null ? "" : title;
+            tvTitle.setText(challengeMode ? ("Izazov - " + clean).toUpperCase() : clean.toUpperCase());
+        }
+    }
+
+    public void setChallengeMode(boolean enabled, int gameIndex, int totalGames) {
+        challengeMode = enabled;
+        challengeIndex = Math.max(1, gameIndex);
+        challengeTotal = Math.max(1, totalGames);
+        renderPlayers();
+        if (enabled && tvStatus != null) {
+            tvStatus.setText("Samostalna partija - Igra " + challengeIndex + "/" + challengeTotal);
         }
     }
 
@@ -93,10 +107,24 @@ public class GameHeaderHelper {
     }
 
     private void renderPlayers() {
+        if (challengeMode) {
+            if (tvPlayer1 != null) {
+                tvPlayer1.setText("Trenutni rezultat");
+            }
+            if (tvPlayer2 != null) {
+                tvPlayer2.setVisibility(View.GONE);
+            }
+            if (tvScore != null) {
+                tvScore.setText("Ukupan rezultat: " + player1Score);
+            }
+            return;
+        }
         if (tvPlayer1 != null) {
+            tvPlayer1.setVisibility(View.VISIBLE);
             tvPlayer1.setText(player1DisplayName);
         }
         if (tvPlayer2 != null) {
+            tvPlayer2.setVisibility(View.VISIBLE);
             tvPlayer2.setText(player2DisplayName);
         }
         if (tvScore != null) {

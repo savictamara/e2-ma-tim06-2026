@@ -4,6 +4,7 @@ import android.content.Intent;
 import android.os.Bundle;
 import android.os.CountDownTimer;
 import android.util.Log;
+import android.view.View;
 import android.widget.EditText;
 import android.widget.TextView;
 import android.widget.Toast;
@@ -54,6 +55,7 @@ public class KorakPoKorakActivity extends AppCompatActivity {
     private boolean statsRecordRequested = false;
     private boolean gameReady = false;
     private boolean fullMatch = false;
+    private boolean challengeRun = false;
     private boolean completingMiniGame = false;
     private TextView tvTimer;
     private TextView tvRound;
@@ -185,10 +187,16 @@ public class KorakPoKorakActivity extends AppCompatActivity {
             Long p2 = snapshot.getLong("player2Score");
             player1Score = p1 == null ? 0 : p1.intValue();
             player2Score = p2 == null ? 0 : p2.intValue();
+            challengeRun = Boolean.TRUE.equals(snapshot.getBoolean("challengeRun"));
             tvPlayer1Score.setText(getString(R.string.player_points, player1Score));
+            tvPlayer2Score.setVisibility(challengeRun ? View.GONE : View.VISIBLE);
             tvPlayer2Score.setText(getString(R.string.player_points, player2Score));
+            tvPoints.setText(challengeRun ? "Ukupan rezultat: " + player1Score
+                    : getString(R.string.points_text, player1Score));
+            headerHelper.setChallengeMode(challengeRun, intValue(snapshot.get("matchIndex")) + 1, GameRepository.FULL_MATCH_ORDER.length);
+            headerHelper.updateGameTitle("Korak po korak");
             headerHelper.updatePlayers(player1Uid, player1Score, player2Uid, player2Score);
-            if ("waiting".equals(gameStatus) || player2Uid.isEmpty()) {
+            if (!challengeRun && ("waiting".equals(gameStatus) || player2Uid.isEmpty())) {
                 tvResult.setText(R.string.waiting_opponent);
                 setControls(false);
                 setStatusText("Čeka se drugi igrač");
@@ -338,6 +346,14 @@ public class KorakPoKorakActivity extends AppCompatActivity {
     }
 
     private void moveToNextStepRound() {
+        if (challengeRun) {
+            setStatusText("Korak po korak je zavrÅ¡en");
+            recordStatsOnce();
+            if (fullMatch) {
+                completeMiniGameOnce();
+            }
+            return;
+        }
         if (roundNumber == 1) {
             roundNumber = 2;
             if (roundListener != null) {
@@ -462,6 +478,9 @@ public class KorakPoKorakActivity extends AppCompatActivity {
     }
 
     private void setStatusText(String statusText) {
+        if (challengeRun) {
+            statusText = challengeStatus(statusText);
+        }
         tvStepStatus.setText(statusText);
         headerHelper.updateStatus(statusText);
         Log.d(TAG, "Status text=" + statusText + ", uid=" + uid
@@ -486,6 +505,19 @@ public class KorakPoKorakActivity extends AppCompatActivity {
                 + ", currentUserEqualsOpponent=" + currentUserEqualsOpponent
                 + ", calculatedStatusText=" + statusText
                 + ", isCurrentUsersTurn=" + isCurrentUsersTurn);
+    }
+
+    private String challengeStatus(String status) {
+        if (status == null || status.trim().isEmpty()) return "Samostalna partija";
+        if (status.contains("ÄŒeka") || status.contains("Čeka") || status.contains("Protivnik")
+                || status.contains("protivnik") || status.contains("drugi")) {
+            return "Samostalna partija";
+        }
+        return status.replace("Priprema druge runde", "Samostalna partija");
+    }
+
+    private int intValue(Object value) {
+        return value instanceof Number ? ((Number) value).intValue() : 0;
     }
 
     private String value(String value) {

@@ -291,6 +291,8 @@ public class NotifikacijeActivity extends AppCompatActivity {
             return FriendsActivity.class;
         }
         if ("FRIENDLY_MATCH_INVITE".equals(normalized)) return FriendsActivity.class;
+        if ("CHALLENGE".equals(normalized) || "CHALLENGE_START".equals(normalized)) return RegionsActivity.class;
+        if ("CHALLENGE_RESULT".equals(normalized)) return ChallengeResultActivity.class;
         if ("LEAGUE".equals(normalized)) return ProfileActivity.class;
         if ("REWARD".equals(normalized)) return RewardActivity.class;
         if ("RANKING".equals(normalized)) return RegionsActivity.class;
@@ -325,6 +327,7 @@ public class NotifikacijeActivity extends AppCompatActivity {
         if ("REWARD".equals(type)) return "Nagrada";
         if ("FRIEND_REQUEST".equals(type)) return "Prijateljstvo";
         if ("LEAGUE".equals(type)) return "Liga";
+        if ("CHALLENGE".equals(type) || "CHALLENGE_START".equals(type) || "CHALLENGE_RESULT".equals(type)) return "Izazov";
         return "Ostalo";
     }
 
