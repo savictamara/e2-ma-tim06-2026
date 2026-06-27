@@ -61,6 +61,7 @@ public class MainActivity extends AppCompatActivity {
         btnNotifikacije = findViewById(R.id.btnNotifikacije);
         Button btnFullMatch = findViewById(R.id.btnFullMatch);
         Button btnChat = findViewById(R.id.btnChat);
+        Button btnRegions = findViewById(R.id.btnRegions);
 
         btnLogin.setOnClickListener(v -> startActivity(new Intent(this, LoginActivity.class)));
         btnRegister.setOnClickListener(v -> startActivity(new Intent(this, RegisterActivity.class)));
@@ -75,6 +76,7 @@ public class MainActivity extends AppCompatActivity {
         btnNotifikacije.setOnClickListener(v -> startActivity(new Intent(this, NotifikacijeActivity.class)));
         btnFullMatch.setOnClickListener(v -> startFullMatch());
         btnChat.setOnClickListener(v -> startActivity(new Intent(this, ChatActivity.class)));
+        btnRegions.setOnClickListener(v -> startActivity(new Intent(this, RegionsActivity.class)));
         updateAccountUi();
         startNotificationListener();
     }
