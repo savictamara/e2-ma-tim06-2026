@@ -12,13 +12,19 @@ import android.os.Build;
 
 import rs.ac.uns.ftn.slagalica.NotificationDetailActivity;
 import rs.ac.uns.ftn.slagalica.R;
+import rs.ac.uns.ftn.slagalica.RewardActivity;
+import rs.ac.uns.ftn.slagalica.FriendsActivity;
 import rs.ac.uns.ftn.slagalica.domain.model.AppNotification;
 
 public final class NotificationHelper {
-    public static final String CHANNEL_CHAT = "chat_notifications";
-    public static final String CHANNEL_RANKING = "ranking_notifications";
-    public static final String CHANNEL_REWARD = "reward_notifications";
-    public static final String CHANNEL_OTHER = "other_notifications";
+    public static final String CHAT_CHANNEL = "CHAT_CHANNEL";
+    public static final String RANKING_CHANNEL = "RANKING_CHANNEL";
+    public static final String REWARD_CHANNEL = "REWARD_CHANNEL";
+    public static final String OTHER_CHANNEL = "OTHER_CHANNEL";
+    public static final String CHANNEL_CHAT = CHAT_CHANNEL;
+    public static final String CHANNEL_RANKING = RANKING_CHANNEL;
+    public static final String CHANNEL_REWARD = REWARD_CHANNEL;
+    public static final String CHANNEL_OTHER = OTHER_CHANNEL;
     private static final java.util.Set<String> DISPLAYED_NOTIFICATION_IDS = new java.util.HashSet<>();
 
     private NotificationHelper() {
@@ -33,13 +39,13 @@ public final class NotificationHelper {
             return;
         }
         manager.createNotificationChannel(new NotificationChannel(
-                CHANNEL_CHAT, "Obaveštenja u četu", NotificationManager.IMPORTANCE_DEFAULT));
+                CHAT_CHANNEL, "Chat notifications", NotificationManager.IMPORTANCE_DEFAULT));
         manager.createNotificationChannel(new NotificationChannel(
-                CHANNEL_RANKING, "Obaveštenja o rangiranju", NotificationManager.IMPORTANCE_DEFAULT));
+                RANKING_CHANNEL, "Ranking notifications", NotificationManager.IMPORTANCE_DEFAULT));
         manager.createNotificationChannel(new NotificationChannel(
-                CHANNEL_REWARD, "Obaveštenja o nagradama", NotificationManager.IMPORTANCE_DEFAULT));
+                REWARD_CHANNEL, "Reward notifications", NotificationManager.IMPORTANCE_DEFAULT));
         manager.createNotificationChannel(new NotificationChannel(
-                CHANNEL_OTHER, "Ostala obaveštenja", NotificationManager.IMPORTANCE_DEFAULT));
+                OTHER_CHANNEL, "Other notifications", NotificationManager.IMPORTANCE_DEFAULT));
     }
 
     public static void showNotification(Context context, AppNotification notification) {
@@ -52,7 +58,13 @@ public final class NotificationHelper {
             return;
         }
         createNotificationChannels(context);
-        Intent intent = new Intent(context, NotificationDetailActivity.class);
+        Class<?> target = NotificationDetailActivity.class;
+        if ("REWARD".equals(notification.type)) {
+            target = RewardActivity.class;
+        } else if ("FRIEND_INVITE".equals(notification.type) || "FRIENDLY_MATCH_INVITE".equals(notification.type)) {
+            target = FriendsActivity.class;
+        }
+        Intent intent = new Intent(context, target);
         intent.putExtra(NotificationDetailActivity.EXTRA_NOTIFICATION_ID, notification.id);
         intent.setFlags(Intent.FLAG_ACTIVITY_SINGLE_TOP | Intent.FLAG_ACTIVITY_CLEAR_TOP);
         PendingIntent pendingIntent = PendingIntent.getActivity(
@@ -87,14 +99,14 @@ public final class NotificationHelper {
 
     private static String channelForType(String type) {
         if ("CHAT".equals(type)) {
-            return CHANNEL_CHAT;
+            return CHAT_CHANNEL;
         }
         if ("RANKING".equals(type)) {
-            return CHANNEL_RANKING;
+            return RANKING_CHANNEL;
         }
         if ("REWARD".equals(type)) {
-            return CHANNEL_REWARD;
+            return REWARD_CHANNEL;
         }
-        return CHANNEL_OTHER;
+        return OTHER_CHANNEL;
     }
 }

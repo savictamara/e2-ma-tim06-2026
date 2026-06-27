@@ -73,10 +73,38 @@ public class ChatRepository {
         });
     }
 
+    public Task<Void> setActiveConversation(String uid, String region) {
+        if (db == null) {
+            return Tasks.forException(new IllegalStateException("Firebase nije inicijalizovan"));
+        }
+        if (isBlank(uid)) {
+            return Tasks.forException(new IllegalArgumentException("Korisnik nije prijavljen"));
+        }
+        Map<String, Object> data = new java.util.HashMap<>();
+        data.put("activeChatRegion", isBlank(region) ? "" : regionId(region));
+        data.put("online", !isBlank(region));
+        data.put("lastActiveAt", FieldValue.serverTimestamp());
+        return db.collection("users").document(uid).set(data, SetOptions.merge());
+    }
+
+    public Task<Void> clearActiveConversation(String uid) {
+        if (db == null) {
+            return Tasks.forException(new IllegalStateException("Firebase nije inicijalizovan"));
+        }
+        if (isBlank(uid)) {
+            return Tasks.forException(new IllegalArgumentException("Korisnik nije prijavljen"));
+        }
+        Map<String, Object> data = new java.util.HashMap<>();
+        data.put("activeChatRegion", "");
+        data.put("online", false);
+        data.put("lastActiveAt", FieldValue.serverTimestamp());
+        return db.collection("users").document(uid).set(data, SetOptions.merge());
+    }
+
     private Task<Void> createOfflineNotifications(String senderId, String senderName, String region, String text) {
+        String currentRegionId = regionId(region);
         return db.collection("users")
                 .whereEqualTo("region", region)
-                .whereEqualTo("online", false)
                 .get()
                 .continueWithTask(task -> {
                     if (!task.isSuccessful()) {
@@ -88,17 +116,26 @@ public class ChatRepository {
                         if (senderId.equals(user.getId())) {
                             continue;
                         }
+                        String activeChatRegion = user.getString("activeChatRegion");
+                        if (currentRegionId.equals(activeChatRegion)) {
+                            continue;
+                        }
                         DocumentReference notification = db.collection("users")
                                 .document(user.getId())
                                 .collection("notifications")
                                 .document();
-                        Map<String, Object> data = new HashMap<>();
+                        Map<String, Object> data = new java.util.HashMap<>();
+                        data.put("notificationId", notification.getId());
                         data.put("id", notification.getId());
                         data.put("type", "CHAT");
-                        data.put("title", "Nova poruka u cetu");
-                        data.put("message", senderName + ": " + text);
+                        data.put("title", "Nova poruka");
+                        data.put("message", senderName + ": " + preview(text));
                         data.put("read", false);
                         data.put("createdAt", FieldValue.serverTimestamp());
+                        data.put("actionType", "CHAT");
+                        data.put("actionTargetId", currentRegionId);
+                        data.put("senderUid", senderId);
+                        data.put("senderName", senderName);
                         data.put("targetScreen", "CHAT");
                         batch.set(notification, data, SetOptions.merge());
                         hasWrites = true;
@@ -113,6 +150,11 @@ public class ChatRepository {
 
     private String regionId(String region) {
         return region == null ? "" : region.trim().replace("/", "_");
+    }
+
+    private String preview(String text) {
+        String clean = text == null ? "" : text.trim();
+        return clean.length() <= 80 ? clean : clean.substring(0, 77) + "...";
     }
 
     private boolean isBlank(String value) {

@@ -12,14 +12,24 @@ import android.widget.Toast;
 
 import androidx.appcompat.app.AppCompatActivity;
 
+import java.util.ArrayList;
+import java.util.List;
+
 import rs.ac.uns.ftn.slagalica.data.repository.FirebaseAuthRepository;
+import rs.ac.uns.ftn.slagalica.data.repository.RegionRepository;
 import rs.ac.uns.ftn.slagalica.data.repository.UserRepository;
+import rs.ac.uns.ftn.slagalica.domain.model.RegionInfo;
+import rs.ac.uns.ftn.slagalica.domain.model.RegionStats;
 import rs.ac.uns.ftn.slagalica.domain.model.User;
 
 public class RegisterActivity extends AppCompatActivity {
     private static final String TAG = "RegisterActivity";
     private FirebaseAuthRepository authRepository;
     private UserRepository userRepository;
+    private RegionRepository regionRepository;
+    private String selectedRegionId = "";
+    private String selectedRegionName = "";
+    private String pendingRegistrationUid = "";
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -28,24 +38,43 @@ public class RegisterActivity extends AppCompatActivity {
 
         authRepository = new FirebaseAuthRepository(this);
         userRepository = new UserRepository(this);
+        regionRepository = new RegionRepository(this);
 
         EditText etEmail = findViewById(R.id.etEmail);
         EditText etUsername = findViewById(R.id.etUsername);
         EditText etRegion = findViewById(R.id.etRegion);
+        RegionMapView registerRegionMap = findViewById(R.id.registerRegionMap);
         EditText etPassword = findViewById(R.id.etPassword);
         EditText etRepeatPassword = findViewById(R.id.etRepeatPassword);
         TextView tvRegisterMessage = findViewById(R.id.tvRegisterMessage);
         Button btnRegisterSubmit = findViewById(R.id.btnRegisterSubmit);
+        registerRegionMap.setData(regionStats(), null, "");
+        registerRegionMap.setOnRegionClickListener(regionId -> {
+            RegionInfo info = RegionRepository.infoById(regionId);
+            if (info == null) {
+                return;
+            }
+            selectedRegionId = info.id;
+            selectedRegionName = info.name;
+            etRegion.setText(info.name);
+            tvRegisterMessage.setText("Izabran region: " + info.name);
+        });
 
         btnRegisterSubmit.setOnClickListener(v -> {
             String email = etEmail.getText().toString().trim();
             String username = etUsername.getText().toString().trim();
-            String region = etRegion.getText().toString().trim();
+            String region = selectedRegionName;
             String password = etPassword.getText().toString();
             String repeat = etRepeatPassword.getText().toString();
 
-            if (email.isEmpty() || username.isEmpty() || region.isEmpty() || password.isEmpty() || repeat.isEmpty()) {
+            if (email.isEmpty() || username.isEmpty() || password.isEmpty() || repeat.isEmpty()) {
                 String message = getString(R.string.error_fill_fields);
+                tvRegisterMessage.setText(message);
+                Toast.makeText(this, message, Toast.LENGTH_SHORT).show();
+                return;
+            }
+            if (selectedRegionId.isEmpty()) {
+                String message = "Morate izabrati region na mapi.";
                 tvRegisterMessage.setText(message);
                 Toast.makeText(this, message, Toast.LENGTH_SHORT).show();
                 return;
@@ -68,7 +97,7 @@ public class RegisterActivity extends AppCompatActivity {
                 Toast.makeText(this, message, Toast.LENGTH_SHORT).show();
                 return;
             }
-            if (!authRepository.isReady() || !userRepository.isReady()) {
+            if (!authRepository.isReady() || !userRepository.isReady() || !regionRepository.isReady()) {
                 String message = getString(R.string.firebase_not_ready);
                 tvRegisterMessage.setText(message);
                 Toast.makeText(this, message, Toast.LENGTH_SHORT).show();
@@ -81,7 +110,14 @@ public class RegisterActivity extends AppCompatActivity {
                         if (!task.isSuccessful()) {
                             throw task.getException();
                         }
-                        return userRepository.createUser(new User(task.getResult().getUid(), email, username, region));
+                        pendingRegistrationUid = task.getResult().getUid();
+                        return userRepository.createUser(new User(pendingRegistrationUid, email, username, region));
+                    })
+                    .continueWithTask(task -> {
+                        if (!task.isSuccessful()) {
+                            throw task.getException();
+                        }
+                        return regionRepository.saveRegistrationRegion(pendingRegistrationUid, username, selectedRegionId);
                     })
                     .addOnSuccessListener(unused -> {
                         btnRegisterSubmit.setEnabled(true);
@@ -106,5 +142,13 @@ public class RegisterActivity extends AppCompatActivity {
                         Toast.makeText(this, message, Toast.LENGTH_SHORT).show();
                     });
         });
+    }
+
+    private List<RegionStats> regionStats() {
+        List<RegionStats> stats = new ArrayList<>();
+        for (RegionInfo info : RegionRepository.regions()) {
+            stats.add(new RegionStats(info.id, info.name, info.iconName));
+        }
+        return stats;
     }
 }

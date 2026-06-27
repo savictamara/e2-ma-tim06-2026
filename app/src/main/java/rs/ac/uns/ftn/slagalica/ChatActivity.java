@@ -82,6 +82,7 @@ public class ChatActivity extends AppCompatActivity {
                     }
                     tvStatus.setText(getString(R.string.chat_region_status, region));
                     btnSend.setEnabled(true);
+                    chatRepository.setActiveConversation(uid, region);
                     listenMessages();
                 })
                 .addOnFailureListener(e -> setUnavailable(e.getMessage()));
@@ -205,6 +206,22 @@ public class ChatActivity extends AppCompatActivity {
 
     private void show(String message) {
         Toast.makeText(this, message == null ? getString(R.string.firebase_not_ready) : message, Toast.LENGTH_SHORT).show();
+    }
+
+    @Override
+    protected void onResume() {
+        super.onResume();
+        if (chatRepository != null && chatRepository.isReady() && !uid.isEmpty() && !region.isEmpty()) {
+            chatRepository.setActiveConversation(uid, region);
+        }
+    }
+
+    @Override
+    protected void onPause() {
+        if (chatRepository != null && chatRepository.isReady() && !uid.isEmpty()) {
+            chatRepository.clearActiveConversation(uid);
+        }
+        super.onPause();
     }
 
     @Override

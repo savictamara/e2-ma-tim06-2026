@@ -12,6 +12,7 @@ public class RegionStats {
     public long totalPlayers;
     public String lastCycleMonth;
     public long previousCyclePlacement;
+    public long currentRank;
 
     public RegionStats(String regionId, String regionName, String iconName) {
         this.regionId = regionId;

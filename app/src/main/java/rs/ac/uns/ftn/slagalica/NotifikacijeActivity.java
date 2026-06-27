@@ -14,6 +14,8 @@ import android.widget.TextView;
 import android.widget.Toast;
 
 import androidx.appcompat.app.AppCompatActivity;
+import androidx.recyclerview.widget.LinearLayoutManager;
+import androidx.recyclerview.widget.RecyclerView;
 
 import com.google.firebase.auth.FirebaseUser;
 import com.google.firebase.firestore.DocumentChange;
@@ -43,7 +45,7 @@ public class NotifikacijeActivity extends AppCompatActivity {
     private boolean firstSnapshotLoaded = false;
     private Filter filter = Filter.ALL;
 
-    private LinearLayout notificationsContainer;
+    private NotificationAdapter notificationAdapter;
     private TextView tvStatus;
     private Button btnFilterAll;
     private Button btnFilterUnread;
@@ -61,7 +63,20 @@ public class NotifikacijeActivity extends AppCompatActivity {
 
         authRepository = new FirebaseAuthRepository(this);
         notificationRepository = new NotificationRepository(this);
-        notificationsContainer = findViewById(R.id.notificationsContainer);
+        RecyclerView notificationsRecycler = findViewById(R.id.notificationsRecycler);
+        notificationsRecycler.setLayoutManager(new LinearLayoutManager(this));
+        notificationAdapter = new NotificationAdapter(new NotificationAdapter.Listener() {
+            @Override
+            public void onNotificationClick(AppNotification notification) {
+                openNotification(notification);
+            }
+
+            @Override
+            public void onMarkReadClick(AppNotification notification) {
+                markRead(notification);
+            }
+        });
+        notificationsRecycler.setAdapter(notificationAdapter);
         tvStatus = findViewById(R.id.tvStatus);
         btnFilterAll = findViewById(R.id.btnFilterAll);
         btnFilterUnread = findViewById(R.id.btnFilterUnread);
@@ -124,15 +139,16 @@ public class NotifikacijeActivity extends AppCompatActivity {
     }
 
     private void renderNotifications() {
-        notificationsContainer.removeAllViews();
+        List<AppNotification> filtered = new ArrayList<>();
         int shown = 0;
         for (AppNotification notification : notifications) {
             if (!matchesFilter(notification)) {
                 continue;
             }
-            notificationsContainer.addView(createNotificationCard(notification));
+            filtered.add(notification);
             shown++;
         }
+        notificationAdapter.submitList(filtered);
         updateFilterButtons();
         setStatus("Prikazano: " + shown + " / ukupno: " + notifications.size());
     }
@@ -224,7 +240,7 @@ public class NotifikacijeActivity extends AppCompatActivity {
     }
 
     private void markRead(AppNotification notification) {
-        notificationRepository.markRead(uid, notification.id)
+        notificationRepository.markAsRead(uid, notification.id)
                 .addOnSuccessListener(unused -> setStatus("Notifikacija je označena kao pročitana"))
                 .addOnFailureListener(e -> {
                     Log.e(TAG, "Mark notification read failed", e);
@@ -242,16 +258,25 @@ public class NotifikacijeActivity extends AppCompatActivity {
     }
 
     private void openNotification(AppNotification notification) {
-        notificationRepository.markRead(uid, notification.id)
+        notificationRepository.markAsRead(uid, notification.id)
                 .addOnSuccessListener(unused -> {
-                    Intent intent = new Intent(this, NotificationDetailActivity.class);
+                    Intent intent = new Intent(this, targetActivityFor(notification));
                     intent.putExtra(NotificationDetailActivity.EXTRA_NOTIFICATION_ID, notification.id);
+                    intent.putExtra("actionTargetId", notification.actionTargetId);
                     startActivity(intent);
                 })
                 .addOnFailureListener(e -> {
                     Log.e(TAG, "Open notification mark read failed", e);
                     show("Greška pri označavanju kao pročitano");
                 });
+    }
+
+    private Class<?> targetActivityFor(AppNotification notification) {
+        String actionType = notification.actionType == null || notification.actionType.trim().isEmpty()
+                ? notification.type
+                : notification.actionType;
+        Class<?> target = targetActivity(actionType);
+        return target == null ? NotificationDetailActivity.class : target;
     }
 
     private Class<?> targetActivity(String targetScreen) {
@@ -261,6 +286,14 @@ public class NotifikacijeActivity extends AppCompatActivity {
         String normalized = targetScreen.trim().toUpperCase(Locale.ROOT);
         if ("PROFILE".equals(normalized)) return ProfileActivity.class;
         if ("NOTIFICATIONS".equals(normalized)) return NotifikacijeActivity.class;
+        if ("CHAT".equals(normalized)) return ChatActivity.class;
+        if ("FRIEND_INVITE".equals(normalized) || "FRIEND_REQUEST".equals(normalized) || "FRIENDS".equals(normalized)) {
+            return FriendsActivity.class;
+        }
+        if ("FRIENDLY_MATCH_INVITE".equals(normalized)) return FriendsActivity.class;
+        if ("LEAGUE".equals(normalized)) return ProfileActivity.class;
+        if ("REWARD".equals(normalized)) return RewardActivity.class;
+        if ("RANKING".equals(normalized)) return RegionsActivity.class;
         if ("SKOCKO".equals(normalized)) return SkockoActivity.class;
         if ("KORAK_PO_KORAK".equals(normalized)) return KorakPoKorakActivity.class;
         if ("MOJ_BROJ".equals(normalized)) return MojBrojActivity.class;

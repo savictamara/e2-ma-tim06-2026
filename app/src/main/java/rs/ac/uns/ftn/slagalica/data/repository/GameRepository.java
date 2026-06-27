@@ -28,6 +28,8 @@ import java.util.Locale;
 import java.util.Map;
 import java.util.Random;
 
+import rs.ac.uns.ftn.slagalica.domain.model.RegionInfo;
+import rs.ac.uns.ftn.slagalica.domain.model.LeagueDefinition;
 import rs.ac.uns.ftn.slagalica.util.FirebaseInitializer;
 
 public class GameRepository {
@@ -480,7 +482,7 @@ public class GameRepository {
                         "currentPlayerUid", game.getString("player1Uid"),
                         "updatedAt", FieldValue.serverTimestamp());
             } else {
-                applyFinalMatchRewards(transaction, gameRef, game, false);
+                applyFinalMatchRewards(transaction, gameRef, game, Boolean.TRUE.equals(game.getBoolean("friendly")));
             }
             return null;
         });
@@ -530,11 +532,21 @@ public class GameRepository {
                 return null;
             }
             String today = todayKey();
-            if (today.equals(user.getString("lastDailyTokenGrant"))) {
+            if (today.equals(user.getString("lastDailyTokenGrant"))
+                    || today.equals(user.getString("lastDailyTokenClaimDate"))) {
                 return null;
             }
-            long tokens = longValueZero(user.get("tokens")) + 5;
-            transaction.set(userRef, mapOf("tokens", tokens, "lastDailyTokenGrant", today), SetOptions.merge());
+            LeagueDefinition league = leagueFromUser(user, longValueZero(user.get("stars")));
+            long tokens = longValueZero(user.get("tokens")) + LeagueDefinition.dailyTokensFor(league.id);
+            transaction.set(userRef, mapOf(
+                    "tokens", tokens,
+                    "lastDailyTokenGrant", today,
+                    "lastDailyTokenClaimDate", today,
+                    "league", league.id,
+                    "leagueName", league.name,
+                    "leagueIcon", league.iconName,
+                    "leagueIconName", league.iconName
+            ), SetOptions.merge());
             return null;
         });
     }
@@ -601,12 +613,126 @@ public class GameRepository {
         long newProgress = progress + earned;
         long tokenBonus = newProgress / 50;
         newProgress = newProgress % 50;
-        transaction.set(userRef, mapOf(
+        Map<String, Object> updates = mapOf(
                 "stars", newStars,
                 "tokens", tokens + tokenBonus,
                 "starTokenProgress", newProgress
-        ), SetOptions.merge());
+        );
+        applyLeagueProgression(transaction, user, userRef, updates, stars, newStars, "MATCH_REWARD");
+        transaction.set(userRef, updates, SetOptions.merge());
+        updateLeaderboardCycleStatsInTransaction(transaction, user, userRef, actualDelta);
         return new RewardResult(actualDelta, tokenBonus);
+    }
+
+    private void applyLeagueProgression(Transaction transaction, DocumentSnapshot user,
+                                        DocumentReference userRef, Map<String, Object> updates,
+                                        long oldStars, long newStars, String reason) {
+        LeagueDefinition oldLeague = leagueFromUser(user, oldStars);
+        LeagueDefinition newLeague = LeagueDefinition.forStars(newStars);
+        updates.put("stars", Math.max(0, newStars));
+        updates.put("league", newLeague.id);
+        updates.put("leagueName", newLeague.name);
+        updates.put("leagueIconName", newLeague.iconName);
+        updates.put("leagueIcon", newLeague.iconName);
+        Log.d(TAG, "League recalculation uid=" + user.getId()
+                + ", oldStars=" + oldStars
+                + ", newStars=" + newStars
+                + ", oldLeague=" + oldLeague.id
+                + ", newLeague=" + newLeague.id
+                + ", reason=" + reason);
+        if (oldLeague.id == newLeague.id) {
+            return;
+        }
+        String direction = LeagueDefinition.direction(oldLeague.id, newLeague.id);
+        String title = "PROMOTION".equals(direction)
+                ? "Presli ste u novu ligu!"
+                : "Pali ste u nizu ligu";
+        String message = "PROMOTION".equals(direction)
+                ? "Cestitamo! Presli ste iz " + oldLeague.name + " u " + newLeague.name + "."
+                : "Presli ste iz " + oldLeague.name + " u " + newLeague.name + ".";
+        updates.put("lastLeagueChangeAt", FieldValue.serverTimestamp());
+        updates.put("pendingLeagueDialog", true);
+        updates.put("pendingLeagueOldLevel", oldLeague.id);
+        updates.put("pendingLeagueNewLevel", newLeague.id);
+        updates.put("pendingLeagueDirection", direction);
+        updates.put("pendingLeagueMessage", message);
+
+        DocumentReference notificationRef = userRef.collection("notifications").document();
+        transaction.set(notificationRef, mapOf(
+                "notificationId", notificationRef.getId(),
+                "id", notificationRef.getId(),
+                "type", "LEAGUE",
+                "title", title,
+                "message", message,
+                "createdAt", FieldValue.serverTimestamp(),
+                "read", false,
+                "actionType", "LEAGUE",
+                "actionTargetId", String.valueOf(newLeague.id),
+                "senderUid", "",
+                "senderName", "",
+                "targetScreen", "LEAGUE"
+        ));
+    }
+
+    private LeagueDefinition leagueFromUser(DocumentSnapshot user, long fallbackStars) {
+        Object raw = user.get("league");
+        if (raw instanceof Number) {
+            return LeagueDefinition.byId(((Number) raw).longValue());
+        }
+        return LeagueDefinition.forStars(fallbackStars);
+    }
+
+    private void updateLeaderboardCycleStatsInTransaction(Transaction transaction, DocumentSnapshot user,
+                                                         DocumentReference userRef, long starsWon) {
+        String regionId = RegionRepository.regionIdForName(firstNonEmpty(user.getString("regionId"), user.getString("region")));
+        RegionInfo info = RegionRepository.infoById(regionId);
+        String monthlyCycle = new SimpleDateFormat("yyyy-MM", Locale.US).format(new Date());
+        String weeklyCycle = LeaderboardRepository.currentCycleId(LeaderboardRepository.WEEKLY);
+        long positiveStarsWon = Math.max(0, starsWon);
+        long weeklyStars = longValueZero(user.get("weeklyStars")) + positiveStarsWon;
+        long monthlyStars = longValueZero(user.get("monthlyStars")) + positiveStarsWon;
+        long weeklyMatchesPlayed = longValueZero(user.get("weeklyMatchesPlayed")) + 1;
+        long monthlyMatchesPlayed = longValueZero(user.get("monthlyMatchesPlayed")) + 1;
+        Map<String, Object> userUpdates = mapOf(
+                "weeklyMatchesPlayed", FieldValue.increment(1),
+                "monthlyMatchesPlayed", FieldValue.increment(1),
+                "weeklyLeaderboardEligible", true,
+                "monthlyLeaderboardEligible", true,
+                "weeklyCycleId", weeklyCycle,
+                "monthlyCycleId", monthlyCycle,
+                "monthlyStarsCycleMonth", monthlyCycle
+        );
+        if (positiveStarsWon > 0) {
+            userUpdates.put("weeklyStars", FieldValue.increment(positiveStarsWon));
+            userUpdates.put("monthlyStars", FieldValue.increment(positiveStarsWon));
+        }
+        if (info != null) {
+            userUpdates.putAll(mapOf(
+                "regionId", info.id,
+                "regionName", info.name,
+                "region", firstNonEmpty(user.getString("region"), info.name)
+            ));
+            if (positiveStarsWon > 0) {
+                userUpdates.put("monthlyRegionStars", FieldValue.increment(positiveStarsWon));
+            }
+        }
+        transaction.set(userRef, userUpdates, SetOptions.merge());
+        if (info != null && positiveStarsWon > 0) {
+            DocumentReference statsRef = db.collection("regionStats").document(info.id);
+            transaction.set(statsRef, mapOf(
+                    "regionId", info.id,
+                    "displayName", info.name,
+                    "regionName", info.name,
+                    "iconName", info.iconName,
+                    "monthlyStars", FieldValue.increment(positiveStarsWon),
+                    "cycleId", monthlyCycle
+            ), SetOptions.merge());
+        }
+        Log.d(TAG, "Leaderboard update uid=" + user.getId()
+                + ", weeklyStars=" + weeklyStars
+                + ", monthlyStars=" + monthlyStars
+                + ", weeklyMatchesPlayed=" + weeklyMatchesPlayed
+                + ", monthlyMatchesPlayed=" + monthlyMatchesPlayed);
     }
 
     private static class RewardResult {
@@ -630,7 +756,9 @@ public class GameRepository {
         }
         DocumentReference userRef = db.collection("users").document(uid);
         transaction.set(userRef, mapOf("online", true, "inGame", inGame,
-                "currentGameId", currentGameId == null ? "" : currentGameId), SetOptions.merge());
+                "currentGameId", currentGameId == null ? "" : currentGameId,
+                "activeGameId", currentGameId == null ? "" : currentGameId,
+                "lastActiveAt", FieldValue.serverTimestamp()), SetOptions.merge());
     }
 
     private int indexOfMiniGame(String miniGame) {
@@ -643,7 +771,7 @@ public class GameRepository {
     }
 
     private String todayKey() {
-        return new SimpleDateFormat("yyyyMMdd", Locale.US).format(new Date());
+        return new SimpleDateFormat("yyyy-MM-dd", Locale.US).format(new Date());
     }
 
     private long createdAtMillis(DocumentSnapshot doc) {
@@ -657,6 +785,15 @@ public class GameRepository {
 
     private boolean isBlank(String value) {
         return value == null || value.trim().isEmpty();
+    }
+
+    private String firstNonEmpty(String... values) {
+        for (String value : values) {
+            if (!isBlank(value)) {
+                return value.trim();
+            }
+        }
+        return "";
     }
 
     public ListenerRegistration listenGame(String gameId, EventListener<DocumentSnapshot> listener) {

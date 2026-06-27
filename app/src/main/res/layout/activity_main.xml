@@ -105,6 +105,16 @@
                 android:textColor="@color/white" />
 
             <Button
+                android:id="@+id/btnFriends"
+                style="@style/Widget.MaterialComponents.Button"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="10dp"
+                android:background="@drawable/bg_button_secondary"
+                android:text="Prijatelji"
+                android:textColor="@color/text_main" />
+
+            <Button
                 android:id="@+id/btnRegions"
                 style="@style/Widget.MaterialComponents.Button"
                 android:layout_width="match_parent"
@@ -113,6 +123,16 @@
                 android:background="@drawable/bg_button_secondary"
                 android:text="@string/go_regions"
                 android:textColor="@color/text_main" />
+
+            <Button
+                android:id="@+id/btnLeaderboards"
+                style="@style/Widget.MaterialComponents.Button"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="10dp"
+                android:background="@drawable/bg_button_primary"
+                android:text="Rang liste"
+                android:textColor="@color/white" />
         </LinearLayout>
 
         <LinearLayout

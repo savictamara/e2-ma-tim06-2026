@@ -12,6 +12,7 @@ import com.google.firebase.firestore.FirebaseFirestore;
 import com.google.firebase.firestore.ListenerRegistration;
 import com.google.firebase.firestore.Query;
 import com.google.firebase.firestore.QuerySnapshot;
+import com.google.firebase.firestore.SetOptions;
 import com.google.firebase.firestore.WriteBatch;
 
 import java.util.HashMap;
@@ -40,7 +41,7 @@ public class NotificationRepository {
     }
 
     public ListenerRegistration listenNotifications(String uid, EventListener<QuerySnapshot> listener) {
-        if (db == null || uid == null || uid.isEmpty()) {
+        if (db == null || isBlank(uid)) {
             return null;
         }
         return notifications(uid)
@@ -48,11 +49,61 @@ public class NotificationRepository {
                 .addSnapshotListener(listener);
     }
 
+    public Task<QuerySnapshot> getNotifications(String uid) {
+        if (db == null) {
+            return Tasks.forException(new IllegalStateException("Firebase nije inicijalizovan"));
+        }
+        if (isBlank(uid)) {
+            return Tasks.forException(new IllegalArgumentException("Korisnik nije prijavljen"));
+        }
+        return notifications(uid)
+                .orderBy("createdAt", Query.Direction.DESCENDING)
+                .get();
+    }
+
+    public Task<QuerySnapshot> getUnreadNotifications(String uid) {
+        if (db == null) {
+            return Tasks.forException(new IllegalStateException("Firebase nije inicijalizovan"));
+        }
+        if (isBlank(uid)) {
+            return Tasks.forException(new IllegalArgumentException("Korisnik nije prijavljen"));
+        }
+        return notifications(uid)
+                .whereEqualTo("read", false)
+                .orderBy("createdAt", Query.Direction.DESCENDING)
+                .get();
+    }
+
+    public Task<DocumentReference> createNotification(String receiverUid, String type, String title,
+                                                      String message, String actionType,
+                                                      String actionTargetId, String senderUid,
+                                                      String senderName) {
+        if (db == null) {
+            return Tasks.forException(new IllegalStateException("Firebase nije inicijalizovan"));
+        }
+        if (isBlank(receiverUid)) {
+            return Tasks.forException(new IllegalArgumentException("Korisnik nije prijavljen"));
+        }
+        DocumentReference doc = notifications(receiverUid).document();
+        Map<String, Object> data = notificationData(doc.getId(), type, title, message, actionType,
+                actionTargetId, senderUid, senderName);
+        return doc.set(data, SetOptions.merge()).continueWith(task -> {
+            if (!task.isSuccessful()) {
+                throw task.getException();
+            }
+            return doc;
+        });
+    }
+
+    public Task<Void> markAsRead(String uid, String notificationId) {
+        return markRead(uid, notificationId);
+    }
+
     public Task<Void> markRead(String uid, String notificationId) {
         if (db == null) {
             return Tasks.forException(new IllegalStateException("Firebase nije inicijalizovan"));
         }
-        if (uid == null || uid.isEmpty() || notificationId == null || notificationId.isEmpty()) {
+        if (isBlank(uid) || isBlank(notificationId)) {
             return Tasks.forException(new IllegalArgumentException("Nedostaje identifikator notifikacije"));
         }
         return notification(uid, notificationId).update("read", true);
@@ -62,7 +113,7 @@ public class NotificationRepository {
         if (db == null) {
             return Tasks.forException(new IllegalStateException("Firebase nije inicijalizovan"));
         }
-        if (uid == null || uid.isEmpty()) {
+        if (isBlank(uid)) {
             return Tasks.forException(new IllegalArgumentException("Korisnik nije prijavljen"));
         }
         return notifications(uid).whereEqualTo("read", false).get().continueWithTask(task -> {
@@ -81,7 +132,7 @@ public class NotificationRepository {
         if (db == null) {
             return Tasks.forException(new IllegalStateException("Firebase nije inicijalizovan"));
         }
-        if (uid == null || uid.isEmpty() || notificationId == null || notificationId.isEmpty()) {
+        if (isBlank(uid) || isBlank(notificationId)) {
             return Tasks.forException(new IllegalArgumentException("Nedostaje identifikator notifikacije"));
         }
         return notification(uid, notificationId).get();
@@ -91,38 +142,52 @@ public class NotificationRepository {
         if (db == null) {
             return Tasks.forException(new IllegalStateException("Firebase nije inicijalizovan"));
         }
-        if (uid == null || uid.isEmpty()) {
+        if (isBlank(uid)) {
             return Tasks.forException(new IllegalArgumentException("Korisnik nije prijavljen"));
         }
 
         WriteBatch batch = db.batch();
-        addTestNotification(batch, uid, "CHAT", "Nova poruka u regionalnom četu",
-                "Stigla je nova poruka od igrača iz tvog regiona. Otvori čet i nastavi razgovor.", "CHAT");
+        addTestNotification(batch, uid, "CHAT", "Nova poruka",
+                "Stigla je nova poruka iz regionalnog ceta.", "CHAT");
         addTestNotification(batch, uid, "RANKING", "Promena plasmana",
-                "Tvoj položaj na rang listi je ažuriran nakon poslednjih odigranih partija.", "RANKING");
+                "Tvoj polozaj na rang listi je azuriran.", "RANKING");
         addTestNotification(batch, uid, "REWARD", "Dostupna nagrada",
-                "Osvojila si dodatne tokene za aktivnost i plasman u prethodnom ciklusu.", "PROFILE");
-        addTestNotification(batch, uid, "FRIEND_REQUEST", "Poziv od igrača",
-                "Jedan igrač želi da te doda u prijatelje i pozove na partiju.", "FRIENDS");
+                "Osvojeni su dodatni tokeni za aktivnost.", "REWARD");
+        addTestNotification(batch, uid, "FRIEND_INVITE", "Poziv od igraca",
+                "Jedan igrac zeli da te doda u prijatelje.", "FRIEND_INVITE");
         addTestNotification(batch, uid, "LEAGUE", "Promena lige",
-                "Broj zvezda se promenio, pa proveri da li si prešla u novu ligu.", "PROFILE");
-        addTestNotification(batch, uid, "OTHER", "Sistemsko obaveštenje",
-                "Aplikacija Slagalica ima novo obaveštenje za tvoj nalog.", "NOTIFICATIONS");
+                "Proveri novu ligu na profilu.", "LEAGUE");
+        addTestNotification(batch, uid, "OTHER", "Sistemsko obavestenje",
+                "Aplikacija Slagalica ima novo obavestenje za tvoj nalog.", "OTHER");
         return batch.commit();
     }
 
-    private void addTestNotification(WriteBatch batch, String uid, String type, String title,
-                                     String message, String targetScreen) {
-        DocumentReference doc = notifications(uid).document();
+    public Map<String, Object> notificationData(String notificationId, String type, String title,
+                                                String message, String actionType,
+                                                String actionTargetId, String senderUid,
+                                                String senderName) {
+        String cleanType = normalize(type, "OTHER");
+        String cleanAction = normalize(actionType, cleanType);
         Map<String, Object> data = new HashMap<>();
-        data.put("id", doc.getId());
-        data.put("type", type);
-        data.put("title", title);
-        data.put("message", message);
-        data.put("read", false);
+        data.put("notificationId", notificationId);
+        data.put("id", notificationId);
+        data.put("type", cleanType);
+        data.put("title", normalize(title, ""));
+        data.put("message", normalize(message, ""));
         data.put("createdAt", FieldValue.serverTimestamp());
-        data.put("targetScreen", targetScreen);
-        batch.set(doc, data);
+        data.put("read", false);
+        data.put("actionType", cleanAction);
+        data.put("actionTargetId", normalize(actionTargetId, ""));
+        data.put("senderUid", normalize(senderUid, ""));
+        data.put("senderName", normalize(senderName, ""));
+        data.put("targetScreen", cleanAction);
+        return data;
+    }
+
+    private void addTestNotification(WriteBatch batch, String uid, String type, String title,
+                                     String message, String actionType) {
+        DocumentReference doc = notifications(uid).document();
+        batch.set(doc, notificationData(doc.getId(), type, title, message, actionType, "", "", ""));
     }
 
     private com.google.firebase.firestore.CollectionReference notifications(String uid) {
@@ -131,5 +196,13 @@ public class NotificationRepository {
 
     private DocumentReference notification(String uid, String notificationId) {
         return notifications(uid).document(notificationId);
+    }
+
+    private boolean isBlank(String value) {
+        return value == null || value.trim().isEmpty();
+    }
+
+    private String normalize(String value, String fallback) {
+        return isBlank(value) ? fallback : value.trim();
     }
 }

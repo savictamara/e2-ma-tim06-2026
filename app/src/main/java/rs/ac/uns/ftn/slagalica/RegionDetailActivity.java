@@ -66,7 +66,8 @@ public class RegionDetailActivity extends AppCompatActivity {
         tvThird.setText(getString(R.string.region_detail_third, stats.thirdPlaces));
         tvActive.setText(getString(R.string.region_detail_active, stats.activePlayers));
         tvTotal.setText(getString(R.string.region_detail_total, stats.totalPlayers));
-        tvPrevious.setText(getString(R.string.region_detail_previous, placementText(stats.previousCyclePlacement)));
+        tvPrevious.setText("Trenutni rang: " + (stats.currentRank > 0 ? stats.currentRank : "-")
+                + "\nPrethodni ciklus: " + placementText(stats.previousCyclePlacement));
     }
 
     private String placementText(long placement) {

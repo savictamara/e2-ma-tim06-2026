@@ -12,6 +12,7 @@ import android.view.View;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Random;
 
 import rs.ac.uns.ftn.slagalica.data.repository.RegionRepository;
 import rs.ac.uns.ftn.slagalica.domain.model.RegionInfo;
@@ -23,19 +24,14 @@ public class RegionMapView extends View {
         void onRegionClick(String regionId);
     }
 
-    private static final double MIN_LAT = 42.0;
-    private static final double MAX_LAT = 46.3;
-    private static final double MIN_LON = 18.7;
-    private static final double MAX_LON = 23.0;
-
     private final Paint fillPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
     private final Paint strokePaint = new Paint(Paint.ANTI_ALIAS_FLAG);
     private final Paint textPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
     private final Paint pointPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
     private final List<RegionStats> regions = new ArrayList<>();
     private final List<RegionPoint> points = new ArrayList<>();
-    private final List<RegionHit> hits = new ArrayList<>();
     private String currentRegionId = "";
+    private String selectedRegionId = "";
     private OnRegionClickListener listener;
 
     public RegionMapView(Context context) {
@@ -54,101 +50,127 @@ public class RegionMapView extends View {
         strokePaint.setStyle(Paint.Style.STROKE);
         strokePaint.setStrokeWidth(dp(2));
         textPaint.setTextAlign(Paint.Align.CENTER);
+        textPaint.setFakeBoldText(true);
         pointPaint.setStyle(Paint.Style.FILL);
     }
 
-    public void setData(List<RegionStats> regionStats, List<RegionPoint> regionPoints, String selectedRegionId) {
+    public void setData(List<RegionStats> regionStats, List<RegionPoint> regionPoints, String currentUserRegionId) {
         regions.clear();
         points.clear();
         if (regionStats != null) {
             regions.addAll(regionStats);
         }
+        if (regions.isEmpty()) {
+            for (RegionInfo info : RegionRepository.regions()) {
+                regions.add(new RegionStats(info.id, info.name, info.iconName));
+            }
+        }
         if (regionPoints != null) {
             points.addAll(regionPoints);
         }
-        currentRegionId = selectedRegionId == null ? "" : selectedRegionId;
+        currentRegionId = currentUserRegionId == null ? "" : currentUserRegionId;
+        if (selectedRegionId.isEmpty()) {
+            selectedRegionId = currentRegionId;
+        }
         invalidate();
+    }
+
+    public void setSelectedRegionId(String regionId) {
+        selectedRegionId = regionId == null ? "" : regionId;
+        invalidate();
+    }
+
+    public String getSelectedRegionId() {
+        return selectedRegionId;
     }
 
     public void setOnRegionClickListener(OnRegionClickListener listener) {
         this.listener = listener;
     }
 
+    public static RegionPoint getRandomPointInsideRegion(String uid, String username, String regionId) {
+        RegionInfo info = RegionRepository.infoById(regionId);
+        if (info == null) {
+            return null;
+        }
+        Random random = new Random();
+        for (int i = 0; i < 200; i++) {
+            float x = random.nextFloat();
+            float y = random.nextFloat();
+            if (info.contains(x, y)) {
+                return new RegionPoint(uid, username, info.id, x, y);
+            }
+        }
+        return new RegionPoint(uid, username, info.id, info.centerX(), info.centerY());
+    }
+
     @Override
     protected void onDraw(Canvas canvas) {
         super.onDraw(canvas);
-        hits.clear();
-        float left = dp(16);
-        float top = dp(14);
-        float right = getWidth() - dp(16);
-        float bottom = getHeight() - dp(14);
+        RectF bounds = mapBounds();
+        drawMapContainer(canvas, bounds);
+        drawRegions(canvas, bounds);
+        drawPoints(canvas, bounds);
+    }
 
+    private void drawMapContainer(Canvas canvas, RectF bounds) {
         fillPaint.setColor(Color.rgb(253, 249, 255));
         strokePaint.setColor(Color.rgb(199, 178, 255));
-        RectF card = new RectF(left, top, right, bottom);
-        canvas.drawRoundRect(card, dp(18), dp(18), fillPaint);
-        canvas.drawRoundRect(card, dp(18), dp(18), strokePaint);
-
-        drawSerbiaShape(canvas, left, top, right, bottom);
-        drawRegions(canvas, left, top, right, bottom);
-        drawPoints(canvas, left, top, right, bottom);
+        canvas.drawRoundRect(bounds, dp(18), dp(18), fillPaint);
+        canvas.drawRoundRect(bounds, dp(18), dp(18), strokePaint);
     }
 
-    private void drawSerbiaShape(Canvas canvas, float left, float top, float right, float bottom) {
-        Path path = new Path();
-        path.moveTo(x(20.0, left, right), y(46.1, top, bottom));
-        path.lineTo(x(21.3, left, right), y(46.0, top, bottom));
-        path.lineTo(x(21.9, left, right), y(45.0, top, bottom));
-        path.lineTo(x(22.7, left, right), y(44.4, top, bottom));
-        path.lineTo(x(22.4, left, right), y(43.4, top, bottom));
-        path.lineTo(x(21.8, left, right), y(42.2, top, bottom));
-        path.lineTo(x(20.5, left, right), y(42.0, top, bottom));
-        path.lineTo(x(19.5, left, right), y(43.5, top, bottom));
-        path.lineTo(x(19.1, left, right), y(44.5, top, bottom));
-        path.lineTo(x(18.9, left, right), y(45.4, top, bottom));
-        path.close();
+    private void drawRegions(Canvas canvas, RectF bounds) {
+        textPaint.setTextSize(dp(11));
+        for (RegionInfo info : RegionRepository.regions()) {
+            boolean selected = info.id.equals(selectedRegionId);
+            boolean current = info.id.equals(currentRegionId);
+            Path path = pathFor(info, bounds);
+            fillPaint.setColor(selected ? Color.rgb(238, 158, 198) : info.color);
+            strokePaint.setColor(current || selected ? Color.rgb(53, 43, 69) : Color.WHITE);
+            strokePaint.setStrokeWidth(current || selected ? dp(4) : dp(2));
+            canvas.drawPath(path, fillPaint);
+            canvas.drawPath(path, strokePaint);
 
-        fillPaint.setColor(Color.rgb(247, 204, 224));
-        strokePaint.setColor(Color.rgb(238, 158, 198));
-        canvas.drawPath(path, fillPaint);
-        canvas.drawPath(path, strokePaint);
-    }
-
-    private void drawRegions(Canvas canvas, float left, float top, float right, float bottom) {
-        textPaint.setTextSize(dp(12));
-        textPaint.setFakeBoldText(true);
-        for (RegionStats stats : regions) {
-            RegionInfo info = RegionRepository.infoById(stats.regionId);
-            if (info == null) {
-                continue;
-            }
-            float centerX = x(info.centerLongitude(), left, right);
-            float centerY = y(info.centerLatitude(), top, bottom);
-            boolean selected = stats.regionId.equals(currentRegionId);
-            fillPaint.setColor(selected ? Color.rgb(238, 158, 198) : Color.rgb(220, 206, 255));
-            strokePaint.setColor(selected ? Color.rgb(53, 43, 69) : Color.rgb(183, 152, 255));
-            RectF icon = new RectF(centerX - dp(19), centerY - dp(18), centerX + dp(19), centerY + dp(18));
-            canvas.drawRoundRect(icon, dp(12), dp(12), fillPaint);
-            canvas.drawRoundRect(icon, dp(12), dp(12), strokePaint);
+            float cx = mapX(info.centerX(), bounds);
+            float cy = mapY(info.centerY(), bounds);
+            fillPaint.setColor(Color.argb(210, 255, 255, 255));
+            RectF icon = new RectF(cx - dp(18), cy - dp(16), cx + dp(18), cy + dp(16));
+            canvas.drawRoundRect(icon, dp(9), dp(9), fillPaint);
             textPaint.setColor(Color.rgb(53, 43, 69));
-            canvas.drawText(stats.iconName, centerX, centerY + dp(5), textPaint);
-            hits.add(new RegionHit(stats.regionId, icon));
+            canvas.drawText(info.iconName, cx, cy + dp(5), textPaint);
         }
     }
 
-    private void drawPoints(Canvas canvas, float left, float top, float right, float bottom) {
+    private void drawPoints(Canvas canvas, RectF bounds) {
         pointPaint.setColor(Color.rgb(53, 43, 69));
+        strokePaint.setColor(Color.WHITE);
+        strokePaint.setStrokeWidth(dp(1));
         for (RegionPoint point : points) {
-            canvas.drawCircle(x(point.longitude, left, right), y(point.latitude, top, bottom), dp(3), pointPaint);
+            RegionInfo info = RegionRepository.infoById(point.regionId);
+            if (info == null || !info.contains(point.x, point.y)) {
+                continue;
+            }
+            float cx = mapX(point.x, bounds);
+            float cy = mapY(point.y, bounds);
+            canvas.drawCircle(cx, cy, dp(4), pointPaint);
+            canvas.drawCircle(cx, cy, dp(4), strokePaint);
         }
     }
 
     @Override
     public boolean onTouchEvent(MotionEvent event) {
-        if (event.getAction() == MotionEvent.ACTION_UP && listener != null) {
-            for (RegionHit hit : hits) {
-                if (hit.bounds.contains(event.getX(), event.getY())) {
-                    listener.onRegionClick(hit.regionId);
+        if (event.getAction() == MotionEvent.ACTION_UP) {
+            RectF bounds = mapBounds();
+            float x = unmapX(event.getX(), bounds);
+            float y = unmapY(event.getY(), bounds);
+            for (RegionInfo info : RegionRepository.regions()) {
+                if (info.contains(x, y)) {
+                    selectedRegionId = info.id;
+                    invalidate();
+                    if (listener != null) {
+                        listener.onRegionClick(info.id);
+                    }
                     return true;
                 }
             }
@@ -156,27 +178,42 @@ public class RegionMapView extends View {
         return true;
     }
 
-    private float x(double longitude, float left, float right) {
-        double ratio = (longitude - MIN_LON) / (MAX_LON - MIN_LON);
-        return (float) (left + ratio * (right - left));
+    private Path pathFor(RegionInfo info, RectF bounds) {
+        Path path = new Path();
+        for (int i = 0; i + 1 < info.polygon.length; i += 2) {
+            float x = mapX(info.polygon[i], bounds);
+            float y = mapY(info.polygon[i + 1], bounds);
+            if (i == 0) {
+                path.moveTo(x, y);
+            } else {
+                path.lineTo(x, y);
+            }
+        }
+        path.close();
+        return path;
     }
 
-    private float y(double latitude, float top, float bottom) {
-        double ratio = (MAX_LAT - latitude) / (MAX_LAT - MIN_LAT);
-        return (float) (top + ratio * (bottom - top));
+    private RectF mapBounds() {
+        return new RectF(dp(16), dp(14), getWidth() - dp(16), getHeight() - dp(14));
+    }
+
+    private float mapX(float x, RectF bounds) {
+        return bounds.left + x * bounds.width();
+    }
+
+    private float mapY(float y, RectF bounds) {
+        return bounds.top + y * bounds.height();
+    }
+
+    private float unmapX(float x, RectF bounds) {
+        return Math.max(0f, Math.min(1f, (x - bounds.left) / bounds.width()));
+    }
+
+    private float unmapY(float y, RectF bounds) {
+        return Math.max(0f, Math.min(1f, (y - bounds.top) / bounds.height()));
     }
 
     private float dp(float value) {
         return value * getResources().getDisplayMetrics().density;
-    }
-
-    private static class RegionHit {
-        final String regionId;
-        final RectF bounds;
-
-        RegionHit(String regionId, RectF bounds) {
-            this.regionId = regionId;
-            this.bounds = bounds;
-        }
     }
 }

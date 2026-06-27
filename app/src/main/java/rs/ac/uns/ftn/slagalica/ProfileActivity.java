@@ -4,10 +4,12 @@ import android.app.AlertDialog;
 import android.content.Intent;
 import android.graphics.Bitmap;
 import android.graphics.Color;
+import android.graphics.drawable.GradientDrawable;
 import android.os.Bundle;
 import android.util.Log;
 import android.widget.Button;
 import android.widget.ImageView;
+import android.widget.ProgressBar;
 import android.widget.TextView;
 import android.widget.Toast;
 
@@ -26,6 +28,7 @@ import java.util.Map;
 import rs.ac.uns.ftn.slagalica.data.repository.FirebaseAuthRepository;
 import rs.ac.uns.ftn.slagalica.data.repository.StatsRepository;
 import rs.ac.uns.ftn.slagalica.data.repository.UserRepository;
+import rs.ac.uns.ftn.slagalica.domain.model.LeagueDefinition;
 
 public class ProfileActivity extends AppCompatActivity {
     private static final String TAG = "ProfileActivity";
@@ -51,6 +54,8 @@ public class ProfileActivity extends AppCompatActivity {
     private TextView tvStars;
     private TextView tvLeague;
     private TextView tvRegion;
+    private ProgressBar progressLeague;
+    private TextView tvLeagueProgress;
     private TextView tvQrValue;
     private TextView tvStatsSummary;
     private TextView tvStatsGames;
@@ -83,6 +88,8 @@ public class ProfileActivity extends AppCompatActivity {
                     Log.e(TAG, "Profile defaults failed", e);
                     Toast.makeText(this, "Profil nije uspeo da se inicijalizuje.", Toast.LENGTH_SHORT).show();
                 });
+        userRepository.ensureLeagueConsistency(uid)
+                .addOnFailureListener(e -> Log.e(TAG, "League consistency check failed", e));
         statsRepository.ensureDefaultStats(uid)
                 .addOnFailureListener(e -> Log.e(TAG, "Stats defaults failed", e));
         listenProfile();
@@ -100,6 +107,8 @@ public class ProfileActivity extends AppCompatActivity {
         tvStars = findViewById(R.id.tvStars);
         tvLeague = findViewById(R.id.tvLeague);
         tvRegion = findViewById(R.id.tvRegion);
+        progressLeague = findViewById(R.id.progressLeague);
+        tvLeagueProgress = findViewById(R.id.tvLeagueProgress);
         tvQrValue = findViewById(R.id.tvQrValue);
         tvStatsSummary = findViewById(R.id.tvStatsSummary);
         tvStatsGames = findViewById(R.id.tvStatsGames);
@@ -156,9 +165,9 @@ public class ProfileActivity extends AppCompatActivity {
         String region = firstNonEmpty(user.getString("region"), "Region nije podešen");
         long tokens = longValue(user.get("tokens"));
         long stars = longValue(user.get("stars"));
-        League league = leagueForStars(stars);
-        String leagueName = firstNonEmpty(user.getString("leagueName"), user.getString("league"), league.name);
-        String leagueIcon = firstNonEmpty(user.getString("leagueIcon"), league.icon);
+        LeagueDefinition league = LeagueDefinition.forStars(stars);
+        String leagueName = firstNonEmpty(user.getString("leagueName"), league.name);
+        String leagueIcon = firstNonEmpty(user.getString("leagueIconName"), user.getString("leagueIcon"), league.iconName);
 
         tvUsername.setText("Korisničko ime: " + username);
         tvEmail.setText("Email: " + email);
@@ -169,6 +178,46 @@ public class ProfileActivity extends AppCompatActivity {
         tvRegion.setText("Region za koji igra: " + region);
         ivLeagueIcon.setImageResource(drawableForId(leagueIcon));
         ivAvatar.setImageResource(drawableForId(firstNonEmpty(user.getString("avatarId"), user.getString("avatar"), "star")));
+        bindLeagueProgress(stars, league);
+        applyAvatarFrame(user);
+    }
+
+    private void bindLeagueProgress(long stars, LeagueDefinition league) {
+        LeagueDefinition next = LeagueDefinition.nextAfter(league);
+        if (next == null) {
+            progressLeague.setProgress(100);
+            tvLeagueProgress.setText("Maksimalna liga dostignuta.");
+            return;
+        }
+        long range = Math.max(1, next.requiredStars - league.requiredStars);
+        long current = Math.max(0, stars - league.requiredStars);
+        int progress = (int) Math.min(100, (current * 100) / range);
+        progressLeague.setProgress(progress);
+        tvLeagueProgress.setText(stars + " / " + next.requiredStars + " zvezda do " + next.name);
+    }
+
+    private void applyAvatarFrame(DocumentSnapshot user) {
+        String frame = firstNonEmpty(user.getString("avatarFrame"), user.getString("avatarFrameType"), "NONE");
+        String color = firstNonEmpty(user.getString("avatarFrameColor"), colorForFrame(frame));
+        if ("NONE".equals(frame) || color.isEmpty()) {
+            ivAvatar.setBackgroundResource(R.drawable.bg_avatar_frame);
+            ivAvatar.setPadding(dp(14), dp(14), dp(14), dp(14));
+            return;
+        }
+        GradientDrawable drawable = new GradientDrawable();
+        drawable.setShape(GradientDrawable.RECTANGLE);
+        drawable.setCornerRadius(dp(16));
+        drawable.setColor(Color.WHITE);
+        drawable.setStroke(dp(5), Color.parseColor(color));
+        ivAvatar.setBackground(drawable);
+        ivAvatar.setPadding(dp(14), dp(14), dp(14), dp(14));
+    }
+
+    private String colorForFrame(String frame) {
+        if ("GOLD".equals(frame)) return "#FFD700";
+        if ("SILVER".equals(frame)) return "#C0C0C0";
+        if ("BRONZE".equals(frame)) return "#CD7F32";
+        return "";
     }
 
     private void setupQr(String uid) {
@@ -290,6 +339,18 @@ public class ProfileActivity extends AppCompatActivity {
             return R.drawable.triangle;
         } else if ("skocko".equals(id)) {
             return R.drawable.skocko;
+        } else if ("ic_league_0".equals(id)) {
+            return R.drawable.ic_league_0;
+        } else if ("ic_league_1".equals(id)) {
+            return R.drawable.ic_league_1;
+        } else if ("ic_league_2".equals(id)) {
+            return R.drawable.ic_league_2;
+        } else if ("ic_league_3".equals(id)) {
+            return R.drawable.ic_league_3;
+        } else if ("ic_league_4".equals(id)) {
+            return R.drawable.ic_league_4;
+        } else if ("ic_league_5".equals(id)) {
+            return R.drawable.ic_league_5;
         }
         return R.drawable.star;
     }
@@ -363,6 +424,10 @@ public class ProfileActivity extends AppCompatActivity {
 
     private String formatNumber(double value) {
         return value == Math.rint(value) ? String.valueOf((long) value) : String.format(java.util.Locale.US, "%.1f", value);
+    }
+
+    private int dp(int value) {
+        return (int) (value * getResources().getDisplayMetrics().density + 0.5f);
     }
 
     @Override

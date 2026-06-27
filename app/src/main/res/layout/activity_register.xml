@@ -21,7 +21,22 @@
 
         <EditText android:id="@+id/etEmail" android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginTop="10dp" android:background="@drawable/bg_step" android:hint="@string/email" android:inputType="textEmailAddress" android:padding="12dp" android:textColor="@color/input_text_color" android:textColorHint="@color/input_hint_color"/>
         <EditText android:id="@+id/etUsername" android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginTop="8dp" android:background="@drawable/bg_step" android:hint="@string/username" android:padding="12dp" android:textColor="@color/input_text_color" android:textColorHint="@color/input_hint_color"/>
-        <EditText android:id="@+id/etRegion" android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginTop="8dp" android:background="@drawable/bg_step" android:hint="@string/region" android:padding="12dp" android:textColor="@color/input_text_color" android:textColorHint="@color/input_hint_color"/>
+        <TextView
+            android:id="@+id/tvRegionMapLabel"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="10dp"
+            android:text="Izaberite region na mapi"
+            android:textColor="@color/text_main"
+            android:textStyle="bold" />
+
+        <rs.ac.uns.ftn.slagalica.RegionMapView
+            android:id="@+id/registerRegionMap"
+            android:layout_width="match_parent"
+            android:layout_height="260dp"
+            android:layout_marginTop="8dp" />
+
+        <EditText android:id="@+id/etRegion" android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginTop="8dp" android:background="@drawable/bg_step" android:enabled="false" android:hint="@string/region" android:padding="12dp" android:textColor="@color/input_text_color" android:textColorHint="@color/input_hint_color"/>
         <EditText android:id="@+id/etPassword" android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginTop="8dp" android:background="@drawable/bg_step" android:hint="@string/password" android:inputType="textPassword" android:padding="12dp" android:textColor="@color/input_text_color" android:textColorHint="@color/input_hint_color"/>
         <EditText android:id="@+id/etRepeatPassword" android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginTop="8dp" android:background="@drawable/bg_step" android:hint="@string/repeat_password" android:inputType="textPassword" android:padding="12dp" android:textColor="@color/input_text_color" android:textColorHint="@color/input_hint_color"/>
 

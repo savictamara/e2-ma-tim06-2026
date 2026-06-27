@@ -1,6 +1,7 @@
 package rs.ac.uns.ftn.slagalica;
 
 import android.Manifest;
+import android.app.AlertDialog;
 import android.content.Intent;
 import android.content.pm.PackageManager;
 import android.os.Build;
@@ -17,8 +18,11 @@ import com.google.firebase.firestore.ListenerRegistration;
 
 import rs.ac.uns.ftn.slagalica.data.repository.FirebaseAuthRepository;
 import rs.ac.uns.ftn.slagalica.data.repository.GameRepository;
+import rs.ac.uns.ftn.slagalica.data.repository.LeaderboardRepository;
 import rs.ac.uns.ftn.slagalica.data.repository.NotificationRepository;
+import rs.ac.uns.ftn.slagalica.data.repository.UserRepository;
 import rs.ac.uns.ftn.slagalica.domain.model.AppNotification;
+import rs.ac.uns.ftn.slagalica.domain.model.LeagueDefinition;
 import rs.ac.uns.ftn.slagalica.util.FirebaseInitializer;
 import rs.ac.uns.ftn.slagalica.util.GameFlow;
 import rs.ac.uns.ftn.slagalica.util.GuestSession;
@@ -30,12 +34,15 @@ public class MainActivity extends AppCompatActivity {
     private FirebaseAuthRepository authRepository;
     private GameRepository gameRepository;
     private NotificationRepository notificationRepository;
+    private LeaderboardRepository leaderboardRepository;
+    private UserRepository userRepository;
     private ListenerRegistration notificationListener;
     private Button btnLogin;
     private Button btnRegister;
     private Button btnReset;
     private Button btnProfile;
     private Button btnNotifikacije;
+    private boolean leagueDialogShowing = false;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -45,6 +52,8 @@ public class MainActivity extends AppCompatActivity {
         authRepository = new FirebaseAuthRepository(this);
         gameRepository = new GameRepository(this);
         notificationRepository = new NotificationRepository(this);
+        leaderboardRepository = new LeaderboardRepository(this);
+        userRepository = new UserRepository(this);
         NotificationHelper.createNotificationChannels(this);
         requestNotificationPermissionIfNeeded();
 
@@ -61,7 +70,9 @@ public class MainActivity extends AppCompatActivity {
         btnNotifikacije = findViewById(R.id.btnNotifikacije);
         Button btnFullMatch = findViewById(R.id.btnFullMatch);
         Button btnChat = findViewById(R.id.btnChat);
+        Button btnFriends = findViewById(R.id.btnFriends);
         Button btnRegions = findViewById(R.id.btnRegions);
+        Button btnLeaderboards = findViewById(R.id.btnLeaderboards);
 
         btnLogin.setOnClickListener(v -> startActivity(new Intent(this, LoginActivity.class)));
         btnRegister.setOnClickListener(v -> startActivity(new Intent(this, RegisterActivity.class)));
@@ -76,8 +87,12 @@ public class MainActivity extends AppCompatActivity {
         btnNotifikacije.setOnClickListener(v -> startActivity(new Intent(this, NotifikacijeActivity.class)));
         btnFullMatch.setOnClickListener(v -> startFullMatch());
         btnChat.setOnClickListener(v -> startActivity(new Intent(this, ChatActivity.class)));
+        btnFriends.setOnClickListener(v -> startActivity(new Intent(this, FriendsActivity.class)));
         btnRegions.setOnClickListener(v -> startActivity(new Intent(this, RegionsActivity.class)));
+        btnLeaderboards.setOnClickListener(v -> startActivity(new Intent(this, LeaderboardActivity.class)));
         updateAccountUi();
+        grantDailyTokens();
+        ensureLeaderboardsAndRewards();
         startNotificationListener();
     }
 
@@ -85,6 +100,90 @@ public class MainActivity extends AppCompatActivity {
     protected void onResume() {
         super.onResume();
         updateAccountUi();
+        grantDailyTokens();
+        checkPendingLeagueDialog();
+        checkPendingReward();
+    }
+
+    private void grantDailyTokens() {
+        FirebaseUser user = authRepository.currentUser();
+        if (user == null || user.isAnonymous() || userRepository == null || !userRepository.isReady()) {
+            return;
+        }
+        userRepository.ensureLeagueConsistency(user.getUid())
+                .continueWithTask(task -> {
+                    if (!task.isSuccessful()) {
+                        throw task.getException();
+                    }
+                    return userRepository.grantDailyLeagueTokens(user.getUid());
+                })
+                .addOnSuccessListener(unused -> checkPendingLeagueDialog())
+                .addOnFailureListener(e -> Log.e(TAG, "League consistency/daily grant failed", e));
+    }
+
+    private void checkPendingLeagueDialog() {
+        if (leagueDialogShowing || userRepository == null || !userRepository.isReady()) {
+            return;
+        }
+        FirebaseUser user = authRepository.currentUser();
+        if (user == null || user.isAnonymous()) {
+            return;
+        }
+        userRepository.getUser(user.getUid())
+                .addOnSuccessListener(doc -> {
+                    if (doc == null || !Boolean.TRUE.equals(doc.getBoolean("pendingLeagueDialog"))) {
+                        return;
+                    }
+                    leagueDialogShowing = true;
+                    long oldLevel = longValue(doc.get("pendingLeagueOldLevel"));
+                    long newLevel = longValue(doc.get("pendingLeagueNewLevel"));
+                    String message = doc.getString("pendingLeagueMessage");
+                    LeagueDefinition oldLeague = LeagueDefinition.byId(oldLevel);
+                    LeagueDefinition newLeague = LeagueDefinition.byId(newLevel);
+                    new AlertDialog.Builder(this)
+                            .setTitle("Promena lige")
+                            .setMessage((message == null ? "" : message)
+                                    + "\n\n" + oldLeague.name + " -> " + newLeague.name)
+                            .setPositiveButton(android.R.string.ok, (dialog, which) ->
+                                    userRepository.clearPendingLeagueDialog(user.getUid())
+                                            .addOnCompleteListener(task -> leagueDialogShowing = false))
+                            .setOnCancelListener(dialog -> {
+                                userRepository.clearPendingLeagueDialog(user.getUid());
+                                leagueDialogShowing = false;
+                            })
+                            .show();
+                })
+                .addOnFailureListener(e -> Log.e(TAG, "Pending league dialog check failed", e));
+    }
+
+    private void ensureLeaderboardsAndRewards() {
+        if (leaderboardRepository == null || !leaderboardRepository.isReady()) {
+            return;
+        }
+        leaderboardRepository.ensureCycles()
+                .addOnSuccessListener(unused -> checkPendingReward())
+                .addOnFailureListener(e -> Log.e(TAG, "Leaderboard cycle ensure failed", e));
+    }
+
+    private void checkPendingReward() {
+        if (leaderboardRepository == null || !leaderboardRepository.isReady()) {
+            return;
+        }
+        FirebaseUser user = authRepository.currentUser();
+        if (user == null || user.isAnonymous()) {
+            return;
+        }
+        leaderboardRepository.getPendingReward(user.getUid())
+                .addOnSuccessListener(doc -> {
+                    if (doc != null && Boolean.TRUE.equals(doc.getBoolean("pendingReward"))) {
+                        Intent intent = new Intent(this, RewardActivity.class);
+                        intent.putExtra(RewardActivity.EXTRA_CYCLE_TYPE, doc.getString("pendingRewardCycleType"));
+                        intent.putExtra(RewardActivity.EXTRA_PLACEMENT, longValue(doc.get("pendingRewardPlacement")));
+                        intent.putExtra(RewardActivity.EXTRA_TOKENS, longValue(doc.get("pendingRewardTokens")));
+                        startActivity(intent);
+                    }
+                })
+                .addOnFailureListener(e -> Log.e(TAG, "Pending reward check failed", e));
     }
 
     private void updateAccountUi() {
@@ -141,6 +240,13 @@ public class MainActivity extends AppCompatActivity {
             if (snapshot == null) {
                 return;
             }
+            int unreadCount = 0;
+            for (com.google.firebase.firestore.DocumentSnapshot doc : snapshot.getDocuments()) {
+                if (!Boolean.TRUE.equals(doc.getBoolean("read"))) {
+                    unreadCount++;
+                }
+            }
+            updateNotificationBadge(unreadCount);
             for (DocumentChange change : snapshot.getDocumentChanges()) {
                 AppNotification notification = AppNotification.fromSnapshot(change.getDocument());
                 if (firstSnapshot[0]) {
@@ -157,11 +263,23 @@ public class MainActivity extends AppCompatActivity {
         });
     }
 
+    private void updateNotificationBadge(int unreadCount) {
+        if (btnNotifikacije == null) {
+            return;
+        }
+        String base = getString(R.string.go_notifikacije);
+        btnNotifikacije.setText(unreadCount > 0 ? base + " (" + unreadCount + ")" : base);
+    }
+
     private void requestNotificationPermissionIfNeeded() {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU
                 && checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED) {
             requestPermissions(new String[]{Manifest.permission.POST_NOTIFICATIONS}, REQUEST_POST_NOTIFICATIONS);
         }
+    }
+
+    private long longValue(Object value) {
+        return value instanceof Number ? ((Number) value).longValue() : 0;
     }
 
     @Override
