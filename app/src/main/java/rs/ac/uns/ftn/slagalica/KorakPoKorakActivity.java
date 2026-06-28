@@ -3,6 +3,8 @@ package rs.ac.uns.ftn.slagalica;
 import android.content.Intent;
 import android.os.Bundle;
 import android.os.CountDownTimer;
+import android.os.Handler;
+import android.os.Looper;
 import android.util.Log;
 import android.view.View;
 import android.widget.EditText;
@@ -31,6 +33,7 @@ import rs.ac.uns.ftn.slagalica.util.GuestSession;
 
 public class KorakPoKorakActivity extends AppCompatActivity {
     private static final String TAG = "KorakPoKorakActivity";
+    private static final String DEBUG_TAG = "KorakDebug";
     private final TextView[] stepViews = new TextView[7];
     private final StepByStepService stepService = new StepByStepService();
     private FirebaseAuthRepository authRepository;
@@ -68,6 +71,8 @@ public class KorakPoKorakActivity extends AppCompatActivity {
     private android.widget.Button btnCheckSolution;
     private GameHeaderHelper headerHelper;
     private String expectedAnswer = "";
+    private int currentAvailablePoints = 0;
+    private final Handler feedbackHandler = new Handler(Looper.getMainLooper());
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -140,7 +145,8 @@ public class KorakPoKorakActivity extends AppCompatActivity {
         btnCheckSolution.setOnClickListener(v -> {
             String solution = etSolution.getText().toString().trim();
             if (solution.isEmpty()) {
-                show(getString(R.string.error_fill_fields));
+                show("Unesite odgovor");
+                tvResult.setText("Unesite odgovor");
                 return;
             }
             boolean allowed = ("ACTIVE_PLAYER".equals(phase) && uid.equals(activePlayerUid))
@@ -149,6 +155,19 @@ public class KorakPoKorakActivity extends AppCompatActivity {
                 show(getString(R.string.not_your_turn));
                 return;
             }
+            boolean isCorrect = !expectedAnswer.isEmpty() && expectedAnswer.equalsIgnoreCase(solution);
+            Log.d(DEBUG_TAG, "uid=" + uid
+                    + ", submitted answer=" + solution
+                    + ", correct answer=" + expectedAnswer
+                    + ", isCorrect=" + isCorrect
+                    + ", currentStep=" + openedSteps
+                    + ", points=" + currentAvailablePoints
+                    + ", challengeRun=" + challengeRun);
+            if (!isCorrect) {
+                showWrongFeedback();
+                return;
+            }
+            showCorrectFeedback();
             if (!expectedAnswer.isEmpty() && !expectedAnswer.equalsIgnoreCase(solution)) {
                 tvResult.setText("Netačno");
                 setStatusText("Netačno");
@@ -157,6 +176,7 @@ public class KorakPoKorakActivity extends AppCompatActivity {
             gameRepository.submitStepAnswer(gameId, roundNumber, uid, solution)
                     .addOnFailureListener(e -> {
                         Log.e(TAG, "Submit step answer failed", e);
+                        resetFeedbackStyle();
                         show(e.getMessage());
                     });
         });
@@ -299,7 +319,9 @@ public class KorakPoKorakActivity extends AppCompatActivity {
             }
         }
         int currentPoints = "OPPONENT_CHANCE".equals(phase) ? 5 : stepService.pointsForStep(openedSteps);
+        currentAvailablePoints = currentPoints;
         tvPoints.setText(getString(R.string.points_text, currentPoints));
+        resetFeedbackStyle();
         setControls(("ACTIVE_PLAYER".equals(phase) && uid.equals(activePlayerUid))
                 || ("OPPONENT_CHANCE".equals(phase) && uid.equals(opponentUid)));
         if ("FINISHED".equals(phase)) {
@@ -418,6 +440,27 @@ public class KorakPoKorakActivity extends AppCompatActivity {
                 .addOnFailureListener(e -> Log.e(TAG, "Complete step in match failed", e));
     }
 
+    private void showCorrectFeedback() {
+        feedbackHandler.removeCallbacksAndMessages(null);
+        etSolution.setBackgroundResource(R.drawable.bg_answer_correct);
+        tvResult.setText("Tačno! +" + currentAvailablePoints + " poena");
+        setStatusText("Tačno!");
+    }
+
+    private void showWrongFeedback() {
+        feedbackHandler.removeCallbacksAndMessages(null);
+        etSolution.setBackgroundResource(R.drawable.bg_answer_wrong);
+        tvResult.setText("Netačno, pokušajte ponovo");
+        setStatusText("Netačno");
+        feedbackHandler.postDelayed(this::resetFeedbackStyle, 900);
+    }
+
+    private void resetFeedbackStyle() {
+        if (etSolution != null) {
+            etSolution.setBackgroundResource(R.drawable.bg_step);
+        }
+    }
+
     private void setControls(boolean enabled) {
         boolean canSubmit = enabled && openedSteps >= 0;
         btnCheckSolution.setEnabled(canSubmit);
@@ -530,6 +573,7 @@ public class KorakPoKorakActivity extends AppCompatActivity {
 
     @Override
     protected void onDestroy() {
+        feedbackHandler.removeCallbacksAndMessages(null);
         if (timer != null) {
             timer.cancel();
         }

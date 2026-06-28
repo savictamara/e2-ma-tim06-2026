@@ -31,6 +31,7 @@ import rs.ac.uns.ftn.slagalica.util.GuestSession;
 
 public class KoZnaZnaActivity extends AppCompatActivity {
     private static final String TAG = "KoZnaZnaActivity";
+    private static final String DEBUG_TAG = "KoZnaZnaDebug";
     private static final int QUESTION_COUNT = 5;
     private static final long QUESTION_DURATION_MS = 5000;
 
@@ -48,6 +49,10 @@ public class KoZnaZnaActivity extends AppCompatActivity {
     private String player2Uid;
     private String phase = "";
     private int currentQuestionIndex = 0;
+    private int currentCorrectAnswerIndex = -1;
+    private int lastRenderedQuestionIndex = -1;
+    private int selectedAnswerIndex = -1;
+    private boolean selectedAnswerCorrect = false;
     private int player1Score = 0;
     private int player2Score = 0;
     private boolean answeredCurrentQuestion = false;
@@ -97,6 +102,7 @@ public class KoZnaZnaActivity extends AppCompatActivity {
         answerButtons[3] = findViewById(R.id.btnAnswer4);
         for (int i = 0; i < answerButtons.length; i++) {
             final int answerIndex = i;
+            answerButtons[i].setBackgroundTintList(null);
             answerButtons[i].setOnClickListener(v -> submitAnswer(answerIndex));
         }
 
@@ -249,14 +255,22 @@ public class KoZnaZnaActivity extends AppCompatActivity {
         }
         tvQuestionIndex.setText(getString(R.string.kznz_question_counter, currentQuestionIndex + 1, QUESTION_COUNT));
         tvQuestion.setText(value((String) question.get("questionText")));
+        currentCorrectAnswerIndex = intValue(question.get("correctAnswerIndex"));
+        if (lastRenderedQuestionIndex != currentQuestionIndex) {
+            selectedAnswerIndex = -1;
+            selectedAnswerCorrect = false;
+            lastRenderedQuestionIndex = currentQuestionIndex;
+        }
         List<String> options = (List<String>) question.get("options");
         for (int i = 0; i < answerButtons.length; i++) {
             answerButtons[i].setText(options != null && i < options.size() ? options.get(i) : "");
-            answerButtons[i].setBackgroundResource(R.drawable.bg_step);
         }
         Map<String, Object> answersByQuestion = (Map<String, Object>) round.get("answersByQuestion");
         Map<String, Object> currentAnswers = nestedMap(answersByQuestion, String.valueOf(currentQuestionIndex));
         answeredCurrentQuestion = currentAnswers.containsKey(uid);
+        Map<String, Object> correctnessByQuestion = (Map<String, Object>) round.get("correctnessByQuestion");
+        Map<String, Object> currentCorrectness = nestedMap(correctnessByQuestion, String.valueOf(currentQuestionIndex));
+        renderAnswerFeedback(currentAnswers, currentCorrectness);
         String otherPlayerUid = uid.equals(player1Uid) ? player2Uid : player1Uid;
         boolean otherPlayerAnswered = otherPlayerUid != null && currentAnswers.containsKey(otherPlayerUid);
         if (answeredCurrentQuestion && otherPlayerAnswered) {
@@ -275,6 +289,16 @@ public class KoZnaZnaActivity extends AppCompatActivity {
             return;
         }
         long answerTime = System.currentTimeMillis();
+        boolean isCorrect = selectedAnswerIndex == currentCorrectAnswerIndex;
+        this.selectedAnswerIndex = selectedAnswerIndex;
+        this.selectedAnswerCorrect = isCorrect;
+        renderAnswerButtons();
+        Log.d(DEBUG_TAG, "uid=" + uid
+                + ", selectedIndex=" + selectedAnswerIndex
+                + ", correctIndex=" + currentCorrectAnswerIndex
+                + ", isCorrect=" + isCorrect
+                + ", isMyTurn=" + GameRepository.PHASE_PLAYING.equals(phase)
+                + ", questionIndex=" + currentQuestionIndex);
         Log.d(TAG, "Submit answer uid=" + uid + ", gameId=" + gameId
                 + ", questionIndex=" + currentQuestionIndex
                 + ", selectedAnswerIndex=" + selectedAnswerIndex
@@ -286,9 +310,66 @@ public class KoZnaZnaActivity extends AppCompatActivity {
                 .addOnFailureListener(e -> {
                     Log.e(TAG, "Submit know it answer failed", e);
                     answeredCurrentQuestion = false;
+                    resetAnswerButtonStyles();
                     setAnswerButtonsEnabled(true);
                     show(e.getMessage());
                 });
+    }
+
+    private void renderAnswerFeedback(Map<String, Object> currentAnswers, Map<String, Object> currentCorrectness) {
+        Object selected = currentAnswers.get(uid);
+        if (!(selected instanceof Number)) {
+            renderAnswerButtons();
+            return;
+        }
+        selectedAnswerIndex = ((Number) selected).intValue();
+        selectedAnswerCorrect = Boolean.TRUE.equals(currentCorrectness.get(uid));
+        renderAnswerButtons();
+        Log.d(DEBUG_TAG, "uid=" + uid
+                + ", selectedIndex=" + selectedAnswerIndex
+                + ", correctIndex=" + currentCorrectAnswerIndex
+                + ", isCorrect=" + selectedAnswerCorrect
+                + ", isMyTurn=" + (!answeredCurrentQuestion && GameRepository.PHASE_PLAYING.equals(phase))
+                + ", questionIndex=" + currentQuestionIndex);
+    }
+
+    private void renderAnswerButtons() {
+        for (int i = 0; i < answerButtons.length; i++) {
+            int background = R.drawable.bg_step;
+            String style = "normal";
+            if (selectedAnswerIndex == i) {
+                background = selectedAnswerCorrect ? R.drawable.bg_answer_correct : R.drawable.bg_answer_wrong;
+                style = selectedAnswerCorrect ? "selected_correct" : "selected_wrong";
+            } else if (selectedAnswerIndex != -1 && !selectedAnswerCorrect && i == currentCorrectAnswerIndex) {
+                background = R.drawable.bg_answer_correct;
+                style = "correct_after_wrong";
+            }
+            applyAnswerButtonBackground(i, background, style);
+        }
+    }
+
+    private void resetAnswerButtonStyles() {
+        selectedAnswerIndex = -1;
+        selectedAnswerCorrect = false;
+        renderAnswerButtons();
+    }
+
+    private void applyAnswerButtonBackground(int index, int background, String style) {
+        Button button = answerButtons[index];
+        button.setBackgroundTintList(null);
+        button.setBackgroundResource(background);
+        Log.d(DEBUG_TAG, "render style applied button=" + index
+                + ", style=" + style
+                + ", clickable=" + button.isClickable()
+                + ", enabled=" + button.isEnabled());
+    }
+
+    private void setAnswerButtonsClickable(boolean clickable) {
+        for (Button answerButton : answerButtons) {
+            answerButton.setEnabled(true);
+            answerButton.setClickable(clickable);
+            answerButton.setAlpha(1f);
+        }
     }
 
     private void startQuestionTimer(DocumentSnapshot round) {
@@ -360,9 +441,7 @@ public class KoZnaZnaActivity extends AppCompatActivity {
                 : "Finalni rezultat: " + player1Score + " : " + player2Score);
         setStatus("Ko zna zna je završeno");
         setAnswerButtonsEnabled(false);
-        for (Button answerButton : answerButtons) {
-            answerButton.setBackgroundResource(R.drawable.bg_step);
-        }
+        resetAnswerButtonStyles();
         recordStatsOnce();
         if (fullMatch) {
             completeMiniGameOnce();
@@ -413,9 +492,8 @@ public class KoZnaZnaActivity extends AppCompatActivity {
     }
 
     private void setAnswerButtonsEnabled(boolean enabled) {
-        for (Button answerButton : answerButtons) {
-            answerButton.setEnabled(enabled);
-        }
+        setAnswerButtonsClickable(enabled);
+        renderAnswerButtons();
         Log.d(TAG, "Answer buttons enabled=" + enabled + ", gameId=" + gameId
                 + ", roundId=" + gameRepository.knowItRoundId()
                 + ", currentUserUid=" + uid + ", phase=" + phase
