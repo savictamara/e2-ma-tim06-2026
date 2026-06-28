@@ -70,6 +70,9 @@
             android:name=".ProfileActivity"
             android:exported="false" />
         <activity
+            android:name=".ProfileStatsDetailActivity"
+            android:exported="false" />
+        <activity
             android:name=".MojBrojActivity"
             android:exported="false" />
         <activity

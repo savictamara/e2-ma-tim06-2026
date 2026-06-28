@@ -4,11 +4,14 @@ import android.app.AlertDialog;
 import android.content.Intent;
 import android.graphics.Bitmap;
 import android.graphics.Color;
+import android.graphics.drawable.ColorDrawable;
 import android.graphics.drawable.GradientDrawable;
 import android.os.Bundle;
 import android.util.Log;
+import android.view.View;
 import android.widget.Button;
 import android.widget.ImageView;
+import android.widget.LinearLayout;
 import android.widget.ProgressBar;
 import android.widget.TextView;
 import android.widget.Toast;
@@ -60,6 +63,15 @@ public class ProfileActivity extends AppCompatActivity {
     private TextView tvStatsSummary;
     private TextView tvStatsGames;
     private TextView tvStatsDetails;
+    private TextView tvStatsSuccess;
+    private ProgressBar progressWinRate;
+    private TextView tvWinRateValue;
+    private TextView tvGamesPlayedCard;
+    private TextView tvWeeklyStatsCard;
+    private TextView tvMonthlyStatsCard;
+    private String currentAvatarId = "star";
+    private String currentAvatarFrame = "NONE";
+    private String currentAvatarFrameColor = "";
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -113,12 +125,34 @@ public class ProfileActivity extends AppCompatActivity {
         tvStatsSummary = findViewById(R.id.tvStatsSummary);
         tvStatsGames = findViewById(R.id.tvStatsGames);
         tvStatsDetails = findViewById(R.id.tvStatsDetails);
+        tvStatsSuccess = findViewById(R.id.tvStatsSuccess);
+        progressWinRate = findViewById(R.id.progressWinRate);
+        tvWinRateValue = findViewById(R.id.tvWinRateValue);
+        tvGamesPlayedCard = findViewById(R.id.tvGamesPlayedCard);
+        tvWeeklyStatsCard = findViewById(R.id.tvWeeklyStatsCard);
+        tvMonthlyStatsCard = findViewById(R.id.tvMonthlyStatsCard);
         Button btnChangeAvatar = findViewById(R.id.btnChangeAvatar);
         Button btnLogout = findViewById(R.id.btnLogout);
         ivAvatar.setOnClickListener(v -> showAvatarPicker());
         btnChangeAvatar.setOnClickListener(v -> showAvatarPicker());
         btnLogout.setOnClickListener(v -> logout());
+        tvStatsGames.setOnClickListener(v -> openStatsDetail(ProfileStatsDetailActivity.TYPE_AVERAGES));
+        tvStatsDetails.setOnClickListener(v -> openStatsDetail(ProfileStatsDetailActivity.TYPE_GAME_DETAILS));
+        tvStatsSuccess.setOnClickListener(v -> openStatsDetail(ProfileStatsDetailActivity.TYPE_SUCCESS));
         renderEmptyStats();
+        resetStatsEntryLabels();
+    }
+
+    private void openStatsDetail(String detailType) {
+        Intent intent = new Intent(this, ProfileStatsDetailActivity.class);
+        intent.putExtra(ProfileStatsDetailActivity.EXTRA_DETAIL_TYPE, detailType);
+        startActivity(intent);
+    }
+
+    private void resetStatsEntryLabels() {
+        tvStatsGames.setText("Prosek po igrama\nPoeni i broj partija po svakoj igri  ›");
+        tvStatsDetails.setText("Detalji po igrama\nTačnost, pokušaji i rešeni zadaci  ›");
+        tvStatsSuccess.setText("Uspešnost po igrama\nPregled procenata po mini-igrama  ›");
     }
 
     private void listenProfile() {
@@ -165,6 +199,10 @@ public class ProfileActivity extends AppCompatActivity {
         String region = firstNonEmpty(user.getString("region"), "Region nije podešen");
         long tokens = longValue(user.get("tokens"));
         long stars = longValue(user.get("stars"));
+        long weeklyStars = longValue(user.get("weeklyStars"));
+        long monthlyStars = longValue(user.get("monthlyStars"));
+        long weeklyMatches = longValue(user.get("weeklyMatchesPlayed"));
+        long monthlyMatches = longValue(user.get("monthlyMatchesPlayed"));
         LeagueDefinition league = LeagueDefinition.forStars(stars);
         String leagueName = firstNonEmpty(user.getString("leagueName"), league.name);
         String leagueIcon = firstNonEmpty(user.getString("leagueIconName"), user.getString("leagueIcon"), league.iconName);
@@ -172,12 +210,17 @@ public class ProfileActivity extends AppCompatActivity {
         tvUsername.setText("Korisničko ime: " + username);
         tvEmail.setText("Email: " + email);
         tvRegionBasic.setText("Region: " + region);
-        tvTokens.setText("Broj tokena: " + tokens);
-        tvStars.setText("Ukupan broj zvezda: " + stars);
+        tvTokens.setText(String.valueOf(tokens));
+        tvStars.setText(String.valueOf(stars));
         tvLeague.setText("Liga: " + leagueName);
         tvRegion.setText("Region za koji igra: " + region);
         ivLeagueIcon.setImageResource(drawableForId(leagueIcon));
-        ivAvatar.setImageResource(drawableForId(firstNonEmpty(user.getString("avatarId"), user.getString("avatar"), "star")));
+        currentAvatarId = firstNonEmpty(user.getString("avatarId"), user.getString("avatar"), "star");
+        currentAvatarFrame = firstNonEmpty(user.getString("avatarFrame"), user.getString("avatarFrameType"), "NONE");
+        currentAvatarFrameColor = firstNonEmpty(user.getString("avatarFrameColor"), colorForFrame(currentAvatarFrame));
+        ivAvatar.setImageResource(drawableForId(currentAvatarId));
+        tvWeeklyStatsCard.setText("Nedeljno\n" + weeklyStars + " zvezda\n" + weeklyMatches + " partija");
+        tvMonthlyStatsCard.setText("Mesečno: " + monthlyStars + " zvezda  •  " + monthlyMatches + " partija");
         bindLeagueProgress(stars, league);
         applyAvatarFrame(user);
     }
@@ -199,9 +242,13 @@ public class ProfileActivity extends AppCompatActivity {
     private void applyAvatarFrame(DocumentSnapshot user) {
         String frame = firstNonEmpty(user.getString("avatarFrame"), user.getString("avatarFrameType"), "NONE");
         String color = firstNonEmpty(user.getString("avatarFrameColor"), colorForFrame(frame));
+        applyFrameToImage(ivAvatar, frame, color);
+    }
+
+    private void applyFrameToImage(ImageView imageView, String frame, String color) {
         if ("NONE".equals(frame) || color.isEmpty()) {
-            ivAvatar.setBackgroundResource(R.drawable.bg_avatar_frame);
-            ivAvatar.setPadding(dp(14), dp(14), dp(14), dp(14));
+            imageView.setBackgroundResource(R.drawable.bg_avatar_frame);
+            imageView.setPadding(dp(14), dp(14), dp(14), dp(14));
             return;
         }
         GradientDrawable drawable = new GradientDrawable();
@@ -209,8 +256,8 @@ public class ProfileActivity extends AppCompatActivity {
         drawable.setCornerRadius(dp(16));
         drawable.setColor(Color.WHITE);
         drawable.setStroke(dp(5), Color.parseColor(color));
-        ivAvatar.setBackground(drawable);
-        ivAvatar.setPadding(dp(14), dp(14), dp(14), dp(14));
+        imageView.setBackground(drawable);
+        imageView.setPadding(dp(14), dp(14), dp(14), dp(14));
     }
 
     private String colorForFrame(String frame) {
@@ -227,6 +274,10 @@ public class ProfileActivity extends AppCompatActivity {
     }
 
     private void showAvatarPicker() {
+        if (System.currentTimeMillis() >= 0) {
+            showThemedAvatarPicker();
+            return;
+        }
         String[] names = {"Zvezda", "Srce", "Krug", "Trougao", "Skočko"};
         String[] ids = {"star", "heart", "circle", "triangle", "skocko"};
         new AlertDialog.Builder(this)
@@ -239,6 +290,61 @@ public class ProfileActivity extends AppCompatActivity {
                 .show();
     }
 
+    private void showThemedAvatarPicker() {
+        String[] ids = {"star", "heart", "circle", "triangle", "skocko"};
+        View content = getLayoutInflater().inflate(R.layout.dialog_avatar_picker, null, false);
+        ImageView preview = content.findViewById(R.id.ivAvatarPreview);
+        LinearLayout options = content.findViewById(R.id.avatarOptionsContainer);
+        final String[] selected = {currentAvatarId};
+        List<ImageView> optionViews = new ArrayList<>();
+        applyAvatarPreview(preview, selected[0]);
+        for (int i = 0; i < ids.length; i++) {
+            ImageView option = new ImageView(this);
+            option.setImageResource(drawableForId(ids[i]));
+            option.setPadding(dp(10), dp(10), dp(10), dp(10));
+            LinearLayout.LayoutParams params = new LinearLayout.LayoutParams(dp(54), dp(54));
+            params.setMargins(i == 0 ? 0 : dp(6), 0, 0, 0);
+            options.addView(option, params);
+            optionViews.add(option);
+            final String avatarId = ids[i];
+            option.setOnClickListener(v -> {
+                selected[0] = avatarId;
+                applyAvatarPreview(preview, selected[0]);
+                updateAvatarOptionSelection(optionViews, ids, selected[0]);
+            });
+        }
+        updateAvatarOptionSelection(optionViews, ids, selected[0]);
+        AlertDialog dialog = new AlertDialog.Builder(this)
+                .setView(content)
+                .create();
+        content.findViewById(R.id.btnAvatarCancel).setOnClickListener(v -> dialog.dismiss());
+        content.findViewById(R.id.btnAvatarSave).setOnClickListener(v -> userRepository.updateAvatar(uid, selected[0])
+                .addOnSuccessListener(unused -> dialog.dismiss())
+                .addOnFailureListener(e -> {
+                    Log.e(TAG, "Avatar update failed", e);
+                    Toast.makeText(this, "Avatar nije saÄuvan.", Toast.LENGTH_SHORT).show();
+                }));
+        dialog.setOnShowListener(d -> {
+            if (dialog.getWindow() != null) {
+                dialog.getWindow().setBackgroundDrawable(new ColorDrawable(Color.TRANSPARENT));
+            }
+        });
+        dialog.show();
+    }
+
+    private void applyAvatarPreview(ImageView imageView, String avatarId) {
+        imageView.setImageResource(drawableForId(avatarId));
+        applyFrameToImage(imageView, currentAvatarFrame, currentAvatarFrameColor);
+    }
+
+    private void updateAvatarOptionSelection(List<ImageView> optionViews, String[] ids, String selectedId) {
+        for (int i = 0; i < optionViews.size(); i++) {
+            optionViews.get(i).setBackgroundResource(ids[i].equals(selectedId)
+                    ? R.drawable.bg_avatar_option_selected
+                    : R.drawable.bg_avatar_option);
+        }
+    }
+
     private void bindStats() {
         DocumentSnapshot summary = stats.get("summary");
         long gamesPlayed = longFrom(summary, "gamesPlayed");
@@ -246,13 +352,14 @@ public class ProfileActivity extends AppCompatActivity {
         long gamesLost = longFrom(summary, "gamesLost");
         double winPercent = percentOrField(summary, "winPercent", gamesWon, gamesPlayed);
         double lossPercent = percentOrField(summary, "lossPercent", gamesLost, gamesPlayed);
+        progressWinRate.setProgress((int) Math.round(winPercent));
+        tvWinRateValue.setText(formatPercent(winPercent) + " pobeda  •  " + formatPercent(lossPercent) + " poraza");
+        tvGamesPlayedCard.setText("Partije\n" + gamesPlayed + "\nP: " + gamesWon + "  I: " + gamesLost);
 
         tvStatsSummary.setText("Ukupan broj odigranih partija: " + gamesPlayed
                 + "\nPobede: " + gamesWon + " (" + formatPercent(winPercent) + ")"
                 + "\nPorazi: " + gamesLost + " (" + formatPercent(lossPercent) + ")"
                 + (gamesPlayed == 0 ? "\nNema odigranih partija" : ""));
-        tvStatsGames.setText(buildAverageScores(summary));
-        tvStatsDetails.setText(buildDetailedStats());
     }
 
     private String buildAverageScores(DocumentSnapshot summary) {
@@ -304,6 +411,11 @@ public class ProfileActivity extends AppCompatActivity {
     }
 
     private void renderEmptyStats() {
+        progressWinRate.setProgress(0);
+        tvWinRateValue.setText("0% pobeda  •  0% poraza");
+        tvGamesPlayedCard.setText("Partije\n0\nP: 0  I: 0");
+        tvWeeklyStatsCard.setText("Nedeljno\n0 zvezda\n0 partija");
+        tvMonthlyStatsCard.setText("Mesečno: 0 zvezda  •  0 partija");
         tvStatsSummary.setText("Ukupan broj odigranih partija: 0\nPobede: 0 (0%)\nPorazi: 0 (0%)\nNema odigranih partija");
         tvStatsGames.setText("Prosečno osvojenih bodova po igri:\nKo zna zna: 0 poena, partija: 0\nMoj broj: 0 poena, partija: 0\nKorak po korak: 0 poena, partija: 0\nSpojnice: 0 poena, partija: 0\nAsocijacije: 0 poena, partija: 0\nSkočko: 0 poena, partija: 0");
         tvStatsDetails.setText("Ko zna zna: pogođeno 0, promašeno 0, uspešnost 0%\nMoj broj: tačan broj 0/0 (0%)\nKorak po korak po koraku: 1: 0%, 2: 0%, 3: 0%, 4: 0%, 5: 0%, 6: 0%, 7: 0%\nAsocijacije: rešeno 0, nerešeno 0\nSkočko po pokušaju: 1: 0%, 2: 0%, 3: 0%, 4: 0%, 5: 0%, 6: 0%\nSpojnice: uspešno povezano 0/0 (0%)");
