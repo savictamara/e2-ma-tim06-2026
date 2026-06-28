@@ -1,5 +1,6 @@
 package rs.ac.uns.ftn.slagalica;
 
+import android.content.Intent;
 import android.os.Bundle;
 import android.os.CountDownTimer;
 import android.util.Log;
@@ -67,6 +68,7 @@ public class AsocijacijeActivity extends AppCompatActivity {
     private boolean fullMatch = false;
     private boolean challengeRun = false;
     private boolean completingMiniGame = false;
+    private String challengeId = "";
     private String canContinueGuessingUid = "";
 
     private TextView tvRound;
@@ -188,6 +190,7 @@ public class AsocijacijeActivity extends AppCompatActivity {
             player1Score = intValue(snapshot.get("player1Score"));
             player2Score = intValue(snapshot.get("player2Score"));
             challengeRun = Boolean.TRUE.equals(snapshot.getBoolean("challengeRun"));
+            challengeId = value(snapshot.getString("challengeId"));
             updateScore();
             tvScoreP2.setVisibility(challengeRun ? View.GONE : View.VISIBLE);
             headerHelper.setChallengeMode(challengeRun, intValue(snapshot.get("matchIndex")) + 1, GameRepository.FULL_MATCH_ORDER.length);
@@ -264,7 +267,7 @@ public class AsocijacijeActivity extends AppCompatActivity {
                 + ", mustGuessAfterOpen=" + mustGuessAfterOpen
                 + ", canContinueGuessingUid=" + canContinueGuessingUid);
 
-        tvRound.setText("Runda " + roundNumber + " / 2");
+        tvRound.setText(challengeRun ? "Igra 1/1" : "Runda " + roundNumber + " / 2");
         tvCurrentPlayer.setText(uid.equals(currentTurnUid) ? "Na potezu: vi" : "Na potezu: protivnik");
         renderBoard(round);
         updateScore();
@@ -460,8 +463,34 @@ public class AsocijacijeActivity extends AppCompatActivity {
             return;
         }
         completingMiniGame = true;
+        if (challengeRun) {
+            Log.d("ChallengeCompletionDebug", "entered Asocijacije final challenge completion"
+                    + ", regionChallengeId=" + challengeId
+                    + ", currentUserUid=" + uid
+                    + ", gameId=" + gameId);
+        }
         gameRepository.completeMiniGame(gameId, GameRepository.MINI_ASSOCIATIONS)
+                .addOnSuccessListener(unused -> {
+                    if (challengeRun) {
+                        Log.d("ChallengeCompletionDebug", "mini score recorded ASOCIJACIJE"
+                                + ", results screen opened=true"
+                                + ", regionChallengeId=" + challengeId);
+                        openChallengeCompletionResult();
+                    }
+                })
                 .addOnFailureListener(e -> Log.e(TAG, "Complete associations in match failed", e));
+    }
+
+    private void openChallengeCompletionResult() {
+        Intent intent = new Intent(this, FinalResultActivity.class);
+        intent.putExtra(GameFlow.EXTRA_GAME_ID, gameId);
+        intent.putExtra(GameFlow.EXTRA_FULL_MATCH, true);
+        intent.putExtra("challengeRun", true);
+        intent.putExtra("challengeCompleted", true);
+        intent.putExtra("regionChallengeId", challengeId);
+        intent.putExtra("challengeId", challengeId);
+        startActivity(intent);
+        finish();
     }
 
     private void setControls(boolean enabled) {

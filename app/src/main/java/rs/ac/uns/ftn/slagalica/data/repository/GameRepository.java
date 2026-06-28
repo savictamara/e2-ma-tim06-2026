@@ -47,11 +47,22 @@ public class GameRepository {
             MINI_STEP_BY_STEP,
             MINI_MY_NUMBER
     };
+    public static final String[] CHALLENGE_MATCH_ORDER = {
+            MINI_KNOW_IT,
+            MINI_CONNECTIONS,
+            MINI_SKOCKO,
+            MINI_MY_NUMBER,
+            MINI_STEP_BY_STEP,
+            MINI_ASSOCIATIONS
+    };
     public static final String PHASE_WAITING_TARGET_STOP = "WAITING_TARGET_STOP";
     public static final String PHASE_WAITING_NUMBERS_STOP = "WAITING_NUMBERS_STOP";
     public static final String PHASE_PLAYING = "PLAYING";
     public static final String PHASE_FINISHED = "FINISHED";
     private static final String TAG = "GameRepository";
+    private static final String FRIENDLY_TAG = "FriendlyInviteDebug";
+    private static final String REGION_CHALLENGE_TAG = "RegionChallengeDebug";
+    private static final String CHALLENGE_FLOW_TAG = "ChallengeFlowDebug";
     private final FirebaseFirestore db;
     private final Random random = new Random();
 
@@ -98,6 +109,21 @@ public class GameRepository {
             return Tasks.forException(new IllegalArgumentException("Nedostaje uid ili challengeId"));
         }
         return db.runTransaction(transaction -> {
+            DocumentReference challengeRef = db.collection("challenges").document(challengeId);
+            DocumentSnapshot challenge = transaction.get(challengeRef);
+            DocumentSnapshot participant = transaction.get(challengeRef.collection("participants").document(uid));
+            String challengeStatus = challenge.getString("status");
+            if (!challenge.exists()
+                    || "FINISHED".equals(challengeStatus)
+                    || "CANCELLED".equals(challengeStatus)) {
+                throw new IllegalStateException("Izazov nije aktivan");
+            }
+            if (!participant.exists()) {
+                throw new IllegalStateException("Niste ucesnik izazova");
+            }
+            if (Boolean.TRUE.equals(participant.getBoolean("finished"))) {
+                throw new IllegalStateException("Vec ste zavrsili izazov");
+            }
             DocumentReference ref = db.collection("games").document();
             String botUid = "__challenge_bot__" + uid;
             Map<String, Object> game = new HashMap<>();
@@ -106,7 +132,7 @@ public class GameRepository {
             game.put("challengePlayerUid", uid);
             game.put("currentPlayerUid", uid);
             game.put("status", "active");
-            game.put("currentMiniGame", FULL_MATCH_ORDER[0]);
+            game.put("currentMiniGame", CHALLENGE_MATCH_ORDER[0]);
             game.put("fullMatch", true);
             game.put("friendly", true);
             game.put("challengeRun", true);
@@ -516,21 +542,33 @@ public class GameRepository {
             if (Boolean.TRUE.equals(game.getBoolean("matchRewardsApplied"))) {
                 return null;
             }
+            boolean challengeRun = Boolean.TRUE.equals(game.getBoolean("challengeRun"));
+            String[] order = challengeRun ? CHALLENGE_MATCH_ORDER : FULL_MATCH_ORDER;
             int index = intValue(game.get("matchIndex"));
-            if (index < 0 || index >= FULL_MATCH_ORDER.length
-                    || !completedMiniGame.equals(FULL_MATCH_ORDER[index])) {
-                index = indexOfMiniGame(completedMiniGame);
+            if (index < 0 || index >= order.length
+                    || !completedMiniGame.equals(order[index])) {
+                index = indexOfMiniGame(completedMiniGame, order);
             }
             if (index < 0) {
                 return null;
             }
-            if (Boolean.TRUE.equals(game.getBoolean("challengeRun"))) {
+            if (challengeRun) {
+                Log.d(REGION_CHALLENGE_TAG, "challengeRun true miniGameName=" + completedMiniGame
+                        + ", totalRounds used=1"
+                        + ", opponent wait skipped=true");
+                Log.d(CHALLENGE_FLOW_TAG, "activity=GameRepository"
+                        + ", challengeRun=true"
+                        + ", challengeId=" + game.getString("challengeId")
+                        + ", current mini-game=" + completedMiniGame
+                        + ", score recorded=true"
+                        + ", next mini-game=" + (index + 1 < order.length ? order[index + 1] : "COMPLETE")
+                        + ", finish called=true");
                 recordChallengeMiniScore(transaction, gameRef, game, completedMiniGame);
             }
-            if (index + 1 < FULL_MATCH_ORDER.length) {
+            if (index + 1 < order.length) {
                 transaction.update(gameRef,
                         "matchIndex", index + 1,
-                        "currentMiniGame", FULL_MATCH_ORDER[index + 1],
+                        "currentMiniGame", order[index + 1],
                         "status", "active",
                         "currentPlayerUid", game.getString("player1Uid"),
                         "updatedAt", FieldValue.serverTimestamp());
@@ -560,7 +598,15 @@ public class GameRepository {
             int player1Score = intValue(game.get("player1Score"));
             int player2Score = intValue(game.get("player2Score"));
             int winnerScore = uid.equals(player1) ? player2Score : player1Score;
-            RewardResult winnerReward = applyPlayerReward(transaction, winner, winnerScore, true, false);
+            boolean friendly = Boolean.TRUE.equals(game.getBoolean("friendly"))
+                    || "FRIENDLY".equals(game.getString("matchType"));
+            RewardResult winnerReward = friendly
+                    ? RewardResult.none()
+                    : applyPlayerReward(transaction, winner, winnerScore, true, false);
+            if (friendly) {
+                Log.d(FRIENDLY_TAG, "friendly result skipped rewards/stats gameId="
+                        + gameRef.getId() + ", reason=abandon");
+            }
             transaction.update(gameRef,
                     "status", "finished",
                     "abandonedByUid", uid,
@@ -635,6 +681,9 @@ public class GameRepository {
         if (!friendly) {
             player1Reward = applyPlayerReward(transaction, player1, player1Score, player1.equals(winner), player1.equals(loser));
             player2Reward = applyPlayerReward(transaction, player2, player2Score, player2.equals(winner), player2.equals(loser));
+        } else {
+            Log.d(FRIENDLY_TAG, "friendly result skipped rewards/stats gameId="
+                    + gameRef.getId() + ", reason=final_result");
         }
         updates.put("player1StarsDelta", player1Reward.starsDelta);
         updates.put("player2StarsDelta", player2Reward.starsDelta);
@@ -649,6 +698,17 @@ public class GameRepository {
 
     private void recordChallengeMiniScore(Transaction transaction, DocumentReference gameRef,
                                           DocumentSnapshot game, String completedMiniGame) {
+        Map<String, Object> existingScores = new HashMap<>();
+        Object rawScores = game.get("challengeScores");
+        if (rawScores instanceof Map) {
+            existingScores.putAll((Map<String, Object>) rawScores);
+        }
+        if (existingScores.containsKey(completedMiniGame)) {
+            Log.d(REGION_CHALLENGE_TAG, "score submitted once skip duplicate gameId=" + gameRef.getId()
+                    + ", miniGameName=" + completedMiniGame
+                    + ", challengeScores keys=" + existingScores.keySet());
+            return;
+        }
         String challengeUid = game.getString("challengePlayerUid");
         String player1 = game.getString("player1Uid");
         int total = challengeUid != null && challengeUid.equals(player1)
@@ -656,12 +716,18 @@ public class GameRepository {
                 : intValue(game.get("player2Score"));
         int baseline = intValue(game.get("challengeScoreBaseline"));
         int delta = Math.max(0, total - baseline);
+        existingScores.put(completedMiniGame, delta);
         transaction.update(gameRef,
                 "challengeScores." + completedMiniGame, delta,
                 "challengeScoreBaseline", total,
                 "updatedAt", FieldValue.serverTimestamp());
-        Log.d(TAG, "Challenge mini score gameId=" + gameRef.getId()
-                + ", miniGame=" + completedMiniGame + ", delta=" + delta + ", total=" + total);
+        Log.d(REGION_CHALLENGE_TAG, "mini-game completed gameId=" + gameRef.getId()
+                + ", miniGame=" + completedMiniGame
+                + ", gameScore=" + delta
+                + ", accumulated score=" + total
+                + ", score submitted once=true"
+                + ", challengeScores keys=" + existingScores.keySet()
+                + ", next mini-game launched=true");
     }
 
     private RewardResult applyPlayerReward(Transaction transaction, String uid, int score,
@@ -834,8 +900,12 @@ public class GameRepository {
     }
 
     private int indexOfMiniGame(String miniGame) {
-        for (int i = 0; i < FULL_MATCH_ORDER.length; i++) {
-            if (FULL_MATCH_ORDER[i].equals(miniGame)) {
+        return indexOfMiniGame(miniGame, FULL_MATCH_ORDER);
+    }
+
+    private int indexOfMiniGame(String miniGame, String[] order) {
+        for (int i = 0; i < order.length; i++) {
+            if (order[i].equals(miniGame)) {
                 return i;
             }
         }
@@ -2109,7 +2179,8 @@ public class GameRepository {
                 visualState.put("updatedBy", uid);
                 visualState.put("updatedAt", FieldValue.serverTimestamp());
                 Map<String, Object> updates = connectionProgressUpdates(round, roundNumber, phase, uid,
-                        playerAttempts, intList(round.get("remainingLeftIndexes")));
+                        playerAttempts, intList(round.get("remainingLeftIndexes")),
+                        Boolean.TRUE.equals(game.getBoolean("challengeRun")));
                 updates.put("attemptsByPlayer", updatedAttemptsByPlayer);
                 updates.put("usedLeftIndexes", usedLeftIndexes);
                 updates.put("currentSelection", null);
@@ -2126,7 +2197,7 @@ public class GameRepository {
             List<Integer> remaining = intList(round.get("remainingLeftIndexes"));
             remaining.remove(Integer.valueOf(leftIndex));
             Map<String, Object> updates = connectionProgressUpdates(round, roundNumber, phase, uid,
-                    playerAttempts, remaining);
+                    playerAttempts, remaining, Boolean.TRUE.equals(game.getBoolean("challengeRun")));
             updates.put("attemptsByPlayer", updatedAttemptsByPlayer);
             updates.put("usedLeftIndexes", usedLeftIndexes);
             updates.put("matchedPairs." + leftIndex, match);
@@ -2187,7 +2258,8 @@ public class GameRepository {
     private Map<String, Object> connectionProgressUpdates(DocumentSnapshot round, int roundNumber,
                                                           String phase, String uid,
                                                           List<Integer> playerAttempts,
-                                                          List<Integer> remaining) {
+                                                          List<Integer> remaining,
+                                                          boolean challengeRun) {
         Map<String, Object> updates = new HashMap<>();
         if (remaining.isEmpty()) {
             updates.put("phase", "FINISHED");
@@ -2198,7 +2270,7 @@ public class GameRepository {
                 && (playerAttempts.size() >= 5 || playerAttempts.containsAll(remaining));
         boolean opponentDone = "OPPONENT_CHANCE".equals(phase) && playerAttempts.containsAll(remaining);
         if (activePlayerDone) {
-            if (Boolean.TRUE.equals(round.getBoolean("challengeRun"))) {
+            if (challengeRun) {
                 updates.put("phase", "FINISHED");
                 updates.put("finished", true);
             } else {

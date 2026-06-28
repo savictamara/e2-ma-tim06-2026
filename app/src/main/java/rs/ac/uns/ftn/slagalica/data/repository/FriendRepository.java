@@ -25,6 +25,7 @@ import rs.ac.uns.ftn.slagalica.util.FirebaseInitializer;
 
 public class FriendRepository {
     private static final String TAG = "FriendRepository";
+    private static final String DEBUG_TAG = "FriendlyInviteDebug";
     private final FirebaseFirestore db;
     private final NotificationRepository notificationRepository;
 
@@ -160,6 +161,20 @@ public class FriendRepository {
         if (isBlank(fromUid) || isBlank(toUid) || fromUid.equals(toUid)) {
             return Tasks.forException(new IllegalArgumentException("Ne mozete izazvati sebe"));
         }
+        return findPendingInvite(fromUid, toUid).continueWithTask(existingTask -> {
+            if (!existingTask.isSuccessful()) {
+                throw existingTask.getException();
+            }
+            if (!isBlank(existingTask.getResult())) {
+                Log.d(DEBUG_TAG, "duplicate invite found inviteId=" + existingTask.getResult()
+                        + ", fromUid=" + fromUid + ", toUid=" + toUid);
+                throw new IllegalArgumentException("Poziv je vec poslat");
+            }
+            return createFriendlyInvite(fromUid, toUid);
+        });
+    }
+
+    private Task<String> createFriendlyInvite(String fromUid, String toUid) {
         return db.runTransaction(transaction -> {
             DocumentSnapshot from = transaction.get(db.collection("users").document(fromUid));
             DocumentSnapshot to = transaction.get(db.collection("users").document(toUid));
@@ -175,21 +190,57 @@ public class FriendRepository {
                     "toUsername", username(to),
                     "status", "PENDING",
                     "gameId", "",
+                    "matchType", "FRIENDLY",
                     "createdAt", FieldValue.serverTimestamp(),
                     "expiresAt", expiresAt,
                     "respondedAt", null
             ));
             DocumentReference notificationRef = db.collection("users").document(toUid).collection("notifications").document();
-            transaction.set(notificationRef, notificationRepository.notificationData(notificationRef.getId(),
+            Map<String, Object> notification = notificationRepository.notificationData(notificationRef.getId(),
                     "FRIENDLY_MATCH_INVITE",
-                    "Poziv za partiju",
-                    username(from) + " vas je pozvao na prijateljsku partiju.",
+                    "Poziv za prijateljsku partiju",
+                    username(from) + " te je pozvao/la na partiju",
                     "FRIENDLY_MATCH_INVITE",
                     inviteId,
                     fromUid,
-                    username(from)), SetOptions.merge());
+                    username(from));
+            notification.put("inviteId", inviteId);
+            notification.put("fromUid", fromUid);
+            notification.put("body", username(from) + " te je pozvao/la na partiju");
+            transaction.set(notificationRef, notification, SetOptions.merge());
+            Log.d(DEBUG_TAG, "invite created inviteId=" + inviteId
+                    + ", fromUid=" + fromUid + ", toUid=" + toUid);
+            Log.d(DEBUG_TAG, "notification created notificationId=" + notificationRef.getId()
+                    + ", toUid=" + toUid + ", inviteId=" + inviteId);
             return inviteId;
         });
+    }
+
+    private Task<String> findPendingInvite(String uidA, String uidB) {
+        return db.collection("friendlyMatchInvites")
+                .whereEqualTo("fromUid", uidA)
+                .whereEqualTo("toUid", uidB)
+                .whereEqualTo("status", "PENDING")
+                .limit(1)
+                .get()
+                .continueWithTask(first -> {
+                    if (!first.isSuccessful()) throw first.getException();
+                    if (!first.getResult().isEmpty()) {
+                        return Tasks.forResult(first.getResult().getDocuments().get(0).getId());
+                    }
+                    return db.collection("friendlyMatchInvites")
+                            .whereEqualTo("fromUid", uidB)
+                            .whereEqualTo("toUid", uidA)
+                            .whereEqualTo("status", "PENDING")
+                            .limit(1)
+                            .get()
+                            .continueWith(second -> {
+                                if (!second.isSuccessful()) throw second.getException();
+                                return second.getResult().isEmpty()
+                                        ? ""
+                                        : second.getResult().getDocuments().get(0).getId();
+                            });
+                });
     }
 
     public Task<Void> cancelInvite(String inviteId) {
@@ -217,7 +268,9 @@ public class FriendRepository {
             DocumentReference ref = db.collection("friendlyMatchInvites").document(inviteId);
             DocumentSnapshot invite = transaction.get(ref);
             if (invite.exists() && "PENDING".equals(invite.getString("status"))) {
-                transaction.set(ref, mapOf("status", status, "respondedAt", FieldValue.serverTimestamp()), SetOptions.merge());
+                transaction.set(ref, mapOf("status", status, "respondedAt", FieldValue.serverTimestamp(),
+                        status.toLowerCase(Locale.US) + "At", FieldValue.serverTimestamp()), SetOptions.merge());
+                Log.d(DEBUG_TAG, "invite " + status.toLowerCase(Locale.US) + " inviteId=" + inviteId);
             }
             return null;
         });
@@ -254,6 +307,7 @@ public class FriendRepository {
             game.put("currentMiniGame", GameRepository.FULL_MATCH_ORDER[0]);
             game.put("fullMatch", true);
             game.put("friendly", true);
+            game.put("matchType", "FRIENDLY");
             game.put("matchIndex", 0);
             game.put("player1Score", 0);
             game.put("player2Score", 0);
@@ -261,9 +315,14 @@ public class FriendRepository {
             game.put("updatedAt", FieldValue.serverTimestamp());
             transaction.set(gameRef, game);
             transaction.set(inviteRef, mapOf("status", "ACCEPTED", "gameId", gameRef.getId(),
+                    "acceptedAt", FieldValue.serverTimestamp(),
                     "respondedAt", FieldValue.serverTimestamp()), SetOptions.merge());
             transaction.set(fromRef, gameState(gameRef.getId()), SetOptions.merge());
             transaction.set(toRef, gameState(gameRef.getId()), SetOptions.merge());
+            Log.d(DEBUG_TAG, "invite accepted inviteId=" + inviteId
+                    + ", fromUid=" + fromUid + ", toUid=" + toUid);
+            Log.d(DEBUG_TAG, "game created gameId=" + gameRef.getId() + ", matchType=FRIENDLY");
+            Log.d(DEBUG_TAG, "both users activeGameId set gameId=" + gameRef.getId());
             return gameRef.getId();
         });
     }
@@ -271,13 +330,12 @@ public class FriendRepository {
     private boolean available(DocumentSnapshot user) {
         if (user == null || !user.exists()) return false;
         String active = firstNonEmpty(user.getString("activeGameId"), user.getString("currentGameId"));
-        return Boolean.TRUE.equals(user.getBoolean("online"))
-                && !Boolean.TRUE.equals(user.getBoolean("inGame"))
+        return !Boolean.TRUE.equals(user.getBoolean("inGame"))
                 && isBlank(active);
     }
 
     private String unavailableReason(DocumentSnapshot user) {
-        if (user == null || !user.exists() || !Boolean.TRUE.equals(user.getBoolean("online"))) return "Offline";
+        if (user == null || !user.exists()) return "Korisnik nije pronadjen";
         return "U partiji";
     }
 

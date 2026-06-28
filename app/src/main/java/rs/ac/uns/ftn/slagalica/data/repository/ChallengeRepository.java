@@ -5,11 +5,13 @@ import android.util.Log;
 
 import com.google.android.gms.tasks.Task;
 import com.google.android.gms.tasks.Tasks;
+import com.google.firebase.Timestamp;
 import com.google.firebase.firestore.DocumentReference;
 import com.google.firebase.firestore.DocumentSnapshot;
+import com.google.firebase.firestore.EventListener;
 import com.google.firebase.firestore.FieldValue;
 import com.google.firebase.firestore.FirebaseFirestore;
-import com.google.firebase.firestore.Query;
+import com.google.firebase.firestore.ListenerRegistration;
 import com.google.firebase.firestore.QuerySnapshot;
 import com.google.firebase.firestore.SetOptions;
 import com.google.firebase.firestore.Transaction;
@@ -29,6 +31,7 @@ import rs.ac.uns.ftn.slagalica.data.repository.GameRepository;
 
 public class ChallengeRepository {
     private static final String TAG = "ChallengeRepository";
+    private static final String DEBUG_TAG = "RegionChallengeDebug";
     public static final String WAITING = "WAITING";
     public static final String ACTIVE = "ACTIVE";
     public static final String FINISHED = "FINISHED";
@@ -55,10 +58,33 @@ public class ChallengeRepository {
 
     public Task<QuerySnapshot> listOpenChallenges() {
         if (db == null) return Tasks.forException(new IllegalStateException("Firebase nije inicijalizovan"));
+        Log.d(DEBUG_TAG, "loading query used collection=challenges simple limit only");
         return db.collection("challenges")
-                .orderBy("createdAt", Query.Direction.DESCENDING)
-                .limit(30)
+                .limit(50)
                 .get();
+    }
+
+    public Task<QuerySnapshot> listRegionChallenges(String regionId) {
+        if (db == null) return Tasks.forException(new IllegalStateException("Firebase nije inicijalizovan"));
+        if (isBlank(regionId)) return listOpenChallenges();
+        Log.d(DEBUG_TAG, "loading query used collection=challenges whereEqualTo regionId only regionId=" + regionId);
+        return db.collection("challenges")
+                .whereEqualTo("regionId", regionId)
+                .limit(50)
+                .get();
+    }
+
+    public ListenerRegistration listenRegionChallenges(String regionId, EventListener<QuerySnapshot> listener) {
+        if (db == null) return null;
+        if (isBlank(regionId)) {
+            Log.d(DEBUG_TAG, "snapshot listener attached collection=challenges simple limit only");
+            return db.collection("challenges").limit(50).addSnapshotListener(listener);
+        }
+        Log.d(DEBUG_TAG, "snapshot listener attached collection=challenges whereEqualTo regionId only regionId=" + regionId);
+        return db.collection("challenges")
+                .whereEqualTo("regionId", regionId)
+                .limit(50)
+                .addSnapshotListener(listener);
     }
 
     public Task<DocumentSnapshot> getChallenge(String challengeId) {
@@ -68,20 +94,33 @@ public class ChallengeRepository {
 
     public Task<QuerySnapshot> getParticipants(String challengeId) {
         if (db == null) return Tasks.forException(new IllegalStateException("Firebase nije inicijalizovan"));
-        return db.collection("challenges").document(challengeId).collection("participants")
-                .orderBy("placement", Query.Direction.ASCENDING)
-                .get();
+        return db.collection("challenges").document(challengeId).collection("participants").get();
+    }
+
+    public Task<DocumentSnapshot> getParticipant(String challengeId, String uid) {
+        if (db == null) return Tasks.forException(new IllegalStateException("Firebase nije inicijalizovan"));
+        return db.collection("challenges").document(challengeId).collection("participants").document(uid).get();
     }
 
     public Task<String> createChallenge(String uid, long stakeStars, long stakeTokens) {
+        return createChallenge(uid, "", "", stakeStars, stakeTokens);
+    }
+
+    public Task<String> createChallenge(String uid, String regionId, String regionName, long stakeStars, long stakeTokens) {
         if (db == null) return Tasks.forException(new IllegalStateException("Firebase nije inicijalizovan"));
         if (stakeStars < 0 || stakeStars > 10 || stakeTokens < 0 || stakeTokens > 2) {
             return Tasks.forException(new IllegalArgumentException("Ulog je van dozvoljenih granica"));
         }
+        if (stakeStars == 0 && stakeTokens == 0) {
+            return Tasks.forException(new IllegalArgumentException("Ulog ne moze biti 0 za zvezde i tokene"));
+        }
+        Log.d(DEBUG_TAG, "create challenge clicked uid=" + uid
+                + ", regionId=" + regionId + ", stakeStars=" + stakeStars + ", stakeTokens=" + stakeTokens);
         return db.runTransaction(transaction -> {
             DocumentReference userRef = db.collection("users").document(uid);
             DocumentSnapshot user = transaction.get(userRef);
             assertStake(user, stakeStars, stakeTokens);
+            Log.d(DEBUG_TAG, "stake validation result ok uid=" + uid);
             DocumentReference challengeRef = db.collection("challenges").document();
             String challengeId = challengeRef.getId();
             String username = username(user);
@@ -89,8 +128,12 @@ public class ChallengeRepository {
                     "stars", longValue(user.get("stars")) - stakeStars,
                     "tokens", longValue(user.get("tokens")) - stakeTokens
             ), SetOptions.merge());
+            Log.d(DEBUG_TAG, "creator stake deducted uid=" + uid
+                    + ", stakeStars=" + stakeStars + ", stakeTokens=" + stakeTokens);
             transaction.set(challengeRef, mapOf(
                     "challengeId", challengeId,
+                    "regionId", firstNonEmpty(regionId, user.getString("regionId"), user.getString("region")),
+                    "regionName", firstNonEmpty(regionName, user.getString("regionName"), user.getString("region")),
                     "creatorUid", uid,
                     "creatorUsername", username,
                     "stakeStars", stakeStars,
@@ -98,15 +141,21 @@ public class ChallengeRepository {
                     "status", WAITING,
                     "maxPlayers", 4,
                     "currentPlayers", 1,
+                    "participantUids", java.util.Collections.singletonList(uid),
                     "createdAt", FieldValue.serverTimestamp(),
                     "startedAt", null,
                     "finishedAt", null,
                     "winnerUid", "",
                     "secondPlaceUid", "",
                     "challengePoolStars", stakeStars,
-                    "challengePoolTokens", stakeTokens
+                    "challengePoolTokens", stakeTokens,
+                    "totalStakeStars", stakeStars,
+                    "totalStakeTokens", stakeTokens,
+                    "completedPlayers", 0,
+                    "rewardsPaid", false
             ));
             transaction.set(challengeRef.collection("participants").document(uid), participantData(uid, username));
+            Log.d(DEBUG_TAG, "challenge created challengeId=" + challengeId);
             return challengeId;
         }).continueWithTask(task -> {
             if (!task.isSuccessful()) throw task.getException();
@@ -120,7 +169,8 @@ public class ChallengeRepository {
         return db.runTransaction(transaction -> {
             DocumentReference challengeRef = db.collection("challenges").document(challengeId);
             DocumentSnapshot challenge = transaction.get(challengeRef);
-            if (!challenge.exists() || !WAITING.equals(challenge.getString("status"))) {
+            String status = challenge.getString("status");
+            if (!challenge.exists() || FINISHED.equals(status) || CANCELLED.equals(status)) {
                 throw new IllegalStateException("Izazov nije otvoren");
             }
             if (uid.equals(challenge.getString("creatorUid"))) throw new IllegalArgumentException("Vec ste u izazovu");
@@ -132,22 +182,56 @@ public class ChallengeRepository {
             DocumentSnapshot user = transaction.get(userRef);
             long stakeStars = longValue(challenge.get("stakeStars"));
             long stakeTokens = longValue(challenge.get("stakeTokens"));
+            Log.d(DEBUG_TAG, "accept clicked challengeId=" + challengeId + ", uid=" + uid);
             assertStake(user, stakeStars, stakeTokens);
+            Log.d(DEBUG_TAG, "stake validation result ok uid=" + uid);
             transaction.set(userRef, mapOf(
                     "stars", longValue(user.get("stars")) - stakeStars,
                     "tokens", longValue(user.get("tokens")) - stakeTokens
             ), SetOptions.merge());
+            Log.d(DEBUG_TAG, "participant stake deducted uid=" + uid
+                    + ", stakeStars=" + stakeStars + ", stakeTokens=" + stakeTokens);
             transaction.set(participantRef, participantData(uid, username(user)));
-            transaction.set(challengeRef, mapOf(
+            Map<String, Object> updates = mapOf(
                     "currentPlayers", FieldValue.increment(1),
                     "challengePoolStars", FieldValue.increment(stakeStars),
-                    "challengePoolTokens", FieldValue.increment(stakeTokens)
-            ), SetOptions.merge());
+                    "challengePoolTokens", FieldValue.increment(stakeTokens),
+                    "totalStakeStars", FieldValue.increment(stakeStars),
+                    "totalStakeTokens", FieldValue.increment(stakeTokens),
+                    "participantUids", FieldValue.arrayUnion(uid)
+            );
+            transaction.set(challengeRef, updates, SetOptions.merge());
+            Log.d(DEBUG_TAG, "participant added challengeId=" + challengeId
+                    + ", uid=" + uid + ", players=" + (currentPlayers + 1));
             return currentPlayers + 1;
         }).continueWithTask(task -> {
             if (!task.isSuccessful()) throw task.getException();
-            if (task.getResult() >= 4) return startChallenge(challengeId, uid, true);
             return Tasks.forResult(null);
+        });
+    }
+
+    public Task<Void> finishChallengeManually(String challengeId, String uid) {
+        if (db == null) return Tasks.forException(new IllegalStateException("Firebase nije inicijalizovan"));
+        Log.d(DEBUG_TAG, "manual finish clicked challengeId=" + challengeId + ", uid=" + uid);
+        return db.collection("challenges").document(challengeId).get().continueWithTask(challengeTask -> {
+            if (!challengeTask.isSuccessful()) throw challengeTask.getException();
+            DocumentSnapshot challenge = challengeTask.getResult();
+            if (!challenge.exists()) throw new IllegalStateException("Izazov ne postoji");
+            if (FINISHED.equals(challenge.getString("status"))) return Tasks.forResult(null);
+            if (!uid.equals(challenge.getString("creatorUid"))) {
+                throw new IllegalArgumentException("Samo kreator moze zavrsiti izazov");
+            }
+            return db.collection("challenges").document(challengeId).collection("participants").get();
+        }).continueWithTask(partsTask -> {
+            if (!partsTask.isSuccessful()) throw partsTask.getException();
+            int completed = completedCount(partsTask.getResult().getDocuments());
+            Log.d(DEBUG_TAG, "manual finish check challengeId=" + challengeId
+                    + ", completedParticipants=" + completed
+                    + ", participantCount=" + partsTask.getResult().size());
+            if (completed < 2) {
+                throw new IllegalStateException("Potrebna su najmanje 2 zavrsena ucesnika");
+            }
+            return finishChallenge(challengeId, partsTask.getResult().getDocuments());
         });
     }
 
@@ -174,18 +258,24 @@ public class ChallengeRepository {
 
     public Task<Void> submitRun(String challengeId, String uid, Map<String, Integer> scores) {
         if (db == null) return Tasks.forException(new IllegalStateException("Firebase nije inicijalizovan"));
-        for (String miniGame : GameRepository.FULL_MATCH_ORDER) {
+        Map<String, Integer> sanitizedScores = new HashMap<>();
+        for (String miniGame : GameRepository.CHALLENGE_MATCH_ORDER) {
             if (!scores.containsKey(miniGame)) {
                 return Tasks.forException(new IllegalArgumentException("Svaka igra mora biti odigrana jednom"));
             }
+            sanitizedScores.put(miniGame, Math.max(0, scores.get(miniGame) == null ? 0 : scores.get(miniGame)));
+        }
+        if (sanitizedScores.size() != GameRepository.CHALLENGE_MATCH_ORDER.length) {
+            return Tasks.forException(new IllegalArgumentException("Izazov mora imati tacno 6 rezultata"));
         }
         long total = 0;
-        for (Integer score : scores.values()) total += Math.max(0, score == null ? 0 : score);
+        for (Integer score : sanitizedScores.values()) total += score == null ? 0 : score;
         long finalTotal = total;
         return db.runTransaction(transaction -> {
             DocumentReference challengeRef = db.collection("challenges").document(challengeId);
             DocumentSnapshot challenge = transaction.get(challengeRef);
-            if (!challenge.exists() || !ACTIVE.equals(challenge.getString("status"))) {
+            if (!challenge.exists() || (!ACTIVE.equals(challenge.getString("status"))
+                    && !WAITING.equals(challenge.getString("status")))) {
                 throw new IllegalStateException("Izazov nije aktivan");
             }
             DocumentReference participantRef = challengeRef.collection("participants").document(uid);
@@ -194,9 +284,22 @@ public class ChallengeRepository {
             if (Boolean.TRUE.equals(participant.getBoolean("finished"))) throw new IllegalStateException("Vec ste zavrsili izazov");
             transaction.set(participantRef, mapOf(
                     "finished", true,
+                    "completed", true,
                     "totalScore", finalTotal,
-                    "scores", scores
+                    "score", finalTotal,
+                    "scores", sanitizedScores,
+                    "completedAt", FieldValue.serverTimestamp()
             ), SetOptions.merge());
+            transaction.set(challengeRef, mapOf(
+                    "completedPlayers", FieldValue.increment(1),
+                    "updatedAt", FieldValue.serverTimestamp()
+            ), SetOptions.merge());
+            if (WAITING.equals(challenge.getString("status"))) {
+                transaction.set(challengeRef, mapOf("status", ACTIVE, "startedAt", FieldValue.serverTimestamp()), SetOptions.merge());
+            }
+            Log.d(DEBUG_TAG, "participant completed challengeId=" + challengeId
+                    + ", uid=" + uid + ", score=" + finalTotal
+                    + ", challengeScores keys=" + sanitizedScores.keySet());
             return null;
         }).continueWithTask(task -> {
             if (!task.isSuccessful()) throw task.getException();
@@ -208,10 +311,26 @@ public class ChallengeRepository {
         return db.collection("challenges").document(challengeId).collection("participants").get()
                 .continueWithTask(task -> {
                     if (!task.isSuccessful()) throw task.getException();
-                    for (DocumentSnapshot doc : task.getResult().getDocuments()) {
-                        if (!Boolean.TRUE.equals(doc.getBoolean("finished"))) return Tasks.forResult(null);
+                    List<DocumentSnapshot> docs = task.getResult().getDocuments();
+                    int completed = completedCount(docs);
+                    Log.d(DEBUG_TAG, "auto finish check challengeId=" + challengeId
+                            + ", completedParticipants=" + completed
+                            + ", participantCount=" + docs.size());
+                    if (docs.size() < 2 || completed < 2) {
+                        Log.d(DEBUG_TAG, "finish challenge check waiting for at least 2 completed participants challengeId=" + challengeId);
+                        db.collection("challenges").document(challengeId)
+                                .set(mapOf("completedPlayers", completed, "updatedAt", FieldValue.serverTimestamp()), SetOptions.merge());
+                        return Tasks.forResult(null);
                     }
-                    return finishChallenge(challengeId, task.getResult().getDocuments());
+                    for (DocumentSnapshot doc : docs) {
+                        if (!Boolean.TRUE.equals(doc.getBoolean("finished"))) {
+                            db.collection("challenges").document(challengeId)
+                                    .set(mapOf("completedPlayers", completed, "updatedAt", FieldValue.serverTimestamp()), SetOptions.merge());
+                            return Tasks.forResult(null);
+                        }
+                    }
+                    Log.d(DEBUG_TAG, "finish challenge check all participants completed challengeId=" + challengeId);
+                    return finishChallenge(challengeId, docs);
                 });
     }
 
@@ -220,8 +339,15 @@ public class ChallengeRepository {
             DocumentReference challengeRef = db.collection("challenges").document(challengeId);
             DocumentSnapshot challenge = transaction.get(challengeRef);
             if (!challenge.exists() || FINISHED.equals(challenge.getString("status"))) return null;
+            boolean rewardsPaid = Boolean.TRUE.equals(challenge.getBoolean("rewardsPaid"));
             List<DocumentSnapshot> sorted = new ArrayList<>(docs);
-            sorted.sort((a, b) -> Long.compare(longValue(b.get("totalScore")), longValue(a.get("totalScore"))));
+            sorted.sort((a, b) -> {
+                int score = Long.compare(longValue(b.get("totalScore")), longValue(a.get("totalScore")));
+                if (score != 0) return score;
+                int completed = Long.compare(timestampMillis(a.getTimestamp("completedAt")), timestampMillis(b.getTimestamp("completedAt")));
+                if (completed != 0) return completed;
+                return Long.compare(timestampMillis(a.getTimestamp("joinedAt")), timestampMillis(b.getTimestamp("joinedAt")));
+            });
             long poolStars = longValue(challenge.get("challengePoolStars"));
             long poolTokens = longValue(challenge.get("challengePoolTokens"));
             long stakeStars = longValue(challenge.get("stakeStars"));
@@ -235,18 +361,26 @@ public class ChallengeRepository {
                         "rewardStars", rewardStars,
                         "rewardTokens", rewardTokens
                 ), SetOptions.merge());
-                if (rewardStars > 0 || rewardTokens > 0) {
+                if (!rewardsPaid && (rewardStars > 0 || rewardTokens > 0)) {
                     transaction.set(db.collection("users").document(p.getId()), mapOf(
                             "stars", FieldValue.increment(rewardStars),
                             "tokens", FieldValue.increment(rewardTokens)
                     ), SetOptions.merge());
                 }
             }
+            Log.d(DEBUG_TAG, "ranking calculated challengeId=" + challengeId
+                    + ", winner=" + (sorted.isEmpty() ? "" : sorted.get(0).getId())
+                    + ", second=" + (sorted.size() < 2 ? "" : sorted.get(1).getId()));
+            Log.d(DEBUG_TAG, "rewards applied challengeId=" + challengeId
+                    + ", poolStars=" + poolStars + ", poolTokens=" + poolTokens
+                    + ", rewardsPaidBefore=" + rewardsPaid);
             transaction.set(challengeRef, mapOf(
                     "status", FINISHED,
                     "finishedAt", FieldValue.serverTimestamp(),
                     "winnerUid", sorted.isEmpty() ? "" : sorted.get(0).getId(),
-                    "secondPlaceUid", sorted.size() < 2 ? "" : sorted.get(1).getId()
+                    "secondPlaceUid", sorted.size() < 2 ? "" : sorted.get(1).getId(),
+                    "completedPlayers", completedCount(sorted),
+                    "rewardsPaid", true
             ), SetOptions.merge());
             return null;
         }).continueWithTask(task -> {
@@ -254,6 +388,14 @@ public class ChallengeRepository {
             notifyParticipants(challengeId, "CHALLENGE_RESULT", "Izazov je zavrsen", "Rezultati izazova su spremni.");
             return Tasks.forResult(null);
         });
+    }
+
+    private int completedCount(List<DocumentSnapshot> docs) {
+        int completed = 0;
+        for (DocumentSnapshot doc : docs) {
+            if (Boolean.TRUE.equals(doc.getBoolean("finished"))) completed++;
+        }
+        return completed;
     }
 
     private void notifyRegionPlayers(String creatorUid, String challengeId) {
@@ -302,7 +444,13 @@ public class ChallengeRepository {
         item.stakeTokens = longValue(doc.get("stakeTokens"));
         item.status = doc.getString("status");
         item.maxPlayers = longValue(doc.get("maxPlayers"));
+        if (item.maxPlayers <= 0) item.maxPlayers = 4;
         item.currentPlayers = longValue(doc.get("currentPlayers"));
+        item.completedPlayers = longValue(doc.get("completedPlayers"));
+        item.regionId = doc.getString("regionId");
+        item.regionName = doc.getString("regionName");
+        item.poolStars = longValue(firstNonNull(doc.get("challengePoolStars"), doc.get("totalStakeStars")));
+        item.poolTokens = longValue(firstNonNull(doc.get("challengePoolTokens"), doc.get("totalStakeTokens")));
         return item;
     }
 
@@ -326,8 +474,20 @@ public class ChallengeRepository {
     private void assertStake(DocumentSnapshot user, long stars, long tokens) {
         if (!user.exists()) throw new IllegalArgumentException("Korisnik nije pronadjen");
         if (longValue(user.get("stars")) < stars || longValue(user.get("tokens")) < tokens) {
-            throw new IllegalArgumentException("Nemate dovoljno zvezda ili tokena");
+            throw new IllegalArgumentException("Nemas dovoljno zvezda/tokena za ovaj izazov");
         }
+    }
+
+    private long timestampMillis(Timestamp timestamp) {
+        return timestamp == null ? Long.MAX_VALUE : timestamp.toDate().getTime();
+    }
+
+    private Object firstNonNull(Object a, Object b) {
+        return a == null ? b : a;
+    }
+
+    private boolean isBlank(String value) {
+        return value == null || value.trim().isEmpty();
     }
 
     private String username(DocumentSnapshot user) {

@@ -17,6 +17,7 @@ import com.google.firebase.firestore.DocumentChange;
 import com.google.firebase.firestore.ListenerRegistration;
 
 import rs.ac.uns.ftn.slagalica.data.repository.FirebaseAuthRepository;
+import rs.ac.uns.ftn.slagalica.data.repository.FriendRepository;
 import rs.ac.uns.ftn.slagalica.data.repository.GameRepository;
 import rs.ac.uns.ftn.slagalica.data.repository.LeaderboardRepository;
 import rs.ac.uns.ftn.slagalica.data.repository.NotificationRepository;
@@ -34,9 +35,11 @@ public class MainActivity extends AppCompatActivity {
     private FirebaseAuthRepository authRepository;
     private GameRepository gameRepository;
     private NotificationRepository notificationRepository;
+    private FriendRepository friendRepository;
     private LeaderboardRepository leaderboardRepository;
     private UserRepository userRepository;
     private ListenerRegistration notificationListener;
+    private ListenerRegistration friendlyInviteListener;
     private Button btnLogin;
     private Button btnRegister;
     private Button btnReset;
@@ -52,6 +55,7 @@ public class MainActivity extends AppCompatActivity {
         authRepository = new FirebaseAuthRepository(this);
         gameRepository = new GameRepository(this);
         notificationRepository = new NotificationRepository(this);
+        friendRepository = new FriendRepository(this);
         leaderboardRepository = new LeaderboardRepository(this);
         userRepository = new UserRepository(this);
         NotificationHelper.createNotificationChannels(this);
@@ -94,6 +98,7 @@ public class MainActivity extends AppCompatActivity {
         grantDailyTokens();
         ensureLeaderboardsAndRewards();
         startNotificationListener();
+        startFriendlyInviteListener();
     }
 
     @Override
@@ -103,6 +108,7 @@ public class MainActivity extends AppCompatActivity {
         grantDailyTokens();
         checkPendingLeagueDialog();
         checkPendingReward();
+        startFriendlyInviteListener();
     }
 
     private void grantDailyTokens() {
@@ -263,6 +269,52 @@ public class MainActivity extends AppCompatActivity {
         });
     }
 
+    private void startFriendlyInviteListener() {
+        if (friendlyInviteListener != null || friendRepository == null || !friendRepository.isReady()) {
+            return;
+        }
+        FirebaseUser user = authRepository.currentUser();
+        if (user == null || user.isAnonymous()) {
+            return;
+        }
+        String uid = user.getUid();
+        friendlyInviteListener = friendRepository.listenIncomingMatchInvites(uid, (snapshot, error) -> {
+            if (error != null) {
+                Log.e(TAG, "Friendly invite listener error", error);
+                return;
+            }
+            if (snapshot == null) {
+                return;
+            }
+            for (DocumentChange change : snapshot.getDocumentChanges()) {
+                if (change.getType() == DocumentChange.Type.ADDED) {
+                    showFriendlyInviteDialog(change.getDocument());
+                }
+            }
+        });
+    }
+
+    private void showFriendlyInviteDialog(com.google.firebase.firestore.DocumentSnapshot invite) {
+        String inviteId = invite.getId();
+        String fromUsername = invite.getString("fromUsername");
+        new AlertDialog.Builder(this)
+                .setTitle("Poziv za prijateljsku partiju")
+                .setMessage((fromUsername == null ? "Prijatelj" : fromUsername)
+                        + " vas poziva na prijateljsku partiju.")
+                .setPositiveButton("Prihvati", (dialog, which) -> friendRepository.acceptInvite(inviteId)
+                        .addOnSuccessListener(gameId -> {
+                            Intent intent = new Intent(this, KoZnaZnaActivity.class);
+                            intent.putExtra(GameFlow.EXTRA_GAME_ID, gameId);
+                            intent.putExtra(GameFlow.EXTRA_FULL_MATCH, true);
+                            startActivity(intent);
+                        })
+                        .addOnFailureListener(e -> android.widget.Toast.makeText(this,
+                                e == null || e.getMessage() == null ? "Poziv nije prihvacen" : e.getMessage(),
+                                android.widget.Toast.LENGTH_SHORT).show()))
+                .setNegativeButton("Odbij", (dialog, which) -> friendRepository.declineInvite(inviteId))
+                .show();
+    }
+
     private void updateNotificationBadge(int unreadCount) {
         if (btnNotifikacije == null) {
             return;
@@ -286,6 +338,9 @@ public class MainActivity extends AppCompatActivity {
     protected void onDestroy() {
         if (notificationListener != null) {
             notificationListener.remove();
+        }
+        if (friendlyInviteListener != null) {
+            friendlyInviteListener.remove();
         }
         super.onDestroy();
     }

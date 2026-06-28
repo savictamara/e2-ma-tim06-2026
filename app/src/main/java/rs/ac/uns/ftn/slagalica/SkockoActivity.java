@@ -224,7 +224,7 @@ public class SkockoActivity extends AppCompatActivity {
             if (!challengeRun && ("waiting".equals(status) || player2Uid.isEmpty())) {
                 setStatusText("Čeka se drugi igrač");
                 setControls(false);
-                tvRound.setText("Runda: -/2");
+                tvRound.setText(challengeRun ? "Igra 1/1" : "Runda: -/2");
                 return;
             }
             Log.d(TAG, "Game became active, currentUserUid=" + uid + ", gameId=" + gameId
@@ -309,7 +309,7 @@ public class SkockoActivity extends AppCompatActivity {
         activePlayerUid = value(round.getString("activePlayerUid"));
         opponentUid = value(round.getString("opponentUid"));
         currentAttemptIndex = intValue(round.get("currentAttemptIndex"));
-        tvRound.setText("Runda: " + roundNumber + "/2");
+        tvRound.setText(challengeRun ? "Igra 1/1" : "Runda: " + roundNumber + "/2");
         tvCurrentPlayer.setText(currentPlayerText());
         renderAttempts(round);
         renderOpponentVisualState(round);

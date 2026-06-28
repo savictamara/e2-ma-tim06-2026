@@ -54,7 +54,7 @@ public class ChallengeRunActivity extends AppCompatActivity {
         tvStatus.setText("Pokretanje mini-igara...");
         gameRepository.createChallengeRunGame(uid, challengeId)
                 .addOnSuccessListener(gameId -> {
-                    Intent intent = new Intent(this, GameFlow.activityClassFor(GameRepository.FULL_MATCH_ORDER[0]));
+                    Intent intent = new Intent(this, GameFlow.activityClassFor(GameRepository.CHALLENGE_MATCH_ORDER[0]));
                     intent.putExtra(GameFlow.EXTRA_GAME_ID, gameId);
                     intent.putExtra(GameFlow.EXTRA_FULL_MATCH, true);
                     startActivity(intent);

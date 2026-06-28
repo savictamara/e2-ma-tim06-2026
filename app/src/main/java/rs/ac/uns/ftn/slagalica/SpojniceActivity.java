@@ -34,6 +34,7 @@ import rs.ac.uns.ftn.slagalica.util.GuestSession;
 public class SpojniceActivity extends AppCompatActivity {
     private static final String TAG = "SpojniceActivity";
     private static final String DEBUG_TAG = "SpojniceDebug";
+    private static final String FLOW_TAG = "ChallengeFlowDebug";
     private static final long PHASE_DURATION_MS = 30000;
 
     private final Button[] leftButtons = new Button[5];
@@ -63,6 +64,7 @@ public class SpojniceActivity extends AppCompatActivity {
     private boolean fullMatch = false;
     private boolean challengeRun = false;
     private boolean completingMiniGame = false;
+    private String challengeId = "";
     private Map<String, Object> matchedPairs;
     private Map<String, Object> attemptsByPlayer;
     private List<Integer> usedLeftIndexes = new ArrayList<>();
@@ -181,6 +183,14 @@ public class SpojniceActivity extends AppCompatActivity {
             player1Score = p1 == null ? 0 : p1.intValue();
             player2Score = p2 == null ? 0 : p2.intValue();
             challengeRun = Boolean.TRUE.equals(snapshot.getBoolean("challengeRun"));
+            challengeId = value(snapshot.getString("challengeId"));
+            Log.d("SpojniceChallengeFix", "challengeRun value onCreate/listen=" + challengeRun
+                    + ", regionChallengeId=" + challengeId
+                    + ", gameId=" + gameId);
+            Log.d(FLOW_TAG, "activity=SpojniceActivity"
+                    + ", challengeRun=" + challengeRun
+                    + ", challengeId=" + challengeId
+                    + ", current mini-game=" + snapshot.getString("currentMiniGame"));
             tvPlayer1Score.setText(getString(R.string.player_points, player1Score));
             tvPlayer2Score.setVisibility(challengeRun ? View.GONE : View.VISIBLE);
             tvPlayer2Score.setText(getString(R.string.player_points, player2Score));
@@ -281,11 +291,15 @@ public class SpojniceActivity extends AppCompatActivity {
         String gameplayKey = gameplayKey(round);
         if (gameplayKey.equals(lastGameplayKey)) {
             renderConnectionButtons();
+            if (challengeRun && isAllPairsConnected()) {
+                Log.d("SpojniceChallengeFix", "all pairs connected -> finishing challenge Spojnice");
+                finishChallengeSpojniceOnce();
+            }
             logSpojniceDebug("visual-only");
             return;
         }
         lastGameplayKey = gameplayKey;
-        tvRound.setText(getString(R.string.spojnice_round, roundNumber, 2));
+        tvRound.setText(challengeRun ? "Igra 1/1" : getString(R.string.spojnice_round, roundNumber, 2));
         tvCriterion.setText("Kriterijum: " + connectionCriterion(round));
 
         List<String> leftItems = stringList(round.get("leftItems"));
@@ -296,6 +310,17 @@ public class SpojniceActivity extends AppCompatActivity {
         }
         renderConnectionButtons();
         updateStatus();
+
+        if (challengeRun && "OPPONENT_CHANCE".equals(phase)) {
+            Log.d(DEBUG_TAG, "challengeRun=true, second chance requested=true, second chance skipped because challengeRun=true");
+            Log.d("SpojniceChallengeFix", "blocked second chance because challengeRun");
+            if (phaseTimer != null) {
+                phaseTimer.cancel();
+                phaseTimer = null;
+            }
+            finishChallengeSpojniceOnce();
+            return;
+        }
 
         if ("FINISHED".equals(phase) || Boolean.TRUE.equals(round.getBoolean("finished"))) {
             if (phaseTimer != null) {
@@ -340,7 +365,21 @@ public class SpojniceActivity extends AppCompatActivity {
             return;
         }
         completingMiniGame = true;
+        Log.d(DEBUG_TAG, "challenge finish submitted=true, challengeRun=" + challengeRun);
+        Log.d(FLOW_TAG, "activity=SpojniceActivity"
+                + ", challengeRun=" + challengeRun
+                + ", current mini-game=" + GameRepository.MINI_CONNECTIONS
+                + ", score recorded=true"
+                + ", next mini-game=" + GameRepository.MINI_SKOCKO
+                + ", finish called=true");
         gameRepository.completeMiniGame(gameId, GameRepository.MINI_CONNECTIONS)
+                .addOnSuccessListener(unused -> {
+                    if (challengeRun) {
+                        Log.d("SpojniceChallengeFix", "opening SKOCKO");
+                        GameFlow.openChallengeMiniGame(this, gameId, challengeId,
+                                GameRepository.MINI_SKOCKO, 2);
+                    }
+                })
                 .addOnFailureListener(e -> Log.e(TAG, "Complete connections in match failed", e));
     }
 
@@ -404,6 +443,9 @@ public class SpojniceActivity extends AppCompatActivity {
     private void submitSelectedPair(int leftIndex, int rightIndex) {
         gameRepository.submitConnectionPair(gameId, roundNumber, uid, leftIndex, rightIndex)
                 .addOnSuccessListener(correct -> {
+                    if (handleChallengePairSuccess(correct)) {
+                        return;
+                    }
                     selectedLeftIndex = -1;
                     selectedRightIndex = -1;
                     renderConnectionButtons();
@@ -448,8 +490,31 @@ public class SpojniceActivity extends AppCompatActivity {
         }.start();
     }
 
+    private boolean handleChallengePairSuccess(Boolean correct) {
+        if (!challengeRun || !Boolean.TRUE.equals(correct)) {
+            return false;
+        }
+        selectedLeftIndex = -1;
+        selectedRightIndex = -1;
+        renderConnectionButtons();
+        int correctPairsCount = matchedPairs == null ? 1 : matchedPairs.size() + 1;
+        Log.d("SpojniceChallengeFix", "correctPairsCount after every pair="
+                + correctPairsCount + ", totalPairs=" + leftButtons.length);
+        if (correctPairsCount >= leftButtons.length) {
+            Log.d("SpojniceChallengeFix", "all pairs connected -> finishing challenge Spojnice");
+            finishChallengeSpojniceOnce();
+            return true;
+        }
+        return false;
+    }
+
     private void advancePhaseByTimeout() {
         Log.d(TAG, "Timeout phase advance gameId=" + gameId + ", round=" + roundNumber + ", phase=" + phase);
+        if (challengeRun) {
+            Log.d("SpojniceChallengeFix", "timer expired -> finishing challenge Spojnice");
+            finishChallengeSpojniceOnce();
+            return;
+        }
         gameRepository.advanceConnectionsPhase(gameId, roundNumber, phase)
                 .addOnFailureListener(e -> {
                     Log.e(TAG, "Advance connections phase failed", e);
@@ -588,6 +653,11 @@ public class SpojniceActivity extends AppCompatActivity {
     }
 
     private void updateStatus() {
+        if (challengeRun && "OPPONENT_CHANCE".equals(phase)) {
+            Log.d(DEBUG_TAG, "challengeRun=true, second chance requested=true, second chance skipped because challengeRun=true");
+            setStatus("Samostalna partija");
+            return;
+        }
         if ("FINISHED".equals(phase)) {
             setStatus(roundNumber == 1 ? "Priprema druge runde" : "Spojnice su završene");
             return;
@@ -844,6 +914,26 @@ public class SpojniceActivity extends AppCompatActivity {
             return "Samostalna partija";
         }
         return status.replace("Priprema druge runde", "Samostalna partija");
+    }
+
+    private boolean isAllPairsConnected() {
+        int totalPairs = leftButtons.length;
+        int correctPairsCount = matchedPairs == null ? 0 : matchedPairs.size();
+        Log.d("SpojniceChallengeFix", "totalPairs=" + totalPairs
+                + ", correctPairsCount after every pair=" + correctPairsCount);
+        return correctPairsCount >= totalPairs;
+    }
+
+    private void finishChallengeSpojniceOnce() {
+        if (!challengeRun) return;
+        if (completingMiniGame) return;
+        if (phaseTimer != null) {
+            phaseTimer.cancel();
+            phaseTimer = null;
+        }
+        setPairButtonsEnabled(false);
+        recordStatsOnce();
+        completeMiniGameOnce();
     }
 
     private int intValue(Object value) {

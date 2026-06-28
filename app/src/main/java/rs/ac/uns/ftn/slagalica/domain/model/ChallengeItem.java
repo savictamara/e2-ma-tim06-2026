@@ -7,6 +7,11 @@ public class ChallengeItem {
     public long stakeStars;
     public long stakeTokens;
     public String status;
+    public String regionId;
+    public String regionName;
     public long maxPlayers;
     public long currentPlayers;
+    public long completedPlayers;
+    public long poolStars;
+    public long poolTokens;
 }

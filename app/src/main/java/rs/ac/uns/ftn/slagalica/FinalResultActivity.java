@@ -2,6 +2,7 @@ package rs.ac.uns.ftn.slagalica;
 
 import android.content.Intent;
 import android.os.Bundle;
+import android.util.Log;
 import android.widget.Button;
 import android.widget.TextView;
 import android.widget.Toast;
@@ -10,17 +11,23 @@ import androidx.appcompat.app.AppCompatActivity;
 
 import com.google.android.gms.tasks.Tasks;
 import com.google.firebase.firestore.DocumentSnapshot;
+import com.google.firebase.firestore.QuerySnapshot;
 
+import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 
 import rs.ac.uns.ftn.slagalica.data.repository.ChallengeRepository;
 import rs.ac.uns.ftn.slagalica.data.repository.GameRepository;
 import rs.ac.uns.ftn.slagalica.data.repository.UserRepository;
+import rs.ac.uns.ftn.slagalica.domain.model.ChallengeParticipant;
 import rs.ac.uns.ftn.slagalica.util.FirebaseInitializer;
 import rs.ac.uns.ftn.slagalica.util.GameFlow;
 
 public class FinalResultActivity extends AppCompatActivity {
+    private static final String CHALLENGE_TAG = "FinalResultChallengeDebug";
+    private static final String COMPLETION_TAG = "ChallengeCompletionDebug";
     private GameRepository gameRepository;
     private ChallengeRepository challengeRepository;
     private UserRepository userRepository;
@@ -75,6 +82,17 @@ public class FinalResultActivity extends AppCompatActivity {
 
     private void bindResult(DocumentSnapshot game, String player1Name, String player2Name) {
         if (Boolean.TRUE.equals(game.getBoolean("challengeRun"))) {
+            boolean challengeCompleted = getIntent().getBooleanExtra("challengeCompleted", false);
+            Log.d(CHALLENGE_TAG, "challengeCompleted extra=" + challengeCompleted
+                    + ", challenge status game=" + game.getString("status")
+                    + ", currentMiniGame=" + game.getString("currentMiniGame"));
+            if (!challengeCompleted) {
+                tvPlayers.setText("Izazov");
+                tvScores.setText("Challenge rezultat nije poslat jer finalna igra nije potvrdjena.");
+                tvWinner.setText("");
+                tvRewards.setText("Vratite se na Regions ekran i nastavite izazov.");
+                return;
+            }
             submitChallengeResult(game);
             return;
         }
@@ -87,14 +105,21 @@ public class FinalResultActivity extends AppCompatActivity {
         long p2Stars = longValue(game.get("player2StarsDelta"));
         long p1Tokens = longValue(game.get("player1TokensAwarded"));
         long p2Tokens = longValue(game.get("player2TokensAwarded"));
+        boolean friendly = Boolean.TRUE.equals(game.getBoolean("friendly"))
+                || "FRIENDLY".equals(game.getString("matchType"));
 
-        tvPlayers.setText("Igrac 1: " + player1Name + "\nIgrac 2: " + player2Name);
+        tvPlayers.setText((friendly ? "Prijateljska partija\n" : "")
+                + "Igrac 1: " + player1Name + "\nIgrac 2: " + player2Name);
         tvScores.setText("Rezultat\n" + player1Name + ": " + player1Score
                 + "\n" + player2Name + ": " + player2Score);
         tvWinner.setText("Pobednik: " + winnerName);
-        tvRewards.setText("Zvezde i tokeni\n"
-                + player1Name + ": " + signed(p1Stars) + " zvezda, +" + p1Tokens + " tokena\n"
-                + player2Name + ": " + signed(p2Stars) + " zvezda, +" + p2Tokens + " tokena");
+        if (friendly) {
+            tvRewards.setText("Prijateljska partija ne dodeljuje zvezde, tokene, statistiku ni rang poene.");
+        } else {
+            tvRewards.setText("Zvezde i tokeni\n"
+                    + player1Name + ": " + signed(p1Stars) + " zvezda, +" + p1Tokens + " tokena\n"
+                    + player2Name + ": " + signed(p2Stars) + " zvezda, +" + p2Tokens + " tokena");
+        }
     }
 
     private void submitChallengeResult(DocumentSnapshot game) {
@@ -106,7 +131,7 @@ public class FinalResultActivity extends AppCompatActivity {
         }
         Map<String, Integer> scores = new HashMap<>();
         Map<String, Object> rawScores = mapValue(game.get("challengeScores"));
-        for (String miniGame : GameRepository.FULL_MATCH_ORDER) {
+        for (String miniGame : GameRepository.CHALLENGE_MATCH_ORDER) {
             scores.put(miniGame, intValue(rawScores.get(miniGame)));
         }
         tvPlayers.setText("Izazov");
@@ -114,16 +139,103 @@ public class FinalResultActivity extends AppCompatActivity {
         tvWinner.setText("Cuvanje rezultata izazova...");
         tvRewards.setText("");
         challengeRepository.submitRun(challengeId, challengePlayerUid, scores)
-                .addOnSuccessListener(unused -> openChallengeResults(challengeId))
+                .addOnSuccessListener(unused -> {
+                    Log.d(COMPLETION_TAG, "participant completed written"
+                            + ", regionChallengeId=" + challengeId
+                            + ", currentUserUid=" + challengePlayerUid
+                            + ", totalScore=" + sum(scores)
+                            + ", results screen opened=true");
+                    showChallengeResults(challengeId);
+                })
                 .addOnFailureListener(e -> {
                     show(e == null || e.getMessage() == null ? "Rezultat izazova nije sacuvan" : e.getMessage());
-                    openChallengeResults(challengeId);
+                    showChallengeResults(challengeId);
                 });
     }
 
-    private void openChallengeResults(String challengeId) {
-        Intent intent = new Intent(this, ChallengeResultActivity.class);
-        intent.putExtra(ChallengeResultActivity.EXTRA_CHALLENGE_ID, challengeId);
+    private void showChallengeResults(String challengeId) {
+        challengeRepository.getChallenge(challengeId)
+                .addOnSuccessListener(challenge -> challengeRepository.getParticipants(challengeId)
+                        .addOnSuccessListener(parts -> bindChallengeResults(challenge, parts))
+                        .addOnFailureListener(e -> {
+                            Log.e(CHALLENGE_TAG, "participants load failed", e);
+                            openRegions();
+                        }))
+                .addOnFailureListener(e -> {
+                    Log.e(CHALLENGE_TAG, "challenge load failed", e);
+                    openRegions();
+                });
+    }
+
+    private void bindChallengeResults(DocumentSnapshot challenge, QuerySnapshot snapshot) {
+        List<ChallengeParticipant> participants = new ArrayList<>();
+        int completedCount = 0;
+        if (snapshot != null) {
+            for (DocumentSnapshot doc : snapshot.getDocuments()) {
+                ChallengeParticipant participant = challengeRepository.participantFrom(doc);
+                participants.add(participant);
+                if (participant.finished) completedCount++;
+            }
+        }
+        participants.sort((a, b) -> {
+            if (a.placement == 0 && b.placement == 0) return Long.compare(b.totalScore, a.totalScore);
+            if (a.placement == 0) return 1;
+            if (b.placement == 0) return -1;
+            return Long.compare(a.placement, b.placement);
+        });
+        String status = challenge == null ? "" : value(challenge.getString("status"));
+        Log.d(CHALLENGE_TAG, "challenge status=" + status
+                + ", participants loaded=" + participants.size()
+                + ", completedCount=" + completedCount
+                + ", waiting vs finished UI=" + ChallengeRepository.FINISHED.equals(status));
+        tvPlayers.setText("Izazov");
+        tvScores.setText("Ucesnici: " + completedCount + "/" + participants.size());
+        if (!ChallengeRepository.FINISHED.equals(status)) {
+            tvWinner.setText("Zavrsili ste izazov. Ceka se rezultat ostalih igraca.");
+            tvRewards.setText(challengeRows(participants, false));
+            Log.d(COMPLETION_TAG, "waiting state opened=true"
+                    + ", joinedCount=" + participants.size()
+                    + ", completedCount=" + completedCount
+                    + ", finish condition=false");
+            return;
+        }
+        tvWinner.setText("Rezultati izazova");
+        tvRewards.setText(challengeRows(participants, true));
+        Log.d(COMPLETION_TAG, "finish condition=true"
+                + ", joinedCount=" + participants.size()
+                + ", completedCount=" + completedCount);
+    }
+
+    private String challengeRows(List<ChallengeParticipant> participants, boolean finished) {
+        StringBuilder builder = new StringBuilder();
+        for (ChallengeParticipant participant : participants) {
+            String place = participant.placement == 0 ? "-" : String.valueOf(participant.placement);
+            builder.append(place).append(". ")
+                    .append(value(participant.username, participant.uid))
+                    .append(" - ").append(participant.totalScore).append(" poena");
+            if (finished) {
+                if (participant.placement == 2) {
+                    builder.append(" - Vracen ulog");
+                } else if (participant.rewardStars > 0 || participant.rewardTokens > 0) {
+                    builder.append(" - Nagrada: ")
+                            .append(participant.rewardStars).append(" zvezda, ")
+                            .append(participant.rewardTokens).append(" tokena");
+                } else {
+                    builder.append(" - Bez nagrade");
+                }
+            } else if (participant.finished) {
+                builder.append(" - zavrsio");
+            } else {
+                builder.append(" - igra se ceka");
+            }
+            builder.append('\n');
+        }
+        return builder.toString().trim();
+    }
+
+    private void openRegions() {
+        Intent intent = new Intent(this, RegionsActivity.class);
+        intent.addFlags(Intent.FLAG_ACTIVITY_CLEAR_TOP | Intent.FLAG_ACTIVITY_SINGLE_TOP);
         startActivity(intent);
         finish();
     }
@@ -171,6 +283,10 @@ public class FinalResultActivity extends AppCompatActivity {
 
     private String value(String value) {
         return value == null ? "" : value;
+    }
+
+    private String value(String value, String fallback) {
+        return value == null || value.trim().isEmpty() ? fallback : value;
     }
 
     private void returnToMainMenu() {

@@ -123,9 +123,10 @@ public class FriendsActivity extends AppCompatActivity {
                 + " | Zvezde: " + friend.stars
                 + " | " + friend.leagueName
                 + " | " + (friend.online ? "Online" : "Offline"));
-        if (!friend.online) {
+        challenge.setText("Pozovi");
+        if (friend.uid.equals(uid)) {
             challenge.setEnabled(false);
-            challenge.setText("Offline");
+            challenge.setText("Vi");
         } else if (friend.inGame || !isBlank(friend.activeGameId)) {
             challenge.setEnabled(false);
             challenge.setText("U partiji");
@@ -166,7 +167,11 @@ public class FriendsActivity extends AppCompatActivity {
 
     private void sendMatchInvite(FriendItem friend) {
         friendRepository.sendFriendlyInvite(uid, friend.uid)
-                .addOnSuccessListener(inviteId -> showOutgoingInvite(inviteId))
+                .addOnSuccessListener(inviteId -> {
+                    show("Poziv je poslat");
+                    showOutgoingInvite(inviteId);
+                    loadFriends();
+                })
                 .addOnFailureListener(e -> show(e.getMessage()));
     }
 

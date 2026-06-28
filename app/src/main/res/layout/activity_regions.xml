@@ -84,7 +84,8 @@
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
                 android:layout_marginTop="10dp"
-                android:orientation="horizontal">
+                android:orientation="horizontal"
+                android:visibility="gone">
 
                 <EditText
                     android:id="@+id/etChallengeStars"
@@ -124,7 +125,7 @@
                 android:layout_height="48dp"
                 android:layout_marginTop="10dp"
                 android:background="@drawable/bg_button_primary"
-                android:text="Kreiraj izazov"
+                android:text="Postavi izazov"
                 android:textColor="@color/white"
                 android:textStyle="bold" />
 

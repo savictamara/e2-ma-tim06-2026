@@ -74,6 +74,7 @@ public class MojBrojActivity extends AppCompatActivity {
     private boolean challengeRun = false;
     private boolean completingMiniGame = false;
     private boolean finalResultOpening = false;
+    private String challengeId = "";
     private String gameStatus = "";
     private String currentPlayer1Uid = "";
     private String currentPlayer2Uid = "";
@@ -268,6 +269,7 @@ public class MojBrojActivity extends AppCompatActivity {
             player1Score = p1 == null ? 0 : p1.intValue();
             player2Score = p2 == null ? 0 : p2.intValue();
             challengeRun = Boolean.TRUE.equals(snapshot.getBoolean("challengeRun"));
+            challengeId = value(snapshot.getString("challengeId"));
             tvPlayer1.setText(getString(R.string.player_points, player1Score));
             tvPlayer2.setVisibility(challengeRun ? View.GONE : View.VISIBLE);
             tvPlayer2.setText(getString(R.string.player_points, player2Score));
@@ -366,7 +368,7 @@ public class MojBrojActivity extends AppCompatActivity {
         activePlayerUid = value(round.getString("activePlayerUid"));
         Long roundIndex = round.getLong("roundIndex");
         currentRoundIndex = roundIndex == null ? roundNumber : roundIndex.intValue();
-        tvRound.setText("Runda: " + currentRoundIndex + "/2");
+        tvRound.setText(challengeRun ? "Igra 1/1" : "Runda: " + currentRoundIndex + "/2");
         Long target = round.getLong("targetNumber");
         targetNumber = target == null ? 0 : target.intValue();
         tvTarget.setText(getString(R.string.target_number, targetNumber));
@@ -438,7 +440,14 @@ public class MojBrojActivity extends AppCompatActivity {
         }
         completingMiniGame = true;
         gameRepository.completeMiniGame(gameId, GameRepository.MINI_MY_NUMBER)
-                .addOnSuccessListener(ignored -> openFinalResult())
+                .addOnSuccessListener(ignored -> {
+                    if (challengeRun) {
+                        GameFlow.openChallengeMiniGame(this, gameId, challengeId,
+                                GameRepository.MINI_STEP_BY_STEP, 4);
+                        return;
+                    }
+                    openFinalResult();
+                })
                 .addOnFailureListener(e -> Log.e(TAG, "Complete my number in match failed", e));
     }
 

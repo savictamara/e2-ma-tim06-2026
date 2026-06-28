@@ -19,6 +19,7 @@ import rs.ac.uns.ftn.slagalica.util.FirebaseInitializer;
 
 public class StatsRepository {
     private static final String TAG = "StatsRepository";
+    private static final String FRIENDLY_TAG = "FriendlyInviteDebug";
     private static final String GAME_KNOW_IT = "Ko zna zna";
     private static final String GAME_MY_NUMBER = "Moj broj";
     private static final String GAME_STEP = "Korak po korak";
@@ -84,7 +85,8 @@ public class StatsRepository {
         return db.runTransaction(transaction -> {
             DocumentSnapshot game = transaction.get(gameRef);
             DocumentSnapshot round = transaction.get(roundRef);
-            if (!isFinishedGame(game) || Boolean.TRUE.equals(game.getBoolean("statsApplied_ko_zna_zna"))) {
+            if (skipFriendlyStats(game, "ko_zna_zna")
+                    || !isFinishedGame(game) || Boolean.TRUE.equals(game.getBoolean("statsApplied_ko_zna_zna"))) {
                 return null;
             }
             String p1 = game.getString("player1Uid");
@@ -113,7 +115,8 @@ public class StatsRepository {
             DocumentSnapshot game = transaction.get(gameRef);
             DocumentSnapshot r1 = transaction.get(r1Ref);
             DocumentSnapshot r2 = transaction.get(r2Ref);
-            if (!isFinishedGame(game) || Boolean.TRUE.equals(game.getBoolean("statsApplied_moj_broj"))) {
+            if (skipFriendlyStats(game, "moj_broj")
+                    || !isFinishedGame(game) || Boolean.TRUE.equals(game.getBoolean("statsApplied_moj_broj"))) {
                 return null;
             }
             String p1 = game.getString("player1Uid");
@@ -142,7 +145,8 @@ public class StatsRepository {
             DocumentSnapshot game = transaction.get(gameRef);
             DocumentSnapshot r1 = transaction.get(r1Ref);
             DocumentSnapshot r2 = transaction.get(r2Ref);
-            if (!isFinishedRound(r2) || Boolean.TRUE.equals(game.getBoolean("statsApplied_korak_po_korak"))) {
+            if (skipFriendlyStats(game, "korak_po_korak")
+                    || !isFinishedRound(r2) || Boolean.TRUE.equals(game.getBoolean("statsApplied_korak_po_korak"))) {
                 return null;
             }
             String p1 = game.getString("player1Uid");
@@ -171,7 +175,8 @@ public class StatsRepository {
             DocumentSnapshot game = transaction.get(gameRef);
             DocumentSnapshot r1 = transaction.get(r1Ref);
             DocumentSnapshot r2 = transaction.get(r2Ref);
-            if (!isFinishedGame(game) || Boolean.TRUE.equals(game.getBoolean("statsApplied_spojnice"))) {
+            if (skipFriendlyStats(game, "spojnice")
+                    || !isFinishedGame(game) || Boolean.TRUE.equals(game.getBoolean("statsApplied_spojnice"))) {
                 return null;
             }
             String p1 = game.getString("player1Uid");
@@ -200,7 +205,8 @@ public class StatsRepository {
             DocumentSnapshot game = transaction.get(gameRef);
             DocumentSnapshot r1 = transaction.get(r1Ref);
             DocumentSnapshot r2 = transaction.get(r2Ref);
-            if (!isFinishedGame(game) || Boolean.TRUE.equals(game.getBoolean("statsApplied_asocijacije"))) {
+            if (skipFriendlyStats(game, "asocijacije")
+                    || !isFinishedGame(game) || Boolean.TRUE.equals(game.getBoolean("statsApplied_asocijacije"))) {
                 return null;
             }
             String p1 = game.getString("player1Uid");
@@ -229,7 +235,8 @@ public class StatsRepository {
             DocumentSnapshot game = transaction.get(gameRef);
             DocumentSnapshot r1 = transaction.get(r1Ref);
             DocumentSnapshot r2 = transaction.get(r2Ref);
-            if (!isFinishedGame(game) || Boolean.TRUE.equals(game.getBoolean("statsApplied_skocko"))) {
+            if (skipFriendlyStats(game, "skocko")
+                    || !isFinishedGame(game) || Boolean.TRUE.equals(game.getBoolean("statsApplied_skocko"))) {
                 return null;
             }
             String p1 = game.getString("player1Uid");
@@ -520,6 +527,17 @@ public class StatsRepository {
 
     private boolean isFinishedGame(DocumentSnapshot game) {
         return game != null && game.exists() && "finished".equals(game.getString("status"));
+    }
+
+    private boolean skipFriendlyStats(DocumentSnapshot game, String statName) {
+        boolean skip = game != null && game.exists()
+                && (Boolean.TRUE.equals(game.getBoolean("friendly"))
+                || "FRIENDLY".equals(game.getString("matchType")));
+        if (skip) {
+            Log.d(FRIENDLY_TAG, "friendly result skipped rewards/stats gameId="
+                    + game.getId() + ", stat=" + statName);
+        }
+        return skip;
     }
 
     private boolean isFinishedRound(DocumentSnapshot round) {

@@ -34,6 +34,7 @@ import rs.ac.uns.ftn.slagalica.util.GuestSession;
 public class KorakPoKorakActivity extends AppCompatActivity {
     private static final String TAG = "KorakPoKorakActivity";
     private static final String DEBUG_TAG = "KorakDebug";
+    private static final String FLOW_TAG = "ChallengeFlowDebug";
     private final TextView[] stepViews = new TextView[7];
     private final StepByStepService stepService = new StepByStepService();
     private FirebaseAuthRepository authRepository;
@@ -45,6 +46,7 @@ public class KorakPoKorakActivity extends AppCompatActivity {
     private CountDownTimer timer;
     private String uid;
     private String gameId;
+    private String challengeId = "";
     private String gameStatus = "";
     private String player1Uid = "";
     private String player2Uid = "";
@@ -165,6 +167,10 @@ public class KorakPoKorakActivity extends AppCompatActivity {
                     + ", challengeRun=" + challengeRun);
             if (!isCorrect) {
                 showWrongFeedback();
+                if (challengeRun && openedSteps >= 6) {
+                    Log.d("KorakChallengeFix", "finish path used=wrong final answer, score=" + player1Score);
+                    finishChallengeKorakOnce();
+                }
                 return;
             }
             showCorrectFeedback();
@@ -174,6 +180,12 @@ public class KorakPoKorakActivity extends AppCompatActivity {
                 return;
             }
             gameRepository.submitStepAnswer(gameId, roundNumber, uid, solution)
+                    .addOnSuccessListener(unused -> {
+                        if (challengeRun) {
+                            Log.d("KorakChallengeFix", "finish path used=correct answer, score=" + player1Score);
+                            finishChallengeKorakOnce();
+                        }
+                    })
                     .addOnFailureListener(e -> {
                         Log.e(TAG, "Submit step answer failed", e);
                         resetFeedbackStyle();
@@ -208,6 +220,15 @@ public class KorakPoKorakActivity extends AppCompatActivity {
             player1Score = p1 == null ? 0 : p1.intValue();
             player2Score = p2 == null ? 0 : p2.intValue();
             challengeRun = Boolean.TRUE.equals(snapshot.getBoolean("challengeRun"));
+            challengeId = value(snapshot.getString("challengeId"));
+            Log.d("KorakChallengeFix", "challengeRun value onCreate/listen=" + challengeRun
+                    + ", regionChallengeId=" + challengeId
+                    + ", gameId=" + gameId);
+            Log.d(FLOW_TAG, "activity=KorakPoKorakActivity"
+                    + ", challengeRun=" + challengeRun
+                    + ", challengeId=" + challengeId
+                    + ", current mini-game=" + snapshot.getString("currentMiniGame")
+                    + ", entered KorakPoKorak=true");
             tvPlayer1Score.setText(getString(R.string.player_points, player1Score));
             tvPlayer2Score.setVisibility(challengeRun ? View.GONE : View.VISIBLE);
             tvPlayer2Score.setText(getString(R.string.player_points, player2Score));
@@ -294,7 +315,7 @@ public class KorakPoKorakActivity extends AppCompatActivity {
         Long roundIndex = round.getLong("roundIndex");
         int displayRound = roundIndex == null ? roundNumber : roundIndex.intValue();
         roundNumber = displayRound;
-        tvRound.setText("Runda: " + displayRound + "/2");
+        tvRound.setText(challengeRun ? "Igra 1/1" : "Runda: " + displayRound + "/2");
         Long opened = round.getLong("openedStepIndex");
         openedSteps = opened == null ? 0 : opened.intValue();
         List<String> steps = (List<String>) round.get("steps");
@@ -360,6 +381,12 @@ public class KorakPoKorakActivity extends AppCompatActivity {
     private void handleStepTimerFinished() {
         if ("ACTIVE_PLAYER".equals(phase) && uid.equals(activePlayerUid)) {
             gameRepository.openNextStep(gameId, roundNumber, uid, true)
+                    .addOnSuccessListener(unused -> {
+                        if (challengeRun && openedSteps >= 6) {
+                            Log.d("KorakChallengeFix", "finish path used=time expired final step, score=" + player1Score);
+                            finishChallengeKorakOnce();
+                        }
+                    })
                     .addOnFailureListener(e -> Log.e(TAG, "Open next step on timeout failed", e));
         } else if ("OPPONENT_CHANCE".equals(phase) && uid.equals(opponentUid)) {
             gameRepository.finishStepRound(gameId, roundNumber)
@@ -370,9 +397,10 @@ public class KorakPoKorakActivity extends AppCompatActivity {
     private void moveToNextStepRound() {
         if (challengeRun) {
             setStatusText("Korak po korak je zavrÅ¡en");
+            Log.d("KorakChallengeFix", "blocked normal finish because challengeRun");
             recordStatsOnce();
             if (fullMatch) {
-                completeMiniGameOnce();
+                finishChallengeKorakOnce();
             }
             return;
         }
@@ -431,12 +459,51 @@ public class KorakPoKorakActivity extends AppCompatActivity {
                 .addOnFailureListener(e -> Log.e(TAG, "Record step stats failed", e));
     }
 
+    private void finishChallengeKorakOnce() {
+        if (!challengeRun) return;
+        if (completingMiniGame) return;
+        if (timer != null) {
+            timer.cancel();
+            timer = null;
+        }
+        btnCheckSolution.setEnabled(false);
+        etSolution.setEnabled(false);
+        recordStatsOnce();
+        Log.d("KorakChallengeFix", "finish path used=finishChallengeKorakOnce"
+                + ", score=" + player1Score
+                + ", opening ASOCIJACIJE");
+        completeMiniGameOnce();
+    }
+
     private void completeMiniGameOnce() {
         if (completingMiniGame || gameRepository == null || gameId == null || gameId.isEmpty()) {
             return;
         }
         completingMiniGame = true;
+        Log.d(DEBUG_TAG, "challengeRun=" + challengeRun
+                + ", score=" + player1Score
+                + ", next navigation to ASOCIJACIJE=" + challengeRun);
+        Log.d(FLOW_TAG, "activity=KorakPoKorakActivity"
+                + ", challengeRun=" + challengeRun
+                + ", current mini-game=" + GameRepository.MINI_STEP_BY_STEP
+                + ", score recorded=true"
+                + ", next mini-game=" + GameRepository.MINI_ASSOCIATIONS
+                + ", all extras passed via gameId/firestore=true");
         gameRepository.completeMiniGame(gameId, GameRepository.MINI_STEP_BY_STEP)
+                .addOnSuccessListener(unused -> {
+                    if (!challengeRun) {
+                        return;
+                    }
+                    Log.d("KorakChallengeFix", "opening ASOCIJACIJE");
+                    Log.d(FLOW_TAG, "activity=KorakPoKorakActivity"
+                            + ", challengeRun=true"
+                            + ", challengeId=" + challengeId
+                            + ", current mini-game=" + GameRepository.MINI_STEP_BY_STEP
+                            + ", next mini-game=" + GameRepository.MINI_ASSOCIATIONS
+                            + ", finish called=true");
+                    GameFlow.openChallengeMiniGame(this, gameId, challengeId,
+                            GameRepository.MINI_ASSOCIATIONS, 5);
+                })
                 .addOnFailureListener(e -> Log.e(TAG, "Complete step in match failed", e));
     }
 

@@ -44,6 +44,27 @@ public final class GameFlow {
         return true;
     }
 
+    public static boolean openChallengeMiniGame(Activity activity, String gameId, String challengeId,
+                                                String miniGame, int challengeMiniGameIndex) {
+        Class<?> activityClass = activityClassFor(miniGame);
+        if (activityClass == null || activity == null || gameId == null || gameId.isEmpty()) {
+            return false;
+        }
+        Intent intent = new Intent(activity, activityClass);
+        intent.putExtra(EXTRA_GAME_ID, gameId);
+        intent.putExtra(EXTRA_FULL_MATCH, true);
+        intent.putExtra("gameId", gameId);
+        intent.putExtra("challengeRun", true);
+        intent.putExtra("regionChallengeId", value(challengeId));
+        intent.putExtra("challengeId", value(challengeId));
+        intent.putExtra("friendly", true);
+        intent.putExtra("challengeMiniGame", miniGame);
+        intent.putExtra("challengeMiniGameIndex", challengeMiniGameIndex);
+        activity.startActivity(intent);
+        activity.finish();
+        return true;
+    }
+
     public static void openFinalResult(Activity activity, String gameId) {
         if (activity == null || gameId == null || gameId.isEmpty()) {
             return;
