@@ -746,7 +746,7 @@ public class MojBrojActivity extends AppCompatActivity {
                 llNumberButtons.addView(row, rowParams);
             }
             final int index = i;
-            Button button = tokenButton(String.valueOf(availableNumbers.get(i)));
+            Button button = tokenButton(String.valueOf(availableNumbers.get(i)), R.drawable.bg_number_chip);
             button.setOnClickListener(v -> appendNumberToken(index));
             LinearLayout.LayoutParams params = new LinearLayout.LayoutParams(0, dp(42), 1);
             params.setMargins(i % 3 == 0 ? 0 : dp(6), 0, 0, 0);
@@ -774,7 +774,7 @@ public class MojBrojActivity extends AppCompatActivity {
                 llOperatorButtons.addView(row, rowParams);
             }
             String operator = operators[i];
-            Button button = tokenButton(operator);
+            Button button = tokenButton(operator, R.drawable.bg_operator_chip);
             button.setOnClickListener(v -> appendOperatorToken(operator));
             LinearLayout.LayoutParams params = new LinearLayout.LayoutParams(0, dp(38), 1);
             params.setMargins(i % 3 == 0 ? 0 : dp(6), 0, 0, 0);
@@ -782,12 +782,12 @@ public class MojBrojActivity extends AppCompatActivity {
         }
     }
 
-    private Button tokenButton(String label) {
+    private Button tokenButton(String label, int backgroundRes) {
         Button button = new Button(this);
         button.setText(label);
         button.setTextSize(15);
         button.setTextColor(Color.rgb(53, 43, 69));
-        button.setBackgroundResource(R.drawable.bg_number_chip);
+        button.setBackgroundResource(backgroundRes);
         return button;
     }
 
