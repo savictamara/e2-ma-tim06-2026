@@ -1,14 +1,18 @@
 package rs.ac.uns.ftn.slagalica;
 
 import android.content.Intent;
+import android.graphics.Color;
 import android.hardware.Sensor;
 import android.hardware.SensorManager;
 import android.os.Bundle;
 import android.os.CountDownTimer;
+import android.text.Editable;
+import android.text.TextWatcher;
 import android.util.Log;
 import android.view.View;
 import android.widget.Button;
 import android.widget.EditText;
+import android.widget.LinearLayout;
 import android.widget.TextView;
 import android.widget.Toast;
 
@@ -20,8 +24,10 @@ import com.google.firebase.firestore.DocumentSnapshot;
 import com.google.firebase.firestore.ListenerRegistration;
 
 import java.util.ArrayList;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 
 import rs.ac.uns.ftn.slagalica.data.repository.FirebaseAuthRepository;
 import rs.ac.uns.ftn.slagalica.data.repository.GameRepository;
@@ -37,6 +43,7 @@ import rs.ac.uns.ftn.slagalica.util.ShakeDetector;
 
 public class MojBrojActivity extends AppCompatActivity {
     private static final String TAG = "MojBrojActivity";
+    private static final String DEBUG_TAG = "MojBrojDebug";
     private final ExpressionEvaluator evaluator = new ExpressionEvaluator();
     private final MyNumberService myNumberService = new MyNumberService();
     private FirebaseAuthRepository authRepository;
@@ -68,6 +75,7 @@ public class MojBrojActivity extends AppCompatActivity {
     private boolean completingMiniGame = false;
     private boolean finalResultOpening = false;
     private String gameStatus = "";
+    private String currentPlayer1Uid = "";
     private String currentPlayer2Uid = "";
     private TextView tvTarget;
     private TextView tvRound;
@@ -82,7 +90,14 @@ public class MojBrojActivity extends AppCompatActivity {
     private Button btnStopTarget;
     private Button btnStopNumbers;
     private Button btnDelete;
+    private Button btnClearExpression;
     private Button btnConfirm;
+    private LinearLayout llNumberButtons;
+    private LinearLayout llOperatorButtons;
+    private final List<Button> numberButtons = new ArrayList<>();
+    private final List<Token> expressionTokens = new ArrayList<>();
+    private final Set<Integer> usedNumberIndexes = new HashSet<>();
+    private boolean updatingExpressionProgrammatically = false;
     private GameHeaderHelper headerHelper;
 
     @Override
@@ -111,7 +126,10 @@ public class MojBrojActivity extends AppCompatActivity {
         btnStopTarget = findViewById(R.id.btnStopTarget);
         btnStopNumbers = findViewById(R.id.btnStopNumbers);
         btnDelete = findViewById(R.id.btnDelete);
+        btnClearExpression = findViewById(R.id.btnClearExpression);
         btnConfirm = findViewById(R.id.btnConfirm);
+        llNumberButtons = findViewById(R.id.llNumberButtons);
+        llOperatorButtons = findViewById(R.id.llOperatorButtons);
         headerHelper = new GameHeaderHelper(this, findViewById(android.R.id.content));
         headerHelper.updateGameTitle("Moj broj");
 
@@ -175,10 +193,19 @@ public class MojBrojActivity extends AppCompatActivity {
         });
 
         btnDelete.setOnClickListener(v -> {
-            String expression = etExpression.getText().toString();
-            if (!expression.isEmpty()) {
-                etExpression.setText(expression.substring(0, expression.length() - 1));
-                etExpression.setSelection(etExpression.getText().length());
+            deleteLastExpressionToken();
+        });
+        btnClearExpression.setOnClickListener(v -> clearExpression());
+        buildOperatorButtons();
+        etExpression.addTextChangedListener(new TextWatcher() {
+            @Override public void beforeTextChanged(CharSequence s, int start, int count, int after) {}
+            @Override public void onTextChanged(CharSequence s, int start, int before, int count) {}
+            @Override public void afterTextChanged(Editable s) {
+                if (!updatingExpressionProgrammatically) {
+                    expressionTokens.clear();
+                    recalculateUsedNumbersFromExpression(s.toString());
+                    refreshNumberButtons();
+                }
             }
         });
 
@@ -249,8 +276,10 @@ public class MojBrojActivity extends AppCompatActivity {
             headerHelper.updatePlayers(snapshot.getString("player1Uid"), player1Score,
                     snapshot.getString("player2Uid"), player2Score);
             String status = snapshot.getString("status");
+            String player1Uid = value(snapshot.getString("player1Uid"));
             String player2Uid = value(snapshot.getString("player2Uid"));
             gameStatus = value(status);
+            currentPlayer1Uid = player1Uid;
             currentPlayer2Uid = player2Uid;
             if (!GameRepository.MINI_MY_NUMBER.equals(snapshot.getString("currentMiniGame"))) {
                 if (fullMatch && GameFlow.openMiniGame(this, gameId, snapshot.getString("currentMiniGame"))) {
@@ -343,6 +372,7 @@ public class MojBrojActivity extends AppCompatActivity {
         tvTarget.setText(getString(R.string.target_number, targetNumber));
         availableNumbers = readNumbers(round);
         tvNumbers.setText(formatNumbers(availableNumbers));
+        buildNumberButtons();
         Map<String, Object> submissions = (Map<String, Object>) round.get("submissionsByPlayer");
         Map<String, Object> results = (Map<String, Object>) round.get("resultsByPlayer");
         submitted = submissions != null && submissions.containsKey(uid);
@@ -591,7 +621,10 @@ public class MojBrojActivity extends AppCompatActivity {
     private void setPlayControls(boolean enabled) {
         etExpression.setEnabled(enabled);
         btnDelete.setEnabled(enabled);
+        btnClearExpression.setEnabled(enabled);
         btnConfirm.setEnabled(enabled);
+        refreshNumberButtons();
+        refreshOperatorButtons(enabled);
         Log.d(TAG, "Play controls enabled=" + enabled + ", gameId=" + gameId + ", roundId="
                 + gameRepository.myNumberRoundId(roundNumber) + ", currentUserUid=" + uid
                 + ", phase=" + phase + ", activePlayerUid=" + activePlayerUid
@@ -603,7 +636,7 @@ public class MojBrojActivity extends AppCompatActivity {
         if ("waiting".equals(status) || value(player2Uid).isEmpty()) {
             statusText = "Čeka se drugi igrač";
         } else if (GameRepository.PHASE_WAITING_TARGET_STOP.equals(phase)) {
-            if (!GameRepository.isNonEmpty(activePlayerUid)) {
+            if (isInvalidActivePlayer()) {
                 Log.e(TAG, "Missing activePlayerUid in Moj broj, currentUid=" + uid
                         + ", phase=" + phase + ", game.status=" + status + ", player2Uid=" + player2Uid);
                 setStatusText("Priprema igre");
@@ -612,7 +645,7 @@ public class MojBrojActivity extends AppCompatActivity {
             }
             statusText = uid.equals(activePlayerUid) ? "Zaustavite traženi broj" : "Protivnik bira traženi broj";
         } else if (GameRepository.PHASE_WAITING_NUMBERS_STOP.equals(phase)) {
-            if (!GameRepository.isNonEmpty(activePlayerUid)) {
+            if (isInvalidActivePlayer()) {
                 Log.e(TAG, "Missing activePlayerUid in Moj broj, currentUid=" + uid
                         + ", phase=" + phase + ", game.status=" + status + ", player2Uid=" + player2Uid);
                 setStatusText("Priprema igre");
@@ -628,6 +661,15 @@ public class MojBrojActivity extends AppCompatActivity {
             statusText = "";
         }
         setStatusText(statusText);
+    }
+
+    private boolean isInvalidActivePlayer() {
+        if (!GameRepository.isNonEmpty(activePlayerUid)) {
+            return true;
+        }
+        return !challengeRun
+                && !activePlayerUid.equals(currentPlayer1Uid)
+                && !activePlayerUid.equals(currentPlayer2Uid);
     }
 
     private void updateStatusForPhase() {
@@ -669,14 +711,218 @@ public class MojBrojActivity extends AppCompatActivity {
         boolean isCurrentUsersTurn = (GameRepository.PHASE_WAITING_TARGET_STOP.equals(phase)
                 || GameRepository.PHASE_WAITING_NUMBERS_STOP.equals(phase))
                 && uid != null && uid.equals(activePlayerUid);
+        Log.d(DEBUG_TAG, "uid=" + uid
+                + ", player1Uid=" + currentPlayer1Uid
+                + ", player2Uid=" + currentPlayer2Uid
+                + ", currentPlayerUid=" + activePlayerUid
+                + ", phase=" + phase
+                + ", status=" + gameStatus
+                + ", isMyTurn=" + isCurrentUsersTurn
+                + ", text=" + status);
         Log.d(TAG, "Turn status currentUid=" + uid
-                + ", player1Uid=n/a, player2Uid=" + currentPlayer2Uid
+                + ", player1Uid=" + currentPlayer1Uid + ", player2Uid=" + currentPlayer2Uid
                 + ", activePlayerUid=" + activePlayerUid
                 + ", opponentUid="
                 + ", currentTurnUid="
                 + ", phase=" + phase
                 + ", calculatedStatusText=" + status
                 + ", isCurrentUsersTurn=" + isCurrentUsersTurn);
+    }
+
+    private void buildNumberButtons() {
+        if (llNumberButtons == null) {
+            return;
+        }
+        llNumberButtons.removeAllViews();
+        numberButtons.clear();
+        LinearLayout row = null;
+        for (int i = 0; i < availableNumbers.size(); i++) {
+            if (i % 3 == 0) {
+                row = new LinearLayout(this);
+                row.setOrientation(LinearLayout.HORIZONTAL);
+                LinearLayout.LayoutParams rowParams = new LinearLayout.LayoutParams(
+                        LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT);
+                rowParams.setMargins(0, i == 0 ? 0 : dp(5), 0, 0);
+                llNumberButtons.addView(row, rowParams);
+            }
+            final int index = i;
+            Button button = tokenButton(String.valueOf(availableNumbers.get(i)));
+            button.setOnClickListener(v -> appendNumberToken(index));
+            LinearLayout.LayoutParams params = new LinearLayout.LayoutParams(0, dp(42), 1);
+            params.setMargins(i % 3 == 0 ? 0 : dp(6), 0, 0, 0);
+            row.addView(button, params);
+            numberButtons.add(button);
+        }
+        recalculateUsedNumbersFromExpression(etExpression.getText().toString());
+        refreshNumberButtons();
+    }
+
+    private void buildOperatorButtons() {
+        if (llOperatorButtons == null) {
+            return;
+        }
+        llOperatorButtons.removeAllViews();
+        String[] operators = {"+", "-", "*", "/", "(", ")"};
+        LinearLayout row = null;
+        for (int i = 0; i < operators.length; i++) {
+            if (i % 3 == 0) {
+                row = new LinearLayout(this);
+                row.setOrientation(LinearLayout.HORIZONTAL);
+                LinearLayout.LayoutParams rowParams = new LinearLayout.LayoutParams(
+                        LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT);
+                rowParams.setMargins(0, i == 0 ? 0 : dp(5), 0, 0);
+                llOperatorButtons.addView(row, rowParams);
+            }
+            String operator = operators[i];
+            Button button = tokenButton(operator);
+            button.setOnClickListener(v -> appendOperatorToken(operator));
+            LinearLayout.LayoutParams params = new LinearLayout.LayoutParams(0, dp(38), 1);
+            params.setMargins(i % 3 == 0 ? 0 : dp(6), 0, 0, 0);
+            row.addView(button, params);
+        }
+    }
+
+    private Button tokenButton(String label) {
+        Button button = new Button(this);
+        button.setText(label);
+        button.setTextSize(15);
+        button.setTextColor(Color.rgb(53, 43, 69));
+        button.setBackgroundResource(R.drawable.bg_number_chip);
+        return button;
+    }
+
+    private void appendNumberToken(int index) {
+        if (index < 0 || index >= availableNumbers.size() || usedNumberIndexes.contains(index) || !etExpression.isEnabled()) {
+            return;
+        }
+        usedNumberIndexes.add(index);
+        expressionTokens.add(new Token(String.valueOf(availableNumbers.get(index)), index));
+        setExpressionFromTokens();
+        refreshNumberButtons();
+    }
+
+    private void appendOperatorToken(String operator) {
+        if (!etExpression.isEnabled()) {
+            return;
+        }
+        expressionTokens.add(new Token(operator, -1));
+        setExpressionFromTokens();
+    }
+
+    private void deleteLastExpressionToken() {
+        if (!expressionTokens.isEmpty() && etExpression.getText().toString().equals(joinTokens())) {
+            Token token = expressionTokens.remove(expressionTokens.size() - 1);
+            if (token.numberIndex >= 0) {
+                usedNumberIndexes.remove(token.numberIndex);
+            }
+            setExpressionFromTokens();
+            refreshNumberButtons();
+            return;
+        }
+        String expression = etExpression.getText().toString();
+        if (!expression.isEmpty()) {
+            updatingExpressionProgrammatically = true;
+            etExpression.setText(expression.substring(0, expression.length() - 1));
+            etExpression.setSelection(etExpression.getText().length());
+            updatingExpressionProgrammatically = false;
+            expressionTokens.clear();
+            recalculateUsedNumbersFromExpression(etExpression.getText().toString());
+            refreshNumberButtons();
+        }
+    }
+
+    private void clearExpression() {
+        expressionTokens.clear();
+        usedNumberIndexes.clear();
+        updatingExpressionProgrammatically = true;
+        etExpression.setText("");
+        updatingExpressionProgrammatically = false;
+        refreshNumberButtons();
+    }
+
+    private void setExpressionFromTokens() {
+        updatingExpressionProgrammatically = true;
+        etExpression.setText(joinTokens());
+        etExpression.setSelection(etExpression.getText().length());
+        updatingExpressionProgrammatically = false;
+    }
+
+    private String joinTokens() {
+        StringBuilder builder = new StringBuilder();
+        for (Token token : expressionTokens) {
+            builder.append(token.text);
+        }
+        return builder.toString();
+    }
+
+    private void recalculateUsedNumbersFromExpression(String expression) {
+        usedNumberIndexes.clear();
+        int i = 0;
+        while (i < expression.length()) {
+            char c = expression.charAt(i);
+            if (Character.isDigit(c)) {
+                int start = i;
+                while (i < expression.length() && Character.isDigit(expression.charAt(i))) {
+                    i++;
+                }
+                int value = Integer.parseInt(expression.substring(start, i));
+                int index = firstUnusedNumberIndex(value);
+                if (index >= 0) {
+                    usedNumberIndexes.add(index);
+                }
+            } else {
+                i++;
+            }
+        }
+    }
+
+    private int firstUnusedNumberIndex(int value) {
+        for (int i = 0; i < availableNumbers.size(); i++) {
+            if (!usedNumberIndexes.contains(i) && availableNumbers.get(i) == value) {
+                return i;
+            }
+        }
+        return -1;
+    }
+
+    private void refreshNumberButtons() {
+        boolean controlsEnabled = etExpression != null && etExpression.isEnabled();
+        for (int i = 0; i < numberButtons.size(); i++) {
+            Button button = numberButtons.get(i);
+            boolean used = usedNumberIndexes.contains(i);
+            button.setEnabled(controlsEnabled && !used);
+            button.setBackgroundResource(used ? R.drawable.bg_number_chip_used : R.drawable.bg_number_chip);
+            button.setTextColor(used ? Color.rgb(124, 112, 146) : Color.rgb(53, 43, 69));
+        }
+    }
+
+    private void refreshOperatorButtons(boolean enabled) {
+        if (llOperatorButtons == null) {
+            return;
+        }
+        for (int i = 0; i < llOperatorButtons.getChildCount(); i++) {
+            View row = llOperatorButtons.getChildAt(i);
+            if (row instanceof LinearLayout) {
+                LinearLayout linearRow = (LinearLayout) row;
+                for (int j = 0; j < linearRow.getChildCount(); j++) {
+                    linearRow.getChildAt(j).setEnabled(enabled);
+                }
+            }
+        }
+    }
+
+    private int dp(int value) {
+        return (int) (value * getResources().getDisplayMetrics().density);
+    }
+
+    private static class Token {
+        final String text;
+        final int numberIndex;
+
+        Token(String text, int numberIndex) {
+            this.text = text;
+            this.numberIndex = numberIndex;
+        }
     }
 
     private String challengeStatus(String status) {

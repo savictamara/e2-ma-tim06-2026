@@ -1100,6 +1100,27 @@ public class GameRepository {
             DocumentSnapshot game = transaction.get(gameRef);
             DocumentSnapshot existing = transaction.get(roundRef);
             if (existing.exists()) {
+                if (isGameReady(game)) {
+                    String p1 = game.getString("player1Uid");
+                    String p2 = game.getString("player2Uid");
+                    String active = activeUidForRound(game, roundNumber, p1, p2);
+                    String opponent = opponentUidForRound(game, roundNumber, p1, p2);
+                    String existingActive = existing.getString("activePlayerUid");
+                    String existingOpponent = existing.getString("opponentUid");
+                    if (!active.equals(existingActive) || !opponent.equals(existingOpponent)) {
+                        transaction.update(roundRef,
+                                "activePlayerUid", active,
+                                "opponentUid", opponent,
+                                "updatedAt", FieldValue.serverTimestamp());
+                        transaction.set(gameRef, mapOf("currentMiniGame", MINI_MY_NUMBER,
+                                "currentPlayerUid", active,
+                                "updatedAt", FieldValue.serverTimestamp()), SetOptions.merge());
+                        Log.d(TAG, "Repair existing my number round gameId=" + gameId
+                                + ", round=" + roundNumber
+                                + ", active=" + existingActive + "->" + active
+                                + ", opponent=" + existingOpponent + "->" + opponent);
+                    }
+                }
                 return null;
             }
             Log.d(TAG, "Creating my number round, gameId=" + gameId + ", roundNumber=" + roundNumber);
@@ -2009,6 +2030,7 @@ public class GameRepository {
             round.put("remainingLeftIndexes", Arrays.asList(0, 1, 2, 3, 4));
             round.put("currentLeftIndex", null);
             round.put("currentSelection", null);
+            round.put("spojniceVisualState", new HashMap<String, Object>());
             round.put("finished", false);
             round.put("phaseStartedAt", FieldValue.serverTimestamp());
             round.put("createdAt", FieldValue.serverTimestamp());
@@ -2064,11 +2086,19 @@ public class GameRepository {
                     + ", selectedRightIndex=" + rightIndex + ", correct=" + correct);
             updatedAttemptsByPlayer.put(uid, playerAttempts);
             if (!correct) {
+                Map<String, Object> visualState = new HashMap<>();
+                visualState.put("selectedLeft", null);
+                visualState.put("selectedRight", null);
+                visualState.put("wrongLeft", leftIndex);
+                visualState.put("wrongRight", rightIndex);
+                visualState.put("updatedBy", uid);
+                visualState.put("updatedAt", FieldValue.serverTimestamp());
                 Map<String, Object> updates = connectionProgressUpdates(round, roundNumber, phase, uid,
                         playerAttempts, intList(round.get("remainingLeftIndexes")));
                 updates.put("attemptsByPlayer", updatedAttemptsByPlayer);
                 updates.put("usedLeftIndexes", usedLeftIndexes);
                 updates.put("currentSelection", null);
+                updates.put("spojniceVisualState", visualState);
                 updates.put("updatedAt", FieldValue.serverTimestamp());
                 transaction.update(roundRef, updates);
                 updateConnectionsGameForPhase(transaction, gameRef, game, round, roundNumber, updates);
@@ -2087,6 +2117,7 @@ public class GameRepository {
             updates.put("matchedPairs." + leftIndex, match);
             updates.put("remainingLeftIndexes", remaining);
             updates.put("currentSelection", null);
+            updates.put("spojniceVisualState", new HashMap<String, Object>());
             updates.put("updatedAt", FieldValue.serverTimestamp());
             transaction.update(roundRef, updates);
             applyScore(transaction, gameRef, game, uid, 2);
@@ -2109,6 +2140,33 @@ public class GameRepository {
         selection.put("rightIndex", rightIndex);
         selection.put("updatedAt", FieldValue.serverTimestamp());
         return roundRef.update("currentSelection", selection, "updatedAt", FieldValue.serverTimestamp());
+    }
+
+    public Task<Void> updateConnectionVisualState(String gameId, int roundNumber, String uid,
+                                                  Integer selectedLeft, Integer selectedRight,
+                                                  Integer wrongLeft, Integer wrongRight) {
+        if (db == null) {
+            return Tasks.forException(new IllegalStateException("Firebase nije inicijalizovan"));
+        }
+        DocumentReference roundRef = db.collection("games").document(gameId)
+                .collection("rounds").document(connectionsRoundId(roundNumber));
+        Map<String, Object> visualState = new HashMap<>();
+        visualState.put("selectedLeft", selectedLeft);
+        visualState.put("selectedRight", selectedRight);
+        visualState.put("wrongLeft", wrongLeft);
+        visualState.put("wrongRight", wrongRight);
+        visualState.put("updatedBy", uid);
+        visualState.put("updatedAt", FieldValue.serverTimestamp());
+        return roundRef.update("spojniceVisualState", visualState);
+    }
+
+    public Task<Void> clearConnectionVisualState(String gameId, int roundNumber) {
+        if (db == null) {
+            return Tasks.forException(new IllegalStateException("Firebase nije inicijalizovan"));
+        }
+        return db.collection("games").document(gameId)
+                .collection("rounds").document(connectionsRoundId(roundNumber))
+                .update("spojniceVisualState", new HashMap<String, Object>());
     }
 
     private Map<String, Object> connectionProgressUpdates(DocumentSnapshot round, int roundNumber,

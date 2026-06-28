@@ -1,6 +1,8 @@
 package rs.ac.uns.ftn.slagalica;
 
 import android.content.Intent;
+import android.content.res.ColorStateList;
+import android.graphics.Color;
 import android.os.Bundle;
 import android.os.CountDownTimer;
 import android.util.Log;
@@ -31,6 +33,7 @@ import rs.ac.uns.ftn.slagalica.util.GuestSession;
 
 public class SpojniceActivity extends AppCompatActivity {
     private static final String TAG = "SpojniceActivity";
+    private static final String DEBUG_TAG = "SpojniceDebug";
     private static final long PHASE_DURATION_MS = 30000;
 
     private final Button[] leftButtons = new Button[5];
@@ -67,6 +70,13 @@ public class SpojniceActivity extends AppCompatActivity {
     private String currentSelectionUid = "";
     private int currentSelectionLeftIndex = -1;
     private int currentSelectionRightIndex = -1;
+    private String wrongSelectionUid = "";
+    private int wrongSelectionLeftIndex = -1;
+    private int wrongSelectionRightIndex = -1;
+    private String lastWrongSelectionKey = "";
+    private int visualSelectedLeftIndex = -1;
+    private int visualSelectedRightIndex = -1;
+    private String lastGameplayKey = "";
 
     private TextView tvRound;
     private TextView tvCriterion;
@@ -267,6 +277,14 @@ public class SpojniceActivity extends AppCompatActivity {
         usedLeftIndexes = intList(round.get("usedLeftIndexes"));
         remainingLeftIndexes = intList(round.get("remainingLeftIndexes"));
         bindCurrentSelection((Map<String, Object>) round.get("currentSelection"));
+        bindVisualState((Map<String, Object>) round.get("spojniceVisualState"));
+        String gameplayKey = gameplayKey(round);
+        if (gameplayKey.equals(lastGameplayKey)) {
+            renderConnectionButtons();
+            logSpojniceDebug("visual-only");
+            return;
+        }
+        lastGameplayKey = gameplayKey;
         tvRound.setText(getString(R.string.spojnice_round, roundNumber, 2));
         tvCriterion.setText("Kriterijum: " + connectionCriterion(round));
 
@@ -276,7 +294,7 @@ public class SpojniceActivity extends AppCompatActivity {
             leftButtons[i].setText(i < leftItems.size() ? leftItems.get(i) : "");
             rightButtons[i].setText(i < rightItems.size() ? rightItems.get(i) : "");
         }
-        refreshButtons();
+        renderConnectionButtons();
         updateStatus();
 
         if ("FINISHED".equals(phase) || Boolean.TRUE.equals(round.getBoolean("finished"))) {
@@ -335,10 +353,22 @@ public class SpojniceActivity extends AppCompatActivity {
             return;
         }
         selectedLeftIndex = leftIndex;
+        wrongSelectionLeftIndex = -1;
+        wrongSelectionRightIndex = -1;
+        visualSelectedLeftIndex = leftIndex;
+        visualSelectedRightIndex = -1;
         Log.d(TAG, "selectedLeftIndex=" + selectedLeftIndex + ", gameId=" + gameId + ", round=" + roundNumber);
-        refreshButtons();
-        gameRepository.updateConnectionSelection(gameId, roundNumber, uid, selectedLeftIndex, null)
-                .addOnFailureListener(e -> Log.e(TAG, "Update left connection selection failed", e));
+        Log.d(DEBUG_TAG, "click uid=" + uid + ", isMyTurn=" + canCurrentUserPlay()
+                + ", side=left, index=" + leftIndex
+                + ", localSelectedLeft=" + selectedLeftIndex
+                + ", localSelectedRight=" + selectedRightIndex);
+        logSpojniceDebug("left-click");
+        renderConnectionButtons();
+        if (!challengeRun) {
+            gameRepository.updateConnectionVisualState(gameId, roundNumber, uid, leftIndex, null, null, null)
+                    .addOnSuccessListener(unused -> logVisualWrite("left", leftIndex, null, null, null))
+                    .addOnFailureListener(e -> Log.e(TAG, "Update connection visual left failed", e));
+        }
     }
 
     private void onRightSelected(int rightIndex) {
@@ -351,11 +381,24 @@ public class SpojniceActivity extends AppCompatActivity {
         }
         int leftIndex = selectedLeftIndex;
         selectedRightIndex = rightIndex;
-        refreshButtons();
+        wrongSelectionLeftIndex = -1;
+        wrongSelectionRightIndex = -1;
+        visualSelectedLeftIndex = leftIndex;
+        visualSelectedRightIndex = rightIndex;
+        renderConnectionButtons();
+        Log.d(DEBUG_TAG, "click uid=" + uid + ", isMyTurn=" + canCurrentUserPlay()
+                + ", side=right, index=" + rightIndex
+                + ", localSelectedLeft=" + selectedLeftIndex
+                + ", localSelectedRight=" + selectedRightIndex);
+        logSpojniceDebug("right-click");
+        if (!challengeRun) {
+            gameRepository.updateConnectionVisualState(gameId, roundNumber, uid, leftIndex, rightIndex, null, null)
+                    .addOnSuccessListener(unused -> logVisualWrite("right", leftIndex, rightIndex, null, null))
+                    .addOnFailureListener(e -> Log.e(TAG, "Update connection visual right failed", e));
+        }
         Log.d(TAG, "Submit pair selectedLeftIndex=" + leftIndex + ", selectedRightIndex=" + rightIndex
                 + ", phase=" + phase + ", uid=" + uid);
-        gameRepository.updateConnectionSelection(gameId, roundNumber, uid, leftIndex, rightIndex)
-                .addOnCompleteListener(selectionTask -> submitSelectedPair(leftIndex, rightIndex));
+        submitSelectedPair(leftIndex, rightIndex);
     }
 
     private void submitSelectedPair(int leftIndex, int rightIndex) {
@@ -363,7 +406,7 @@ public class SpojniceActivity extends AppCompatActivity {
                 .addOnSuccessListener(correct -> {
                     selectedLeftIndex = -1;
                     selectedRightIndex = -1;
-                    refreshButtons();
+                    renderConnectionButtons();
                     if (!Boolean.TRUE.equals(correct)) {
                         show("Netačno");
                     }
@@ -371,7 +414,7 @@ public class SpojniceActivity extends AppCompatActivity {
                 .addOnFailureListener(e -> {
                     selectedLeftIndex = -1;
                     selectedRightIndex = -1;
-                    refreshButtons();
+                    renderConnectionButtons();
                     Log.e(TAG, "Submit connection pair failed", e);
                     show(e.getMessage());
                 });
@@ -455,25 +498,47 @@ public class SpojniceActivity extends AppCompatActivity {
         return valid;
     }
 
-    private void refreshButtons() {
+    private void renderConnectionButtons() {
         for (int i = 0; i < leftButtons.length; i++) {
             if (isLeftMatched(i)) {
-                leftButtons[i].setBackgroundResource(R.drawable.bg_answer_correct);
-            } else if (i == selectedLeftIndex || i == currentSelectionLeftIndex) {
-                leftButtons[i].setBackgroundResource(R.drawable.bg_answer_selected);
+                applyConnectionStyle(leftButtons[i], R.drawable.bg_answer_correct, false);
+                Log.d(DEBUG_TAG, "render left index=" + i + ", style=correct");
+            } else if (i == wrongSelectionLeftIndex) {
+                applyConnectionStyle(leftButtons[i], R.drawable.bg_answer_wrong,
+                        canCurrentUserPlay() && !hasCurrentPlayerAttempted(i));
+                Log.d(DEBUG_TAG, "render left index=" + i + ", style=wrong");
+            } else if (i == selectedLeftIndex || i == currentSelectionLeftIndex || i == visualSelectedLeftIndex) {
+                applyConnectionStyle(leftButtons[i], R.drawable.bg_answer_selected,
+                        canCurrentUserPlay() && !hasCurrentPlayerAttempted(i));
+                Log.d(DEBUG_TAG, "render left index=" + i + ", style=selected");
             } else {
-                leftButtons[i].setBackgroundResource(R.drawable.bg_step);
+                applyConnectionStyle(leftButtons[i], R.drawable.bg_step,
+                        canCurrentUserPlay() && !hasCurrentPlayerAttempted(i));
             }
         }
         for (int i = 0; i < rightButtons.length; i++) {
             if (isRightMatched(i)) {
-                rightButtons[i].setBackgroundResource(R.drawable.bg_answer_correct);
-            } else if (i == selectedRightIndex || i == currentSelectionRightIndex) {
-                rightButtons[i].setBackgroundResource(R.drawable.bg_answer_selected);
+                applyConnectionStyle(rightButtons[i], R.drawable.bg_answer_correct, false);
+                Log.d(DEBUG_TAG, "render right index=" + i + ", style=correct");
+            } else if (i == wrongSelectionRightIndex) {
+                applyConnectionStyle(rightButtons[i], R.drawable.bg_answer_wrong, canCurrentUserPlay());
+                Log.d(DEBUG_TAG, "render right index=" + i + ", style=wrong");
+            } else if (i == selectedRightIndex || i == currentSelectionRightIndex || i == visualSelectedRightIndex) {
+                applyConnectionStyle(rightButtons[i], R.drawable.bg_answer_selected, canCurrentUserPlay());
+                Log.d(DEBUG_TAG, "render right index=" + i + ", style=selected");
             } else {
-                rightButtons[i].setBackgroundResource(R.drawable.bg_step);
+                applyConnectionStyle(rightButtons[i], R.drawable.bg_step, canCurrentUserPlay());
             }
         }
+    }
+
+    private void applyConnectionStyle(Button button, int backgroundRes, boolean clickable) {
+        button.setBackgroundTintList((ColorStateList) null);
+        button.setBackgroundResource(backgroundRes);
+        button.setEnabled(true);
+        button.setClickable(clickable);
+        button.setAlpha(1f);
+        button.setTextColor(Color.rgb(53, 43, 69));
     }
 
     private boolean canCurrentUserPlay() {
@@ -509,9 +574,12 @@ public class SpojniceActivity extends AppCompatActivity {
 
     private void setPairButtonsEnabled(boolean enabled) {
         for (int i = 0; i < leftButtons.length; i++) {
-            leftButtons[i].setEnabled(enabled && !isLeftMatched(i) && !hasCurrentPlayerAttempted(i));
-            rightButtons[i].setEnabled(enabled && !isRightMatched(i));
+            leftButtons[i].setEnabled(true);
+            rightButtons[i].setEnabled(true);
+            leftButtons[i].setClickable(enabled && !isLeftMatched(i) && !hasCurrentPlayerAttempted(i));
+            rightButtons[i].setClickable(enabled && !isRightMatched(i));
         }
+        renderConnectionButtons();
         Log.d(TAG, "Pair buttons enabled=" + enabled + ", gameId=" + gameId
                 + ", roundId=" + gameRepository.connectionsRoundId(roundNumber)
                 + ", currentUserUid=" + uid + ", phase=" + phase
@@ -623,6 +691,74 @@ public class SpojniceActivity extends AppCompatActivity {
                 + ", currentUserUid=" + uid);
     }
 
+    private void bindVisualState(Map<String, Object> visualState) {
+        visualSelectedLeftIndex = -1;
+        visualSelectedRightIndex = -1;
+        wrongSelectionUid = "";
+        wrongSelectionLeftIndex = -1;
+        wrongSelectionRightIndex = -1;
+        if (visualState == null) {
+            return;
+        }
+        Object updatedBy = visualState.get("updatedBy");
+        Object selectedLeft = visualState.get("selectedLeft");
+        Object selectedRight = visualState.get("selectedRight");
+        Object wrongLeft = visualState.get("wrongLeft");
+        Object wrongRight = visualState.get("wrongRight");
+        wrongSelectionUid = updatedBy == null ? "" : String.valueOf(updatedBy);
+        if (selectedLeft instanceof Number) {
+            visualSelectedLeftIndex = ((Number) selectedLeft).intValue();
+        }
+        if (selectedRight instanceof Number) {
+            visualSelectedRightIndex = ((Number) selectedRight).intValue();
+        }
+        if (wrongLeft instanceof Number) {
+            wrongSelectionLeftIndex = ((Number) wrongLeft).intValue();
+        }
+        if (wrongRight instanceof Number) {
+            wrongSelectionRightIndex = ((Number) wrongRight).intValue();
+        }
+        scheduleWrongSelectionClear();
+    }
+
+    private String gameplayKey(DocumentSnapshot round) {
+        return value(round.getString("phase"))
+                + "|" + value(round.getString("activePlayerUid"))
+                + "|" + value(round.getString("opponentUid"))
+                + "|" + round.getBoolean("finished")
+                + "|" + String.valueOf(round.get("matchedPairs"))
+                + "|" + String.valueOf(round.get("attemptsByPlayer"))
+                + "|" + String.valueOf(round.get("usedLeftIndexes"))
+                + "|" + String.valueOf(round.get("remainingLeftIndexes"))
+                + "|" + String.valueOf(round.getLong("roundIndex"));
+    }
+
+    private void logSpojniceDebug(String event) {
+        int matchedSize = matchedPairs == null ? 0 : matchedPairs.size();
+        Log.d(DEBUG_TAG, "event=" + event
+                + ", uid=" + uid
+                + ", isMyTurn=" + canCurrentUserPlay()
+                + ", selectedLeft=" + selectedLeftIndex
+                + ", selectedRight=" + selectedRightIndex
+                + ", visualSelectedLeft=" + visualSelectedLeftIndex
+                + ", visualSelectedRight=" + visualSelectedRightIndex
+                + ", visualWrongLeft=" + wrongSelectionLeftIndex
+                + ", visualWrongRight=" + wrongSelectionRightIndex
+                + ", matchedPairsSize=" + matchedSize
+                + ", phase=" + phase
+                + ", status=" + gameStatus);
+    }
+
+    private void logVisualWrite(String event, Integer selectedLeft, Integer selectedRight,
+                                Integer wrongLeft, Integer wrongRight) {
+        Log.d(DEBUG_TAG, "visual-write event=" + event
+                + ", uid=" + uid
+                + ", selectedLeft=" + selectedLeft
+                + ", selectedRight=" + selectedRight
+                + ", wrongLeft=" + wrongLeft
+                + ", wrongRight=" + wrongRight);
+    }
+
     private void setStatus(String status) {
         if (challengeRun) {
             status = challengeStatus(status);
@@ -653,6 +789,52 @@ public class SpojniceActivity extends AppCompatActivity {
                 + ", phase=" + phase
                 + ", calculatedStatusText=" + status
                 + ", isCurrentUsersTurn=" + isCurrentUsersTurn);
+    }
+
+    private void bindWrongSelection(Map<String, Object> selection) {
+        wrongSelectionUid = "";
+        wrongSelectionLeftIndex = -1;
+        wrongSelectionRightIndex = -1;
+        if (selection == null) {
+            return;
+        }
+        Object selectionUid = selection.get("uid");
+        Object left = selection.get("leftIndex");
+        Object right = selection.get("rightIndex");
+        wrongSelectionUid = selectionUid == null ? "" : String.valueOf(selectionUid);
+        if (left instanceof Number) {
+            wrongSelectionLeftIndex = ((Number) left).intValue();
+        }
+        if (right instanceof Number) {
+            wrongSelectionRightIndex = ((Number) right).intValue();
+        }
+        Log.d(TAG, "Wrong selection uid=" + wrongSelectionUid
+                + ", leftIndex=" + wrongSelectionLeftIndex
+                + ", rightIndex=" + wrongSelectionRightIndex
+                + ", currentUserUid=" + uid);
+    }
+
+    private void scheduleWrongSelectionClear() {
+        if (wrongSelectionLeftIndex < 0 || wrongSelectionRightIndex < 0) {
+            lastWrongSelectionKey = "";
+            return;
+        }
+        String key = wrongSelectionUid + ":" + wrongSelectionLeftIndex + ":" + wrongSelectionRightIndex + ":" + roundNumber;
+        if (key.equals(lastWrongSelectionKey)) {
+            return;
+        }
+        lastWrongSelectionKey = key;
+        findViewById(android.R.id.content).postDelayed(() -> {
+            if (key.equals(lastWrongSelectionKey)) {
+                wrongSelectionLeftIndex = -1;
+                wrongSelectionRightIndex = -1;
+                renderConnectionButtons();
+                if (!challengeRun && gameRepository != null && gameId != null && !gameId.isEmpty()) {
+                    gameRepository.clearConnectionVisualState(gameId, roundNumber)
+                            .addOnFailureListener(e -> Log.e(TAG, "Clear connection visual state failed", e));
+                }
+            }
+        }, 700);
     }
 
     private String challengeStatus(String status) {

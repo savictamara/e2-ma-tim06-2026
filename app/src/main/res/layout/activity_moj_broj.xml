@@ -145,7 +145,20 @@
             </LinearLayout>
 
             <TextView android:id="@+id/tvNumbers" android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginTop="6dp" android:text="- - - - - -" android:textColor="@color/game_text_color" android:textSize="18sp" android:textStyle="bold"/>
-            <TextView android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginTop="3dp" android:text="( ) + - * /" android:textColor="@color/text_muted"/>
+
+            <LinearLayout
+                android:id="@+id/llNumberButtons"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="6dp"
+                android:orientation="vertical" />
+
+            <LinearLayout
+                android:id="@+id/llOperatorButtons"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="5dp"
+                android:orientation="vertical" />
 
             <EditText android:id="@+id/etExpression" android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginTop="5dp" android:background="@drawable/bg_step" android:hint="@string/hint_expression" android:padding="8dp" android:textColor="@color/game_text_color" android:textColorHint="@color/input_hint_color"/>
 
@@ -156,6 +169,7 @@
                 android:orientation="horizontal">
 
                 <Button android:id="@+id/btnDelete" style="@style/Widget.MaterialComponents.Button" android:layout_width="0dp" android:layout_height="42dp" android:layout_weight="1" android:background="@drawable/bg_button_secondary" android:text="@string/delete_last" android:textColor="@color/text_main"/>
+                <Button android:id="@+id/btnClearExpression" style="@style/Widget.MaterialComponents.Button" android:layout_width="0dp" android:layout_height="42dp" android:layout_marginStart="8dp" android:layout_weight="1" android:background="@drawable/bg_button_secondary" android:text="Ocisti" android:textColor="@color/text_main"/>
                 <Button android:id="@+id/btnConfirm" style="@style/Widget.MaterialComponents.Button" android:layout_width="0dp" android:layout_height="42dp" android:layout_marginStart="8dp" android:layout_weight="1" android:background="@drawable/bg_button_primary" android:text="@string/submit_result" android:textColor="@color/white"/>
             </LinearLayout>
 
