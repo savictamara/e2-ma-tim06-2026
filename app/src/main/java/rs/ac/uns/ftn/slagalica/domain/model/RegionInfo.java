@@ -81,4 +81,8 @@ public class RegionInfo {
         }
         return inside;
     }
+
+    public boolean containsLatLon(double latitude, double longitude) {
+        return contains((float) longitude, (float) latitude);
+    }
 }

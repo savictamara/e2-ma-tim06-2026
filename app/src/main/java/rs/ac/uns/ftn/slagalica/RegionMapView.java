@@ -1,14 +1,20 @@
 package rs.ac.uns.ftn.slagalica;
 
 import android.content.Context;
+import android.graphics.Bitmap;
 import android.graphics.Canvas;
 import android.graphics.Color;
 import android.graphics.Paint;
-import android.graphics.Path;
-import android.graphics.RectF;
 import android.util.AttributeSet;
-import android.view.MotionEvent;
-import android.view.View;
+import android.graphics.drawable.BitmapDrawable;
+import android.graphics.drawable.Drawable;
+
+import org.osmdroid.config.Configuration;
+import org.osmdroid.util.BoundingBox;
+import org.osmdroid.util.GeoPoint;
+import org.osmdroid.views.MapView;
+import org.osmdroid.views.overlay.Marker;
+import org.osmdroid.views.overlay.Polygon;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -19,39 +25,37 @@ import rs.ac.uns.ftn.slagalica.domain.model.RegionInfo;
 import rs.ac.uns.ftn.slagalica.domain.model.RegionPoint;
 import rs.ac.uns.ftn.slagalica.domain.model.RegionStats;
 
-public class RegionMapView extends View {
+public class RegionMapView extends MapView {
     public interface OnRegionClickListener {
         void onRegionClick(String regionId);
     }
 
-    private final Paint fillPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
-    private final Paint strokePaint = new Paint(Paint.ANTI_ALIAS_FLAG);
-    private final Paint textPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
-    private final Paint pointPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
     private final List<RegionStats> regions = new ArrayList<>();
     private final List<RegionPoint> points = new ArrayList<>();
     private String currentRegionId = "";
     private String selectedRegionId = "";
     private OnRegionClickListener listener;
+    private boolean shouldFitBounds = true;
 
     public RegionMapView(Context context) {
         super(context);
-        init();
+        init(context);
     }
 
     public RegionMapView(Context context, AttributeSet attrs) {
         super(context, attrs);
-        init();
+        init(context);
     }
 
-    private void init() {
-        setLayerType(View.LAYER_TYPE_SOFTWARE, null);
-        fillPaint.setStyle(Paint.Style.FILL);
-        strokePaint.setStyle(Paint.Style.STROKE);
-        strokePaint.setStrokeWidth(dp(2));
-        textPaint.setTextAlign(Paint.Align.CENTER);
-        textPaint.setFakeBoldText(true);
-        pointPaint.setStyle(Paint.Style.FILL);
+    private void init(Context context) {
+        Configuration.getInstance().setUserAgentValue(context.getPackageName());
+        setMultiTouchControls(true);
+        getController().setZoom(7.1);
+        getController().setCenter(new GeoPoint(44.05, 20.75));
+        setMinZoomLevel(6.5);
+        setMaxZoomLevel(12.0);
+        setMapOrientation(0f);
+        setTilesScaledToDpi(true);
     }
 
     public void setData(List<RegionStats> regionStats, List<RegionPoint> regionPoints, String currentUserRegionId) {
@@ -72,12 +76,13 @@ public class RegionMapView extends View {
         if (selectedRegionId.isEmpty()) {
             selectedRegionId = currentRegionId;
         }
-        invalidate();
+        shouldFitBounds = true;
+        render();
     }
 
     public void setSelectedRegionId(String regionId) {
         selectedRegionId = regionId == null ? "" : regionId;
-        invalidate();
+        render();
     }
 
     public String getSelectedRegionId() {
@@ -88,132 +93,303 @@ public class RegionMapView extends View {
         this.listener = listener;
     }
 
+    private void render() {
+        getOverlays().clear();
+        drawRegionPolygons();
+        drawRegionLabels();
+        drawPlayerMarkers();
+        if (shouldFitBounds) {
+            fitSerbiaBoundsWhenReady();
+        }
+        invalidate();
+    }
+
+    private void fitSerbiaBoundsWhenReady() {
+        post(() -> {
+            shouldFitBounds = false;
+            try {
+                BoundingBox bounds = allRegionBounds();
+                if (bounds == null || getWidth() == 0 || getHeight() == 0) {
+                    applyFallbackView();
+                    return;
+                }
+                setMapOrientation(0f);
+                zoomToBoundingBox(bounds, false, dp(52));
+            } catch (Exception ignored) {
+                applyFallbackView();
+            }
+        });
+    }
+
+    private void applyFallbackView() {
+        setMapOrientation(0f);
+        getController().setCenter(new GeoPoint(44.05, 20.75));
+        getController().setZoom(7.1);
+    }
+
+    private BoundingBox allRegionBounds() {
+        double north = -90.0;
+        double south = 90.0;
+        double east = -180.0;
+        double west = 180.0;
+        boolean hasPoint = false;
+        for (RegionInfo info : RegionRepository.regions()) {
+            for (GeoPoint point : geoPoints(info)) {
+                north = Math.max(north, point.getLatitude());
+                south = Math.min(south, point.getLatitude());
+                east = Math.max(east, point.getLongitude());
+                west = Math.min(west, point.getLongitude());
+                hasPoint = true;
+            }
+        }
+        return hasPoint ? new BoundingBox(north, east, south, west) : null;
+    }
+
+    private void drawRegionPolygons() {
+        for (RegionInfo info : orderedRegionsForDrawing()) {
+            Polygon polygon = new Polygon(this);
+            polygon.setPoints(geoPoints(info));
+            polygon.setTitle(info.name);
+            polygon.setSubDescription(regionIcon(info.id));
+            polygon.getFillPaint().setColor(fillColor(info));
+            boolean highlighted = info.id.equals(currentRegionId) || info.id.equals(selectedRegionId);
+            polygon.getOutlinePaint().setColor(highlighted
+                    ? Color.rgb(82, 58, 135) : Color.argb(210, 78, 78, 88));
+            polygon.getOutlinePaint().setStrokeWidth(highlighted ? dpFloat(2.5f) : dpFloat(1.3f));
+            polygon.getOutlinePaint().setStyle(Paint.Style.STROKE);
+            polygon.setOnClickListener((poly, mapView, eventPos) -> {
+                selectedRegionId = info.id;
+                if (listener != null) {
+                    listener.onRegionClick(info.id);
+                }
+                render();
+                return true;
+            });
+            getOverlays().add(polygon);
+        }
+    }
+
+    private void drawRegionLabels() {
+        for (RegionInfo info : RegionRepository.regions()) {
+            Marker marker = new Marker(this);
+            marker.setPosition(new GeoPoint(info.centerLatitude(), info.centerLongitude()));
+            marker.setTitle(info.name);
+            marker.setSnippet(regionIcon(info.id));
+            marker.setTextLabelFontSize(12);
+            marker.setTextLabelBackgroundColor(Color.argb(120, 255, 255, 255));
+            marker.setTextLabelForegroundColor(Color.rgb(53, 43, 69));
+            marker.setIcon(textIcon(regionIcon(info.id), 11));
+            marker.setAnchor(Marker.ANCHOR_CENTER, Marker.ANCHOR_CENTER);
+            marker.setOnMarkerClickListener((m, mapView) -> {
+                selectedRegionId = info.id;
+                if (listener != null) {
+                    listener.onRegionClick(info.id);
+                }
+                render();
+                return true;
+            });
+            getOverlays().add(marker);
+        }
+    }
+
+    private void drawPlayerMarkers() {
+        List<GeoPoint> placed = new ArrayList<>();
+        for (RegionPoint point : points) {
+            RegionInfo info = RegionRepository.infoById(point.regionId);
+            if (info == null || !isPointInPolygon(point.latitude, point.longitude, geoPoints(info))) {
+                continue;
+            }
+            GeoPoint position = spreadPoint(point, info, placed);
+            placed.add(position);
+            Marker marker = new Marker(this);
+            marker.setPosition(position);
+            marker.setTitle(point.username);
+            marker.setSnippet("Zvezde: " + point.stars + " | Liga: " + point.leagueName);
+            marker.setIcon(dotIcon(colorForRegion(point.regionId), 14));
+            marker.setAnchor(Marker.ANCHOR_CENTER, Marker.ANCHOR_CENTER);
+            marker.setOnMarkerClickListener((m, mapView) -> {
+                if (listener != null) {
+                    listener.onRegionClick(point.regionId);
+                }
+                m.showInfoWindow();
+                return true;
+            });
+            getOverlays().add(marker);
+        }
+    }
+
+    private int fillColor(RegionInfo info) {
+        int base = colorForRegion(info.id);
+        int alpha = info.id.equals(currentRegionId) || info.id.equals(selectedRegionId) ? 74 : 40;
+        return Color.argb(alpha, Color.red(base), Color.green(base), Color.blue(base));
+    }
+
+    private List<RegionInfo> orderedRegionsForDrawing() {
+        List<RegionInfo> ordered = new ArrayList<>();
+        addRegionIfPresent(ordered, "SUMADIJA_ZAPADNA_SRBIJA");
+        addRegionIfPresent(ordered, "JUZNA_ISTOCNA_SRBIJA");
+        addRegionIfPresent(ordered, "KOSOVO_METOHIJA");
+        addRegionIfPresent(ordered, "VOJVODINA");
+        addRegionIfPresent(ordered, "BEOGRAD");
+        for (RegionInfo info : RegionRepository.regions()) {
+            if (!containsRegion(ordered, info.id)) {
+                ordered.add(info);
+            }
+        }
+        return ordered;
+    }
+
+    private void addRegionIfPresent(List<RegionInfo> regions, String regionId) {
+        RegionInfo info = RegionRepository.infoById(regionId);
+        if (info != null) {
+            regions.add(info);
+        }
+    }
+
+    private boolean containsRegion(List<RegionInfo> regions, String regionId) {
+        for (RegionInfo info : regions) {
+            if (info.id.equals(regionId)) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    private GeoPoint spreadPoint(RegionPoint point, RegionInfo info, List<GeoPoint> placed) {
+        double lat = point.latitude;
+        double lon = point.longitude;
+        List<GeoPoint> polygon = geoPoints(info);
+        for (int i = 0; i < placed.size(); i++) {
+            GeoPoint other = placed.get(i);
+            if (Math.abs(other.getLatitude() - lat) < 0.012 && Math.abs(other.getLongitude() - lon) < 0.012) {
+                double angle = (i % 8) * Math.PI / 4.0;
+                double offset = 0.008 + Math.min(0.012, (i % 3) * 0.004);
+                double nextLat = lat + Math.sin(angle) * offset;
+                double nextLon = lon + Math.cos(angle) * offset;
+                if (isPointInPolygon(nextLat, nextLon, polygon)) {
+                    lat = nextLat;
+                    lon = nextLon;
+                }
+            }
+        }
+        return new GeoPoint(lat, lon);
+    }
+
+    private int colorForRegion(String regionId) {
+        if ("VOJVODINA".equals(regionId)) return Color.rgb(117, 201, 139);
+        if ("BEOGRAD".equals(regionId)) return Color.rgb(111, 181, 232);
+        if ("SUMADIJA_ZAPADNA_SRBIJA".equals(regionId)) return Color.rgb(242, 174, 101);
+        if ("JUZNA_ISTOCNA_SRBIJA".equals(regionId)) return Color.rgb(169, 137, 223);
+        if ("KOSOVO_METOHIJA".equals(regionId)) return Color.rgb(234, 133, 170);
+        return Color.rgb(160, 160, 160);
+    }
+
+    private String regionIcon(String regionId) {
+        if ("VOJVODINA".equals(regionId)) return "V";
+        if ("BEOGRAD".equals(regionId)) return "BG";
+        if ("SUMADIJA_ZAPADNA_SRBIJA".equals(regionId)) return "SZ";
+        if ("JUZNA_ISTOCNA_SRBIJA".equals(regionId)) return "JI";
+        if ("KOSOVO_METOHIJA".equals(regionId)) return "KM";
+        return "";
+    }
+
+    private Drawable dotIcon(int color, int dpSize) {
+        int size = dp(dpSize);
+        Bitmap bitmap = Bitmap.createBitmap(size, size, Bitmap.Config.ARGB_8888);
+        Canvas canvas = new Canvas(bitmap);
+        Paint paint = new Paint(Paint.ANTI_ALIAS_FLAG);
+        paint.setColor(Color.WHITE);
+        canvas.drawCircle(size / 2f, size / 2f, size / 2f, paint);
+        paint.setColor(color);
+        canvas.drawCircle(size / 2f, size / 2f, size * 0.36f, paint);
+        return new BitmapDrawable(getResources(), bitmap);
+    }
+
+    private Drawable textIcon(String text, int sp) {
+        int size = dp(20);
+        Bitmap bitmap = Bitmap.createBitmap(size, size, Bitmap.Config.ARGB_8888);
+        Canvas canvas = new Canvas(bitmap);
+        Paint paint = new Paint(Paint.ANTI_ALIAS_FLAG);
+        paint.setColor(Color.argb(215, 255, 255, 255));
+        canvas.drawCircle(size / 2f, size / 2f, size * 0.48f, paint);
+        paint.setStyle(Paint.Style.STROKE);
+        paint.setStrokeWidth(Math.max(1f, dpFloat(0.8f)));
+        paint.setColor(Color.argb(170, 82, 78, 91));
+        canvas.drawCircle(size / 2f, size / 2f, size * 0.45f, paint);
+        paint.setStyle(Paint.Style.FILL);
+        paint.setColor(Color.rgb(53, 43, 69));
+        paint.setTextAlign(Paint.Align.CENTER);
+        paint.setFakeBoldText(true);
+        paint.setTextSize(sp * getResources().getDisplayMetrics().scaledDensity);
+        Paint.FontMetrics metrics = paint.getFontMetrics();
+        canvas.drawText(text, size / 2f, size / 2f - (metrics.ascent + metrics.descent) / 2f, paint);
+        return new BitmapDrawable(getResources(), bitmap);
+    }
+
+    private int dp(int value) {
+        return (int) (value * getResources().getDisplayMetrics().density);
+    }
+
+    private float dpFloat(float value) {
+        return value * getResources().getDisplayMetrics().density;
+    }
+
+    private List<GeoPoint> geoPoints(RegionInfo info) {
+        List<GeoPoint> geoPoints = new ArrayList<>();
+        for (int i = 0; i + 1 < info.polygon.length; i += 2) {
+            geoPoints.add(new GeoPoint(info.polygon[i + 1], info.polygon[i]));
+        }
+        return geoPoints;
+    }
+
     public static RegionPoint getRandomPointInsideRegion(String uid, String username, String regionId) {
         RegionInfo info = RegionRepository.infoById(regionId);
         if (info == null) {
             return null;
         }
-        Random random = new Random();
-        for (int i = 0; i < 200; i++) {
-            float x = random.nextFloat();
-            float y = random.nextFloat();
-            if (info.contains(x, y)) {
-                return new RegionPoint(uid, username, info.id, x, y);
-            }
-        }
-        return new RegionPoint(uid, username, info.id, info.centerX(), info.centerY());
-    }
-
-    @Override
-    protected void onDraw(Canvas canvas) {
-        super.onDraw(canvas);
-        RectF bounds = mapBounds();
-        drawMapContainer(canvas, bounds);
-        drawRegions(canvas, bounds);
-        drawPoints(canvas, bounds);
-    }
-
-    private void drawMapContainer(Canvas canvas, RectF bounds) {
-        fillPaint.setColor(Color.rgb(253, 249, 255));
-        strokePaint.setColor(Color.rgb(199, 178, 255));
-        canvas.drawRoundRect(bounds, dp(18), dp(18), fillPaint);
-        canvas.drawRoundRect(bounds, dp(18), dp(18), strokePaint);
-    }
-
-    private void drawRegions(Canvas canvas, RectF bounds) {
-        textPaint.setTextSize(dp(11));
-        for (RegionInfo info : RegionRepository.regions()) {
-            boolean selected = info.id.equals(selectedRegionId);
-            boolean current = info.id.equals(currentRegionId);
-            Path path = pathFor(info, bounds);
-            fillPaint.setColor(selected ? Color.rgb(238, 158, 198) : info.color);
-            strokePaint.setColor(current || selected ? Color.rgb(53, 43, 69) : Color.WHITE);
-            strokePaint.setStrokeWidth(current || selected ? dp(4) : dp(2));
-            canvas.drawPath(path, fillPaint);
-            canvas.drawPath(path, strokePaint);
-
-            float cx = mapX(info.centerX(), bounds);
-            float cy = mapY(info.centerY(), bounds);
-            fillPaint.setColor(Color.argb(210, 255, 255, 255));
-            RectF icon = new RectF(cx - dp(18), cy - dp(16), cx + dp(18), cy + dp(16));
-            canvas.drawRoundRect(icon, dp(9), dp(9), fillPaint);
-            textPaint.setColor(Color.rgb(53, 43, 69));
-            canvas.drawText(info.iconName, cx, cy + dp(5), textPaint);
-        }
-    }
-
-    private void drawPoints(Canvas canvas, RectF bounds) {
-        pointPaint.setColor(Color.rgb(53, 43, 69));
-        strokePaint.setColor(Color.WHITE);
-        strokePaint.setStrokeWidth(dp(1));
-        for (RegionPoint point : points) {
-            RegionInfo info = RegionRepository.infoById(point.regionId);
-            if (info == null || !info.contains(point.x, point.y)) {
-                continue;
-            }
-            float cx = mapX(point.x, bounds);
-            float cy = mapY(point.y, bounds);
-            canvas.drawCircle(cx, cy, dp(4), pointPaint);
-            canvas.drawCircle(cx, cy, dp(4), strokePaint);
-        }
-    }
-
-    @Override
-    public boolean onTouchEvent(MotionEvent event) {
-        if (event.getAction() == MotionEvent.ACTION_UP) {
-            RectF bounds = mapBounds();
-            float x = unmapX(event.getX(), bounds);
-            float y = unmapY(event.getY(), bounds);
-            for (RegionInfo info : RegionRepository.regions()) {
-                if (info.contains(x, y)) {
-                    selectedRegionId = info.id;
-                    invalidate();
-                    if (listener != null) {
-                        listener.onRegionClick(info.id);
-                    }
-                    return true;
-                }
-            }
-        }
-        return true;
-    }
-
-    private Path pathFor(RegionInfo info, RectF bounds) {
-        Path path = new Path();
+        List<GeoPoint> polygon = new ArrayList<>();
         for (int i = 0; i + 1 < info.polygon.length; i += 2) {
-            float x = mapX(info.polygon[i], bounds);
-            float y = mapY(info.polygon[i + 1], bounds);
-            if (i == 0) {
-                path.moveTo(x, y);
-            } else {
-                path.lineTo(x, y);
+            polygon.add(new GeoPoint(info.polygon[i + 1], info.polygon[i]));
+        }
+        Random random = new Random();
+        for (int i = 0; i < 600; i++) {
+            double lat = info.minLatitude + random.nextDouble() * (info.maxLatitude - info.minLatitude);
+            double lon = info.minLongitude + random.nextDouble() * (info.maxLongitude - info.minLongitude);
+            if (isPointInPolygon(lat, lon, polygon)) {
+                return new RegionPoint(uid, username, info.id, lat, lon);
             }
         }
-        path.close();
-        return path;
+        GeoPoint centroid = centroid(polygon);
+        return new RegionPoint(uid, username, info.id, centroid.getLatitude(), centroid.getLongitude());
     }
 
-    private RectF mapBounds() {
-        return new RectF(dp(16), dp(14), getWidth() - dp(16), getHeight() - dp(14));
+    public static boolean isPointInPolygon(double lat, double lon, List<GeoPoint> polygon) {
+        boolean inside = false;
+        int count = polygon == null ? 0 : polygon.size();
+        for (int i = 0, j = count - 1; i < count; j = i++) {
+            double yi = polygon.get(i).getLatitude();
+            double xi = polygon.get(i).getLongitude();
+            double yj = polygon.get(j).getLatitude();
+            double xj = polygon.get(j).getLongitude();
+            boolean intersect = ((yi > lat) != (yj > lat))
+                    && (lon < (xj - xi) * (lat - yi) / ((yj - yi) == 0 ? 0.0000001 : (yj - yi)) + xi);
+            if (intersect) {
+                inside = !inside;
+            }
+        }
+        return inside;
     }
 
-    private float mapX(float x, RectF bounds) {
-        return bounds.left + x * bounds.width();
-    }
-
-    private float mapY(float y, RectF bounds) {
-        return bounds.top + y * bounds.height();
-    }
-
-    private float unmapX(float x, RectF bounds) {
-        return Math.max(0f, Math.min(1f, (x - bounds.left) / bounds.width()));
-    }
-
-    private float unmapY(float y, RectF bounds) {
-        return Math.max(0f, Math.min(1f, (y - bounds.top) / bounds.height()));
-    }
-
-    private float dp(float value) {
-        return value * getResources().getDisplayMetrics().density;
+    private static GeoPoint centroid(List<GeoPoint> polygon) {
+        double lat = 0;
+        double lon = 0;
+        if (polygon == null || polygon.isEmpty()) {
+            return new GeoPoint(44.0, 20.8);
+        }
+        for (GeoPoint point : polygon) {
+            lat += point.getLatitude();
+            lon += point.getLongitude();
+        }
+        return new GeoPoint(lat / polygon.size(), lon / polygon.size());
     }
 }

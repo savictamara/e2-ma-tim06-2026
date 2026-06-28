@@ -5,6 +5,7 @@ import android.util.Log;
 
 import com.google.android.gms.tasks.Task;
 import com.google.android.gms.tasks.Tasks;
+import com.google.firebase.Timestamp;
 import com.google.firebase.firestore.DocumentReference;
 import com.google.firebase.firestore.DocumentSnapshot;
 import com.google.firebase.firestore.FieldValue;
@@ -69,6 +70,8 @@ public class RegionRepository {
                 "regionId", info.id,
                 "regionName", info.name,
                 "region", info.name,
+                "regionLat", point.latitude,
+                "regionLon", point.longitude,
                 "regionPointX", point.x,
                 "regionPointY", point.y,
                 "monthlyRegionStars", 0,
@@ -79,8 +82,11 @@ public class RegionRepository {
                 "avatarFrameColor", ""
         ), SetOptions.merge());
         batch.set(regionRef(info.id), baseStatsData(info), SetOptions.merge());
+        batch.set(cycleRegionRef(currentCycleId(), info.id), baseStatsData(info), SetOptions.merge());
         batch.set(regionRef(info.id), mapOf("totalRegisteredPlayers", FieldValue.increment(1),
                 "totalPlayers", FieldValue.increment(1)), SetOptions.merge());
+        batch.set(cycleRegionRef(currentCycleId(), info.id), mapOf("registeredPlayers", FieldValue.increment(1),
+                "totalRegisteredPlayers", FieldValue.increment(1)), SetOptions.merge());
         batch.set(pointRef(info.id, uid), pointData(point, username), SetOptions.merge());
         return batch.commit();
     }
@@ -115,6 +121,11 @@ public class RegionRepository {
             ), SetOptions.merge());
             transaction.set(regionRef(info.id), baseStatsData(info), SetOptions.merge());
             transaction.set(regionRef(info.id), mapOf(
+                    "monthlyStars", FieldValue.increment(starsWon),
+                    "cycleId", currentCycle
+            ), SetOptions.merge());
+            transaction.set(cycleRegionRef(currentCycle, info.id), baseStatsData(info), SetOptions.merge());
+            transaction.set(cycleRegionRef(currentCycle, info.id), mapOf(
                     "monthlyStars", FieldValue.increment(starsWon),
                     "cycleId", currentCycle
             ), SetOptions.merge());
@@ -293,6 +304,7 @@ public class RegionRepository {
             Map<String, Object> data = baseStatsData(info);
             data.put("cycleId", current);
             batch.set(regionRef(info.id), data, SetOptions.merge());
+            batch.set(cycleRegionRef(current, info.id), data, SetOptions.merge());
         }
         return batch.commit();
     }
@@ -324,11 +336,13 @@ public class RegionRepository {
                 continue;
             }
             total.put(regionId, total.getOrDefault(regionId, 0L) + 1);
-            if (Boolean.TRUE.equals(user.getBoolean("online"))) {
+            if (isActiveUser(user)) {
                 active.put(regionId, active.getOrDefault(regionId, 0L) + 1);
             }
             RegionPoint point = pointForUser(user, info, batch);
             if (point != null) {
+                point.stars = longValue(user.get("stars"));
+                point.leagueName = firstNonEmpty(user.getString("leagueName"), "Liga " + longValue(user.get("league")));
                 dashboard.points.add(point);
             }
             RegionStats regionStats = stats.get(regionId);
@@ -345,6 +359,12 @@ public class RegionRepository {
                     "activePlayers", regionStats.activePlayers,
                     "totalRegisteredPlayers", regionStats.totalPlayers,
                     "totalPlayers", regionStats.totalPlayers
+            ), SetOptions.merge());
+            batch.set(cycleRegionRef(currentCycleId(), regionStats.regionId), mapOf(
+                    "activePlayers", regionStats.activePlayers,
+                    "registeredPlayers", regionStats.totalPlayers,
+                    "totalRegisteredPlayers", regionStats.totalPlayers,
+                    "monthlyStars", regionStats.monthlyStars
             ), SetOptions.merge());
         }
         Collections.sort(dashboard.regions, (a, b) -> Long.compare(b.monthlyStars, a.monthlyStars));
@@ -370,11 +390,15 @@ public class RegionRepository {
 
     private RegionPoint pointForUser(DocumentSnapshot user, RegionInfo info, WriteBatch batch) {
         String username = firstNonEmpty(user.getString("username"), user.getId());
+        Double lat = doubleValue(user.get("regionLat"));
+        Double lon = doubleValue(user.get("regionLon"));
         Float x = floatValue(user.get("regionPointX"));
         Float y = floatValue(user.get("regionPointY"));
         RegionPoint point;
-        if (x != null && y != null && info.contains(x, y)) {
-            point = new RegionPoint(user.getId(), username, info.id, x, y);
+        if (lat != null && lon != null && info.containsLatLon(lat, lon)) {
+            point = new RegionPoint(user.getId(), username, info.id, lat, lon);
+        } else if (x != null && y != null && info.contains(x, y)) {
+            point = new RegionPoint(user.getId(), username, info.id, y, x);
         } else {
             point = RegionMapView.getRandomPointInsideRegion(user.getId(), username, info.id);
             if (point == null) {
@@ -384,6 +408,8 @@ public class RegionRepository {
                     "regionId", info.id,
                     "regionName", info.name,
                     "region", firstNonEmpty(user.getString("region"), info.name),
+                    "regionLat", point.latitude,
+                    "regionLon", point.longitude,
                     "regionPointX", point.x,
                     "regionPointY", point.y
             ), SetOptions.merge());
@@ -394,16 +420,16 @@ public class RegionRepository {
 
     public static List<RegionInfo> regions() {
         return Arrays.asList(
-                new RegionInfo("VOJVODINA", "Vojvodina", "V", 0xFFDCCEFF, 0, 0, 0, 0,
-                        new float[]{0.18f, 0.05f, 0.63f, 0.04f, 0.69f, 0.24f, 0.55f, 0.34f, 0.22f, 0.31f, 0.13f, 0.18f}),
-                new RegionInfo("BEOGRAD", "Beograd", "BG", 0xFFF7CCE0, 0, 0, 0, 0,
-                        new float[]{0.42f, 0.32f, 0.59f, 0.34f, 0.61f, 0.46f, 0.45f, 0.47f, 0.37f, 0.40f}),
-                new RegionInfo("SUMADIJA_ZAPADNA_SRBIJA", "Sumadija i Zapadna Srbija", "SZ", 0xFFC7B2FF, 0, 0, 0, 0,
-                        new float[]{0.19f, 0.32f, 0.43f, 0.31f, 0.47f, 0.48f, 0.42f, 0.69f, 0.24f, 0.72f, 0.11f, 0.55f}),
-                new RegionInfo("JUZNA_ISTOCNA_SRBIJA", "Juzna i Istocna Srbija", "JI", 0xFFBFE6D4, 0, 0, 0, 0,
-                        new float[]{0.58f, 0.35f, 0.80f, 0.45f, 0.86f, 0.74f, 0.66f, 0.96f, 0.39f, 0.73f, 0.46f, 0.49f}),
-                new RegionInfo("KOSOVO_METOHIJA", "Kosovo i Metohija", "KM", 0xFFFFD9A8, 0, 0, 0, 0,
-                        new float[]{0.31f, 0.70f, 0.55f, 0.74f, 0.65f, 0.94f, 0.44f, 0.98f, 0.26f, 0.86f})
+                new RegionInfo("VOJVODINA", "Vojvodina", "V", 0xFFDCCEFF, 44.60, 46.20, 18.75, 21.55,
+                        new float[]{18.85f, 45.70f, 19.05f, 46.10f, 20.30f, 46.20f, 21.45f, 45.70f, 21.35f, 44.85f, 20.30f, 44.62f, 19.10f, 44.75f}),
+                new RegionInfo("BEOGRAD", "Beograd", "BG", 0xFFF7CCE0, 44.55, 45.10, 19.95, 20.85,
+                        new float[]{19.98f, 44.88f, 20.18f, 45.05f, 20.55f, 45.02f, 20.83f, 44.78f, 20.58f, 44.58f, 20.17f, 44.58f}),
+                new RegionInfo("SUMADIJA_ZAPADNA_SRBIJA", "Sumadija i Zapadna Srbija", "SZ", 0xFFC7B2FF, 42.95, 44.90, 18.85, 21.00,
+                        new float[]{18.90f, 44.55f, 19.25f, 44.90f, 20.05f, 44.78f, 20.35f, 44.48f, 20.98f, 44.10f, 20.85f, 43.42f, 20.45f, 42.98f, 19.65f, 43.08f, 18.95f, 43.70f}),
+                new RegionInfo("JUZNA_ISTOCNA_SRBIJA", "Juzna i Istocna Srbija", "JI", 0xFFBFE6D4, 42.25, 44.90, 20.50, 23.05,
+                        new float[]{20.55f, 44.48f, 21.20f, 44.85f, 22.75f, 44.60f, 23.00f, 43.05f, 22.45f, 42.38f, 21.40f, 42.25f, 20.55f, 43.05f}),
+                new RegionInfo("KOSOVO_METOHIJA", "Kosovo i Metohija", "KM", 0xFFFFD9A8, 41.85, 43.35, 20.00, 21.85,
+                        new float[]{20.05f, 43.20f, 20.55f, 43.35f, 21.35f, 43.20f, 21.78f, 42.65f, 21.58f, 41.95f, 20.75f, 41.86f, 20.18f, 42.32f})
         );
     }
 
@@ -483,6 +509,10 @@ public class RegionRepository {
                 "username", firstNonEmpty(username, point.username),
                 "x", point.x,
                 "y", point.y,
+                "lat", point.latitude,
+                "lon", point.longitude,
+                "regionLat", point.latitude,
+                "regionLon", point.longitude,
                 "regionId", point.regionId,
                 "createdAt", FieldValue.serverTimestamp()
         );
@@ -519,6 +549,22 @@ public class RegionRepository {
 
     private DocumentReference pointRef(String regionId, String uid) {
         return regionRef(regionId).collection("points").document(uid);
+    }
+
+    private DocumentReference cycleRegionRef(String cycleId, String regionId) {
+        return db.collection("regionStats").document(cycleId).collection("regions").document(regionId);
+    }
+
+    private boolean isActiveUser(DocumentSnapshot user) {
+        if (Boolean.TRUE.equals(user.getBoolean("online"))) {
+            return true;
+        }
+        Timestamp lastActiveAt = user.getTimestamp("lastActiveAt");
+        if (lastActiveAt == null) {
+            return false;
+        }
+        long ageMs = System.currentTimeMillis() - lastActiveAt.toDate().getTime();
+        return ageMs >= 0 && ageMs <= 10 * 60 * 1000;
     }
 
     private String currentCycleId() {
@@ -561,6 +607,10 @@ public class RegionRepository {
 
     private Float floatValue(Object value) {
         return value instanceof Number ? ((Number) value).floatValue() : null;
+    }
+
+    private Double doubleValue(Object value) {
+        return value instanceof Number ? ((Number) value).doubleValue() : null;
     }
 
     private long longValue(Object value) {

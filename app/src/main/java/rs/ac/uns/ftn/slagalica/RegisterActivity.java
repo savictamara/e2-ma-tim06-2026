@@ -30,6 +30,7 @@ public class RegisterActivity extends AppCompatActivity {
     private String selectedRegionId = "";
     private String selectedRegionName = "";
     private String pendingRegistrationUid = "";
+    private RegionMapView registerRegionMap;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -43,7 +44,7 @@ public class RegisterActivity extends AppCompatActivity {
         EditText etEmail = findViewById(R.id.etEmail);
         EditText etUsername = findViewById(R.id.etUsername);
         EditText etRegion = findViewById(R.id.etRegion);
-        RegionMapView registerRegionMap = findViewById(R.id.registerRegionMap);
+        registerRegionMap = findViewById(R.id.registerRegionMap);
         EditText etPassword = findViewById(R.id.etPassword);
         EditText etRepeatPassword = findViewById(R.id.etRepeatPassword);
         TextView tvRegisterMessage = findViewById(R.id.tvRegisterMessage);
@@ -150,5 +151,21 @@ public class RegisterActivity extends AppCompatActivity {
             stats.add(new RegionStats(info.id, info.name, info.iconName));
         }
         return stats;
+    }
+
+    @Override
+    protected void onResume() {
+        super.onResume();
+        if (registerRegionMap != null) {
+            registerRegionMap.onResume();
+        }
+    }
+
+    @Override
+    protected void onPause() {
+        if (registerRegionMap != null) {
+            registerRegionMap.onPause();
+        }
+        super.onPause();
     }
 }

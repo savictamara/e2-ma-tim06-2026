@@ -1,7 +1,9 @@
 package rs.ac.uns.ftn.slagalica;
 
 import android.content.Intent;
+import android.app.AlertDialog;
 import android.graphics.Color;
+import android.graphics.drawable.ColorDrawable;
 import android.os.Bundle;
 import android.text.TextUtils;
 import android.view.View;
@@ -10,6 +12,7 @@ import android.widget.EditText;
 import android.widget.LinearLayout;
 import android.widget.TextView;
 import android.widget.Toast;
+import android.view.Gravity;
 
 import androidx.appcompat.app.AppCompatActivity;
 
@@ -37,6 +40,7 @@ public class RegionsActivity extends AppCompatActivity {
     private EditText etChallengeStars;
     private EditText etChallengeTokens;
     private String uid = "";
+    private String currentRegionId = "";
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -243,6 +247,7 @@ public class RegionsActivity extends AppCompatActivity {
 
     private void showDashboard(RegionDashboard dashboard) {
         mapView.setData(dashboard.regions, dashboard.points, dashboard.currentUserRegionId);
+        currentRegionId = dashboard.currentUserRegionId == null ? "" : dashboard.currentUserRegionId;
         if (dashboard.currentUserRegionId == null || dashboard.currentUserRegionId.trim().isEmpty()) {
             tvStatus.setText(R.string.regions_missing_region);
         } else {
@@ -267,13 +272,13 @@ public class RegionsActivity extends AppCompatActivity {
         row.setBackgroundResource(stats.regionId.equals(currentRegionId) ? R.drawable.bg_button_secondary : R.drawable.bg_card);
         row.setOnClickListener(v -> openDetail(stats.regionId));
 
-        TextView icon = text(stats.iconName, 18, true);
+        TextView icon = text(medalForPlace(place), 22, true);
         icon.setGravity(android.view.Gravity.CENTER);
         icon.setBackgroundResource(R.drawable.bg_button_primary);
         LinearLayout.LayoutParams iconParams = new LinearLayout.LayoutParams(dp(52), dp(44));
         row.addView(icon, iconParams);
 
-        TextView name = text(place + ". " + stats.regionName, 15, true);
+        TextView name = text(regionIcon(stats.regionId) + " " + stats.regionName, 15, true);
         LinearLayout.LayoutParams nameParams = new LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1);
         nameParams.setMargins(dp(12), 0, dp(8), 0);
         row.addView(name, nameParams);
@@ -295,13 +300,134 @@ public class RegionsActivity extends AppCompatActivity {
         return textView;
     }
 
+    private String regionShortLabel(String regionId) {
+        if ("VOJVODINA".equals(regionId)) return "V";
+        if ("BEOGRAD".equals(regionId)) return "BG";
+        if ("SUMADIJA_ZAPADNA_SRBIJA".equals(regionId)) return "SZ";
+        if ("JUZNA_ISTOCNA_SRBIJA".equals(regionId)) return "JI";
+        if ("KOSOVO_METOHIJA".equals(regionId)) return "KM";
+        return "";
+    }
+
     private void openDetail(String regionId) {
-        Intent intent = new Intent(this, RegionDetailActivity.class);
-        intent.putExtra(RegionDetailActivity.EXTRA_REGION_ID, regionId);
-        startActivity(intent);
+        regionRepository.getRegionStats(regionId)
+                .addOnSuccessListener(stats -> {
+                    if (System.currentTimeMillis() >= 0) {
+                        showRegionStatsDialog(regionId, stats);
+                        return;
+                    }
+                    LinearLayout content = new LinearLayout(this);
+                    content.setOrientation(LinearLayout.VERTICAL);
+                    content.setPadding(dp(8), dp(4), dp(8), 0);
+                    TextView title = text(regionIcon(stats.regionId) + "  " + stats.regionName, 22, true);
+                    title.setGravity(Gravity.CENTER_HORIZONTAL);
+                    content.addView(title);
+                    if (stats.regionId.equals(currentRegionId)) {
+                        TextView badge = text("Vaš region", 13, true);
+                        badge.setGravity(Gravity.CENTER);
+                        badge.setTextColor(Color.WHITE);
+                        badge.setBackgroundResource(R.drawable.bg_button_primary);
+                        LinearLayout.LayoutParams badgeParams = new LinearLayout.LayoutParams(
+                                LinearLayout.LayoutParams.WRAP_CONTENT, LinearLayout.LayoutParams.WRAP_CONTENT);
+                        badgeParams.gravity = Gravity.CENTER_HORIZONTAL;
+                        badgeParams.setMargins(0, dp(8), 0, dp(8));
+                        badge.setPadding(dp(12), dp(6), dp(12), dp(6));
+                        content.addView(badge, badgeParams);
+                    }
+                    content.addView(text("Mesečne zvezde: " + stats.monthlyStars, 15, false));
+                    content.addView(text("Trenutni plasman: " + stats.currentRank, 15, false));
+                    content.addView(text("Prva mesta: " + stats.firstPlaces, 15, false));
+                    content.addView(text("Druga mesta: " + stats.secondPlaces, 15, false));
+                    content.addView(text("Treća mesta: " + stats.thirdPlaces, 15, false));
+                    content.addView(text("Aktivni igrači: " + stats.activePlayers, 15, false));
+                    content.addView(text("Registrovani igrači: " + stats.totalPlayers, 15, false));
+                    new AlertDialog.Builder(this)
+                            .setView(content)
+                            .setPositiveButton(android.R.string.ok, null)
+                            .setNegativeButton("Detalji", (dialog, which) -> {
+                                Intent intent = new Intent(this, RegionDetailActivity.class);
+                                intent.putExtra(RegionDetailActivity.EXTRA_REGION_ID, regionId);
+                                startActivity(intent);
+                            })
+                            .show();
+                })
+                .addOnFailureListener(e -> Toast.makeText(this,
+                        e == null || e.getMessage() == null ? "Region nije ucitan" : e.getMessage(),
+                        Toast.LENGTH_SHORT).show());
+    }
+
+    private void showRegionStatsDialog(String regionId, RegionStats stats) {
+        View content = getLayoutInflater().inflate(R.layout.dialog_region_stats, null, false);
+        ((TextView) content.findViewById(R.id.tvRegionDialogIcon)).setText(regionShortLabel(stats.regionId));
+        ((TextView) content.findViewById(R.id.tvRegionDialogName)).setText(stats.regionName);
+        TextView badge = content.findViewById(R.id.tvRegionDialogCurrentBadge);
+        badge.setVisibility(stats.regionId.equals(currentRegionId) ? View.VISIBLE : View.GONE);
+        ((TextView) content.findViewById(R.id.tvRegionDialogMonthlyStars))
+                .setText("Mesecne zvezde: " + stats.monthlyStars);
+        ((TextView) content.findViewById(R.id.tvRegionDialogRank))
+                .setText("Trenutni plasman: " + stats.currentRank);
+        ((TextView) content.findViewById(R.id.tvRegionDialogFirst))
+                .setText("Prva mesta: " + stats.firstPlaces);
+        ((TextView) content.findViewById(R.id.tvRegionDialogSecond))
+                .setText("Druga mesta: " + stats.secondPlaces);
+        ((TextView) content.findViewById(R.id.tvRegionDialogThird))
+                .setText("Treca mesta: " + stats.thirdPlaces);
+        ((TextView) content.findViewById(R.id.tvRegionDialogActive))
+                .setText("Aktivni igraci: " + stats.activePlayers);
+        ((TextView) content.findViewById(R.id.tvRegionDialogRegistered))
+                .setText("Registrovani igraci: " + stats.totalPlayers);
+
+        AlertDialog dialog = new AlertDialog.Builder(this)
+                .setView(content)
+                .create();
+        content.findViewById(R.id.btnRegionDialogClose).setOnClickListener(v -> dialog.dismiss());
+        content.findViewById(R.id.btnRegionDialogDetails).setOnClickListener(v -> {
+            dialog.dismiss();
+            Intent intent = new Intent(this, RegionDetailActivity.class);
+            intent.putExtra(RegionDetailActivity.EXTRA_REGION_ID, regionId);
+            startActivity(intent);
+        });
+        dialog.setOnShowListener(d -> {
+            if (dialog.getWindow() != null) {
+                dialog.getWindow().setBackgroundDrawable(new ColorDrawable(Color.TRANSPARENT));
+            }
+        });
+        dialog.show();
+    }
+
+    @Override
+    protected void onResume() {
+        super.onResume();
+        if (mapView != null) {
+            mapView.onResume();
+        }
+    }
+
+    @Override
+    protected void onPause() {
+        if (mapView != null) {
+            mapView.onPause();
+        }
+        super.onPause();
     }
 
     private int dp(int value) {
         return (int) (value * getResources().getDisplayMetrics().density);
+    }
+
+    private String medalForPlace(int place) {
+        if (place == 1) return "🥇";
+        if (place == 2) return "🥈";
+        if (place == 3) return "🥉";
+        return String.valueOf(place);
+    }
+
+    private String regionIcon(String regionId) {
+        if ("VOJVODINA".equals(regionId)) return "🌾";
+        if ("BEOGRAD".equals(regionId)) return "🏙";
+        if ("SUMADIJA_ZAPADNA_SRBIJA".equals(regionId)) return "🌳";
+        if ("JUZNA_ISTOCNA_SRBIJA".equals(regionId)) return "⛰";
+        if ("KOSOVO_METOHIJA".equals(regionId)) return "🏰";
+        return "•";
     }
 }

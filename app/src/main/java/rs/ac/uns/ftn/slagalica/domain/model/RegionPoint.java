@@ -8,6 +8,8 @@ public class RegionPoint {
     public float y;
     public double latitude;
     public double longitude;
+    public long stars;
+    public String leagueName = "";
 
     public RegionPoint(String uid, String username, String regionId, double latitude, double longitude) {
         this.uid = uid;
