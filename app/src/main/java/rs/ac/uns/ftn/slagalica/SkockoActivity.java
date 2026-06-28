@@ -36,6 +36,7 @@ import rs.ac.uns.ftn.slagalica.util.GuestSession;
 
 public class SkockoActivity extends AppCompatActivity {
     private static final String TAG = "SkockoActivity";
+    private static final String DEBUG_TAG = "SkockoDebug";
     private static final String PHASE_ACTIVE_PLAYER = "ACTIVE_PLAYER";
     private static final String PHASE_OPPONENT_CHANCE = "OPPONENT_CHANCE";
     private static final String PHASE_FINISHED = "FINISHED";
@@ -84,6 +85,7 @@ public class SkockoActivity extends AppCompatActivity {
     private String activePlayerUid = "";
     private String opponentUid = "";
     private int roundNumber = 1;
+    private int currentAttemptIndex = 0;
     private int player1Score = 0;
     private int player2Score = 0;
     private boolean statsRecordRequested = false;
@@ -100,6 +102,8 @@ public class SkockoActivity extends AppCompatActivity {
     private TextView tvScoreP2;
     private TextView tvStatus;
     private ImageView[] guessSlots;
+    private ImageView[] opponentLiveSlots;
+    private View opponentLiveContainer;
     private ViewGroup paletteBar;
     private Button btnCheck;
     private GameHeaderHelper headerHelper;
@@ -130,6 +134,13 @@ public class SkockoActivity extends AppCompatActivity {
                 findViewById(R.id.ivGuessSlot2),
                 findViewById(R.id.ivGuessSlot3),
                 findViewById(R.id.ivGuessSlot4)
+        };
+        opponentLiveContainer = findViewById(R.id.opponentLiveContainer);
+        opponentLiveSlots = new ImageView[] {
+                findViewById(R.id.opponentLiveSlot1),
+                findViewById(R.id.opponentLiveSlot2),
+                findViewById(R.id.opponentLiveSlot3),
+                findViewById(R.id.opponentLiveSlot4)
         };
         btnCheck = findViewById(R.id.btnCheck);
 
@@ -297,10 +308,11 @@ public class SkockoActivity extends AppCompatActivity {
         phase = value(round.getString("phase"));
         activePlayerUid = value(round.getString("activePlayerUid"));
         opponentUid = value(round.getString("opponentUid"));
-        int currentAttemptIndex = intValue(round.get("currentAttemptIndex"));
+        currentAttemptIndex = intValue(round.get("currentAttemptIndex"));
         tvRound.setText("Runda: " + roundNumber + "/2");
         tvCurrentPlayer.setText(currentPlayerText());
         renderAttempts(round);
+        renderOpponentVisualState(round);
         updateStatusForPhase();
         boolean canPlay = canCurrentUserPlay();
         setControls(canPlay);
@@ -348,7 +360,10 @@ public class SkockoActivity extends AppCompatActivity {
                 + ", phase=" + phase + ", attempt=" + guess);
         setControls(false);
         gameRepository.submitSkockoAttempt(gameId, roundNumber, uid, guess)
-                .addOnSuccessListener(unused -> resetDraftGuess())
+                .addOnSuccessListener(unused -> {
+                    resetDraftGuess();
+                    writeSkockoVisualState();
+                })
                 .addOnFailureListener(e -> {
                     Log.e(TAG, "Submit skocko attempt failed", e);
                     show(e.getMessage());
@@ -403,6 +418,7 @@ public class SkockoActivity extends AppCompatActivity {
             fillGuessRow(i, stringList(attempt.get("symbols")),
                     intValue(feedback.get("exactMatches")), intValue(feedback.get("partialMatches")));
         }
+        redrawDraftSlots();
     }
 
     private void fillGuessRow(int rowIndex, List<String> symbols, int exact, int partial) {
@@ -442,7 +458,7 @@ public class SkockoActivity extends AppCompatActivity {
             TextView feedback = findViewById(rowFeedbackIds[rowIndex]);
             feedback.setText(buildFeedbackSquares(0, 0));
             feedback.setTextColor(Color.BLACK);
-            feedback.setBackgroundColor(Color.TRANSPARENT);
+            feedback.setBackgroundResource(R.drawable.bg_step);
         }
     }
 
@@ -457,7 +473,10 @@ public class SkockoActivity extends AppCompatActivity {
                 break;
             }
         }
+        Log.d(DEBUG_TAG, "uid=" + uid + ", isMyTurn=" + canCurrentUserPlay()
+                + ", active row index=" + draftRowIndex() + ", current local symbols=" + readPartialDraftGuess());
         redrawDraftSlots();
+        writeSkockoVisualState();
         refreshCheckAvailability();
     }
 
@@ -483,21 +502,93 @@ public class SkockoActivity extends AppCompatActivity {
         return guess;
     }
 
-    private void redrawDraftSlots() {
-        for (int i = 0; i < guessSlots.length; i++) {
-            int idx = draftSymbolIndex[i];
-            if (idx < 0) {
-                guessSlots[i].setImageDrawable(null);
-            } else {
-                guessSlots[i].setImageResource(SYMBOL_DRAWABLES[idx]);
+    private List<String> readPartialDraftGuess() {
+        List<String> guess = new ArrayList<>();
+        for (int index : draftSymbolIndex) {
+            if (index >= 0) {
+                guess.add(SYMBOLS.get(index));
             }
         }
+        return guess;
+    }
+
+    private void redrawDraftSlots() {
+        for (ImageView slot : guessSlots) {
+            slot.setImageDrawable(null);
+        }
+        if (!canCurrentUserPlay()) {
+            return;
+        }
+        int rowIndex = draftRowIndex();
+        for (int i = 0; i < guessSlots.length; i++) {
+            int idx = draftSymbolIndex[i];
+            ImageView boardSlot = findViewById(rowSlotIds[rowIndex][i]);
+            if (idx < 0) {
+                guessSlots[i].setImageDrawable(null);
+                boardSlot.setImageDrawable(null);
+                boardSlot.setBackgroundResource(R.drawable.bg_answer_selected);
+            } else {
+                guessSlots[i].setImageResource(SYMBOL_DRAWABLES[idx]);
+                boardSlot.setImageResource(SYMBOL_DRAWABLES[idx]);
+                boardSlot.setBackgroundResource(R.drawable.bg_answer_selected);
+            }
+        }
+        Log.d(DEBUG_TAG, "uid=" + uid + ", isMyTurn=" + canCurrentUserPlay()
+                + ", active row index=" + rowIndex + ", current local symbols=" + readPartialDraftGuess());
     }
 
     private void resetDraftGuess() {
         Arrays.fill(draftSymbolIndex, -1);
         redrawDraftSlots();
         refreshCheckAvailability();
+    }
+
+    private int draftRowIndex() {
+        if (PHASE_OPPONENT_CHANCE.equals(phase)) {
+            return rowSlotIds.length - 1;
+        }
+        return Math.max(0, Math.min(rowSlotIds.length - 1, currentAttemptIndex));
+    }
+
+    private void writeSkockoVisualState() {
+        if (challengeRun || gameId == null || gameId.isEmpty() || !canCurrentUserPlay()) {
+            return;
+        }
+        List<String> symbols = readPartialDraftGuess();
+        Log.d(DEBUG_TAG, "uid=" + uid + ", isMyTurn=" + canCurrentUserPlay()
+                + ", active row index=" + draftRowIndex() + ", current local symbols=" + symbols);
+        gameRepository.updateSkockoVisualState(gameId, roundNumber, uid, symbols, draftRowIndex())
+                .addOnFailureListener(e -> Log.e(DEBUG_TAG, "Visual-only skocko state write failed", e));
+    }
+
+    private void renderOpponentVisualState(DocumentSnapshot round) {
+        if (opponentLiveContainer == null || opponentLiveSlots == null || challengeRun) {
+            if (opponentLiveContainer != null) {
+                opponentLiveContainer.setVisibility(View.GONE);
+            }
+            return;
+        }
+        Map<String, Object> visual = asMap(round.get("skockoVisualState"));
+        String visualActiveUid = value((String) visual.get("activeUid"));
+        List<String> symbols = stringList(visual.get("currentSymbols"));
+        boolean showOpponentRow = !visualActiveUid.isEmpty() && !uid.equals(visualActiveUid) && !symbols.isEmpty()
+                && (PHASE_ACTIVE_PLAYER.equals(phase) || PHASE_OPPONENT_CHANCE.equals(phase));
+        opponentLiveContainer.setVisibility(showOpponentRow ? View.VISIBLE : View.GONE);
+        for (int i = 0; i < opponentLiveSlots.length; i++) {
+            ImageView slot = opponentLiveSlots[i];
+            slot.setImageDrawable(null);
+            slot.setBackgroundResource(R.drawable.bg_step);
+            if (i < symbols.size()) {
+                int symbolIndex = SYMBOLS.indexOf(symbols.get(i));
+                if (symbolIndex >= 0) {
+                    slot.setImageResource(SYMBOL_DRAWABLES[symbolIndex]);
+                    slot.setBackgroundResource(R.drawable.bg_answer_selected);
+                }
+            }
+        }
+        Log.d(DEBUG_TAG, "uid=" + uid + ", isMyTurn=" + canCurrentUserPlay()
+                + ", visual activeUid=" + visualActiveUid + ", visual currentSymbols=" + symbols
+                + ", opponent row render=" + showOpponentRow);
     }
 
     private void setControls(boolean enabled) {

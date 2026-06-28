@@ -1784,6 +1784,21 @@ public class GameRepository {
         });
     }
 
+    public Task<Void> updateSkockoVisualState(String gameId, int roundNumber, String activeUid,
+                                               List<String> currentSymbols, int attemptIndex) {
+        if (db == null) {
+            return Tasks.forException(new IllegalStateException("Firebase nije inicijalizovan"));
+        }
+        DocumentReference roundRef = db.collection("games").document(gameId)
+                .collection("rounds").document(skockoRoundId(roundNumber));
+        Map<String, Object> visualState = new HashMap<>();
+        visualState.put("activeUid", activeUid);
+        visualState.put("currentSymbols", currentSymbols == null ? new ArrayList<String>() : currentSymbols);
+        visualState.put("attemptIndex", attemptIndex);
+        visualState.put("updatedAt", FieldValue.serverTimestamp());
+        return roundRef.update("skockoVisualState", visualState);
+    }
+
     public Task<Void> handleSkockoTimeout(String gameId, int roundNumber, String expectedPhase) {
         if (db == null) {
             return Tasks.forException(new IllegalStateException("Firebase nije inicijalizovan"));

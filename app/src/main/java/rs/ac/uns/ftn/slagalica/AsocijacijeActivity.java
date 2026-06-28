@@ -32,6 +32,7 @@ import rs.ac.uns.ftn.slagalica.util.GuestSession;
 
 public class AsocijacijeActivity extends AppCompatActivity {
     private static final String TAG = "AsocijacijeActivity";
+    private static final String DEBUG_TAG = "AsocijacijeDebug";
     private static final long ROUND_DURATION_MS = 120_000;
 
     private final int[] cellIds = {
@@ -314,7 +315,11 @@ public class AsocijacijeActivity extends AppCompatActivity {
                 TextView cell = cells[col * 4 + field];
                 boolean isOpen = solvedColumn || (opened != null && Boolean.TRUE.equals(opened.get(col + "_" + field)));
                 String label = String.format(Locale.ROOT, "%c%d", 'A' + col, field + 1);
-                cell.setText(isOpen && field < clues.size() ? label + ": " + clues.get(field) : label);
+                String displayedText = isOpen && field < clues.size() ? clues.get(field) : label;
+                cell.setText(displayedText);
+                if (isOpen) {
+                    Log.d(DEBUG_TAG, "opened field key=" + label + ", displayed field text=" + displayedText);
+                }
                 cell.setEnabled(canOpenField && !solvedColumn && !isOpen);
                 cell.setBackgroundResource(solvedColumn ? R.drawable.bg_answer_correct : R.drawable.bg_step);
             }
