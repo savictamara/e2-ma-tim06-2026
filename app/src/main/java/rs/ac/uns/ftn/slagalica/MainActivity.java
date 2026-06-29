@@ -77,6 +77,8 @@ public class MainActivity extends AppCompatActivity {
         Button btnFriends = findViewById(R.id.btnFriends);
         Button btnRegions = findViewById(R.id.btnRegions);
         Button btnLeaderboards = findViewById(R.id.btnLeaderboards);
+        Button btnTournament = findViewById(R.id.btnTournament);
+        Button btnDailyMissions = findViewById(R.id.btnDailyMissions);
 
         btnLogin.setOnClickListener(v -> startActivity(new Intent(this, LoginActivity.class)));
         btnRegister.setOnClickListener(v -> startActivity(new Intent(this, RegisterActivity.class)));
@@ -94,6 +96,8 @@ public class MainActivity extends AppCompatActivity {
         btnFriends.setOnClickListener(v -> startActivity(new Intent(this, FriendsActivity.class)));
         btnRegions.setOnClickListener(v -> startActivity(new Intent(this, RegionsActivity.class)));
         btnLeaderboards.setOnClickListener(v -> startActivity(new Intent(this, LeaderboardActivity.class)));
+        btnTournament.setOnClickListener(v -> startActivity(new Intent(this, TournamentBracketActivity.class)));
+        btnDailyMissions.setOnClickListener(v -> startActivity(new Intent(this, DailyMissionsActivity.class)));
         updateAccountUi();
         grantDailyTokens();
         ensureLeaderboardsAndRewards();

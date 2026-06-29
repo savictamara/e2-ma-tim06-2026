@@ -23,6 +23,7 @@ import java.util.Date;
 import java.util.Locale;
 
 import rs.ac.uns.ftn.slagalica.data.repository.ChatRepository;
+import rs.ac.uns.ftn.slagalica.data.repository.DailyMissionRepository;
 import rs.ac.uns.ftn.slagalica.data.repository.FirebaseAuthRepository;
 import rs.ac.uns.ftn.slagalica.data.repository.UserRepository;
 import rs.ac.uns.ftn.slagalica.domain.model.ChatMessage;
@@ -33,6 +34,7 @@ public class ChatActivity extends AppCompatActivity {
     private FirebaseAuthRepository authRepository;
     private UserRepository userRepository;
     private ChatRepository chatRepository;
+    private DailyMissionRepository dailyMissionRepository;
     private ListenerRegistration messageListener;
     private String uid = "";
     private String username = "";
@@ -60,6 +62,7 @@ public class ChatActivity extends AppCompatActivity {
         authRepository = new FirebaseAuthRepository(this);
         userRepository = new UserRepository(this);
         chatRepository = new ChatRepository(this);
+        dailyMissionRepository = new DailyMissionRepository(this);
         btnSend.setOnClickListener(v -> sendMessage());
 
         FirebaseUser user = authRepository.currentUser();
@@ -160,6 +163,10 @@ public class ChatActivity extends AppCompatActivity {
                 .addOnSuccessListener(ignored -> {
                     etMessage.setText("");
                     btnSend.setEnabled(true);
+                    if (dailyMissionRepository != null && dailyMissionRepository.isReady()) {
+                        dailyMissionRepository.completeMission(uid, DailyMissionRepository.SEND_CHAT)
+                                .addOnFailureListener(e -> android.util.Log.e("DailyMissionDebug", "Chat mission failed", e));
+                    }
                 })
                 .addOnFailureListener(e -> {
                     btnSend.setEnabled(true);

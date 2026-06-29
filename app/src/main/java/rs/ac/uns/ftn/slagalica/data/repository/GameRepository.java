@@ -678,7 +678,11 @@ public class GameRepository {
         updates.put("updatedAt", FieldValue.serverTimestamp());
         RewardResult player1Reward = RewardResult.none();
         RewardResult player2Reward = RewardResult.none();
-        if (!friendly) {
+        if ("TOURNAMENT".equals(game.getString("matchType"))) {
+            Log.d(TAG, "Tournament game finished without normal rewards gameId=" + gameRef.getId()
+                    + ", winner=" + winner
+                    + ", round=" + game.getString("tournamentRound"));
+        } else if (!friendly) {
             player1Reward = applyPlayerReward(transaction, player1, player1Score, player1.equals(winner), player1.equals(loser));
             player2Reward = applyPlayerReward(transaction, player2, player2Score, player2.equals(winner), player2.equals(loser));
         } else {

@@ -133,6 +133,16 @@
                 android:background="@drawable/bg_button_primary"
                 android:text="Rang liste"
                 android:textColor="@color/white" />
+
+            <Button
+                android:id="@+id/btnDailyMissions"
+                style="@style/Widget.MaterialComponents.Button"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="10dp"
+                android:background="@drawable/bg_button_secondary"
+                android:text="Dnevne misije"
+                android:textColor="@color/text_main" />
         </LinearLayout>
 
         <LinearLayout
@@ -159,6 +169,16 @@
                 android:background="@drawable/bg_button_primary"
                 android:text="@string/go_full_match"
                 android:textColor="@color/white" />
+
+            <Button
+                android:id="@+id/btnTournament"
+                style="@style/Widget.MaterialComponents.Button"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="10dp"
+                android:background="@drawable/bg_button_secondary"
+                android:text="Turnir"
+                android:textColor="@color/text_main" />
 
         </LinearLayout>
 

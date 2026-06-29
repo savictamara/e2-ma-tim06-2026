@@ -10,6 +10,8 @@ import android.widget.Toast;
 import androidx.appcompat.app.AppCompatActivity;
 
 import com.google.android.gms.tasks.Tasks;
+import com.google.firebase.auth.FirebaseAuth;
+import com.google.firebase.auth.FirebaseUser;
 import com.google.firebase.firestore.DocumentSnapshot;
 import com.google.firebase.firestore.QuerySnapshot;
 
@@ -19,17 +21,22 @@ import java.util.List;
 import java.util.Map;
 
 import rs.ac.uns.ftn.slagalica.data.repository.ChallengeRepository;
+import rs.ac.uns.ftn.slagalica.data.repository.DailyMissionRepository;
 import rs.ac.uns.ftn.slagalica.data.repository.GameRepository;
+import rs.ac.uns.ftn.slagalica.data.repository.TournamentRepository;
 import rs.ac.uns.ftn.slagalica.data.repository.UserRepository;
 import rs.ac.uns.ftn.slagalica.domain.model.ChallengeParticipant;
 import rs.ac.uns.ftn.slagalica.util.FirebaseInitializer;
 import rs.ac.uns.ftn.slagalica.util.GameFlow;
+import rs.ac.uns.ftn.slagalica.util.GuestSession;
 
 public class FinalResultActivity extends AppCompatActivity {
     private static final String CHALLENGE_TAG = "FinalResultChallengeDebug";
     private static final String COMPLETION_TAG = "ChallengeCompletionDebug";
     private GameRepository gameRepository;
     private ChallengeRepository challengeRepository;
+    private DailyMissionRepository dailyMissionRepository;
+    private TournamentRepository tournamentRepository;
     private UserRepository userRepository;
     private TextView tvPlayers;
     private TextView tvScores;
@@ -55,6 +62,8 @@ public class FinalResultActivity extends AppCompatActivity {
         }
         gameRepository = new GameRepository(this);
         challengeRepository = new ChallengeRepository(this);
+        dailyMissionRepository = new DailyMissionRepository(this);
+        tournamentRepository = new TournamentRepository(this);
         userRepository = new UserRepository(this);
         String gameId = GameFlow.existingGameId(getIntent());
         if (gameId.isEmpty() || !gameRepository.isReady() || !userRepository.isReady()) {
@@ -107,18 +116,56 @@ public class FinalResultActivity extends AppCompatActivity {
         long p2Tokens = longValue(game.get("player2TokensAwarded"));
         boolean friendly = Boolean.TRUE.equals(game.getBoolean("friendly"))
                 || "FRIENDLY".equals(game.getString("matchType"));
+        boolean tournament = "TOURNAMENT".equals(game.getString("matchType"));
 
         tvPlayers.setText((friendly ? "Prijateljska partija\n" : "")
                 + "Igrac 1: " + player1Name + "\nIgrac 2: " + player2Name);
         tvScores.setText("Rezultat\n" + player1Name + ": " + player1Score
                 + "\n" + player2Name + ": " + player2Score);
         tvWinner.setText("Pobednik: " + winnerName);
+        trackDailyMission(game, friendly, tournament, winnerUid);
+        if (tournament) {
+            String loserUid = winnerUid.equals(player1Uid) ? value(game.getString("player2Uid")) : player1Uid;
+            long winnerScore = winnerUid.equals(player1Uid) ? player1Score : player2Score;
+            long loserScore = winnerUid.equals(player1Uid) ? player2Score : player1Score;
+            tournamentRepository.completeTournamentMatch(
+                            value(game.getString("tournamentId")),
+                            value(game.getString("tournamentRound")),
+                            winnerUid,
+                            loserUid,
+                            winnerScore,
+                            loserScore)
+                    .addOnSuccessListener(unused -> openTournamentBracket(value(game.getString("tournamentId"))))
+                    .addOnFailureListener(e -> Log.e(CHALLENGE_TAG, "Tournament result processing failed", e));
+            tvPlayers.setText("Turnir\n" + tvPlayers.getText());
+        }
         if (friendly) {
             tvRewards.setText("Prijateljska partija ne dodeljuje zvezde, tokene, statistiku ni rang poene.");
         } else {
             tvRewards.setText("Zvezde i tokeni\n"
                     + player1Name + ": " + signed(p1Stars) + " zvezda, +" + p1Tokens + " tokena\n"
                     + player2Name + ": " + signed(p2Stars) + " zvezda, +" + p2Tokens + " tokena");
+        }
+    }
+
+    private void trackDailyMission(DocumentSnapshot game, boolean friendly, boolean tournament, String winnerUid) {
+        if (dailyMissionRepository == null || !dailyMissionRepository.isReady()) return;
+        FirebaseUser user = FirebaseAuth.getInstance().getCurrentUser();
+        String uid = user == null ? GuestSession.uid(this) : user.getUid();
+        String player1 = value(game.getString("player1Uid"));
+        String player2 = value(game.getString("player2Uid"));
+        if (!uid.equals(player1) && !uid.equals(player2)) return;
+        if (friendly) {
+            dailyMissionRepository.completeMission(uid, DailyMissionRepository.PLAY_FRIENDLY)
+                    .addOnFailureListener(e -> Log.e("DailyMissionDebug", "Friendly mission failed", e));
+        } else if (tournament) {
+            if (uid.equals(winnerUid)) {
+                dailyMissionRepository.completeMission(uid, DailyMissionRepository.WIN_TOURNAMENT)
+                        .addOnFailureListener(e -> Log.e("DailyMissionDebug", "Tournament mission failed", e));
+            }
+        } else if (uid.equals(winnerUid)) {
+            dailyMissionRepository.completeMission(uid, DailyMissionRepository.WIN_MATCH)
+                    .addOnFailureListener(e -> Log.e("DailyMissionDebug", "Win mission failed", e));
         }
     }
 
@@ -235,6 +282,14 @@ public class FinalResultActivity extends AppCompatActivity {
 
     private void openRegions() {
         Intent intent = new Intent(this, RegionsActivity.class);
+        intent.addFlags(Intent.FLAG_ACTIVITY_CLEAR_TOP | Intent.FLAG_ACTIVITY_SINGLE_TOP);
+        startActivity(intent);
+        finish();
+    }
+
+    private void openTournamentBracket(String tournamentId) {
+        Intent intent = new Intent(this, TournamentBracketActivity.class);
+        intent.putExtra("tournamentId", tournamentId);
         intent.addFlags(Intent.FLAG_ACTIVITY_CLEAR_TOP | Intent.FLAG_ACTIVITY_SINGLE_TOP);
         startActivity(intent);
         finish();
